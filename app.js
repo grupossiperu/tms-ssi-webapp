@@ -52,10 +52,11 @@ const contenedorPanel = document.getElementById('contenedor-panel');
  * Abre el panel/modal con el título y el contenido HTML dados, y ejecuta
  * alInicializar(raizDelPanel) para que cada formulario conecte sus eventos.
  */
-function abrirPanel(titulo, htmlContenido, alInicializar) {
+function abrirPanel(titulo, htmlContenido, alInicializar, opciones) {
+  const claseAncho = (opciones && opciones.ancho) ? ' panel-ancho' : '';
   contenedorPanel.innerHTML = `
     <div class="overlay-modal" id="overlay-panel">
-      <div class="panel-modal">
+      <div class="panel-modal${claseAncho}">
         <div class="panel-header">
           <h2>${titulo}</h2>
           <button class="cerrar-panel" title="Cerrar" onclick="cerrarPanel()">&times;</button>

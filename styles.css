@@ -154,6 +154,7 @@ body{
   box-shadow: 0 12px 40px rgba(0,0,0,.35);
   overflow:hidden;
 }
+.panel-modal.panel-ancho{ max-width: min(1360px, 96vw); }
 .panel-modal .panel-header{
   background: var(--azul-marino);
   color:#fff;
