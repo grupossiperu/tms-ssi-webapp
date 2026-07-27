@@ -129,6 +129,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormPeajes.abrir();
   });
 
+  document.getElementById('btn-lista-conductores').addEventListener('click', function () {
+    FormConductores.abrir();
+  });
+
   document.getElementById('btn-ver').addEventListener('click', function () {
     FormAccesoServicios.abrir(function () {
       // Equivalente a hacer visibles las hojas del módulo: en la web
