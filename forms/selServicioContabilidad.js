@@ -6,6 +6,12 @@
  * SERVICIOS, permite cambiar su ESTADO (Culminado / En Ruta / Falso Flete
  * / Viaje Cancelado) y, al continuar, valida el estado antes de abrir el
  * detalle (frmConsolidadoServicio).
+ *
+ * Columnas mostradas (a pedido del usuario): Fecha, Cliente, Conductor,
+ * Placa, Destino, Fecha/Hora de retiro, Fecha/Hora de posicionamiento,
+ * Galones y total de combustible del tracto, Monto a depositar, Tarifa,
+ * y una columna "Depositado" con checkbox que se guarda de inmediato en la
+ * hoja (columna DEPOSITADO). El filtro de Empresa fue eliminado.
  * -------------------------------------------------------------------------
  */
 const FormSelServicioContabilidad = {
@@ -15,7 +21,6 @@ const FormSelServicioContabilidad = {
   abrir: async function () {
     const html = `
       <div class="barra-filtros">
-        <div class="campo"><label>Empresa</label><input type="text" id="filtroEmpresa"></div>
         <div class="campo"><label>Estado</label>
           <select id="filtroEstado">
             <option value="">Todos</option>
@@ -29,7 +34,11 @@ const FormSelServicioContabilidad = {
       </div>
       <div style="max-height:340px; overflow:auto;">
         <table class="tabla-lista" id="tablaServicios">
-          <thead><tr><th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Destino 1</th><th>Estado</th></tr></thead>
+          <thead><tr>
+            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Destino</th>
+            <th>Retiro</th><th>Posicionamiento</th><th>Gl. tracto</th><th>Total combustible</th>
+            <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th><th>Estado</th>
+          </tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -53,9 +62,33 @@ const FormSelServicioContabilidad = {
     const self = this;
     self._filaSeleccionada = null;
 
+    function numero(v) {
+      if (v === null || v === undefined) return 0;
+      const n = parseFloat(String(v).replace(/S\//g, '').replace(/\$/g, '').replace(/\s/g, '').replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    }
+
+    function formatoFecha(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return String(v);
+      return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+    }
+
+    function formatoFechaHora(fecha, hora) {
+      const f = formatoFecha(fecha);
+      const h = String(hora || '').trim();
+      if (f === '' && (h === '' || h === '-')) return '';
+      if (h === '' || h === '-') return f;
+      return (f + ' ' + h).trim();
+    }
+
+    function esVerdadero(v) {
+      return v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim().toUpperCase() === 'SI';
+    }
+
     async function cargar() {
       const filtros = {
-        empresa: raiz.querySelector('#filtroEmpresa').value.trim(),
         estado: raiz.querySelector('#filtroEstado').value.trim(),
         fechaDesde: raiz.querySelector('#filtroDesde').value.trim(),
         fechaHasta: raiz.querySelector('#filtroHasta').value.trim()
@@ -66,8 +99,28 @@ const FormSelServicioContabilidad = {
       filas.forEach(function (f) {
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
-        tr.innerHTML = `<td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td><td>${f['CLIENTE PARA FACTURACIÓN']||''}</td>
-          <td>${f['CONDUCTOR']||''}</td><td>${f['PLACA TRACTO']||''}</td><td>${f['DESTINO 1']||''}</td><td>${f['ESTADO']||''}</td>`;
+        tr.innerHTML = `
+          <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
+          <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
+          <td>${f['CONDUCTOR'] || ''}</td>
+          <td>${f['PLACA TRACTO'] || ''}</td>
+          <td>${f['DESTINO 1'] || ''}</td>
+          <td>${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
+          <td>${formatoFechaHora(f['FECHA DE POSICIONAMIENTO'], f['HORA DE POSICIONAMIENTO'])}</td>
+          <td>${numero(f['GL TRACTO']).toFixed(2)}</td>
+          <td>${numero(f['TOTAL TRACTO']).toFixed(2)}</td>
+          <td>${numero(f['MONTO DEPOSITADO']).toFixed(2)}</td>
+          <td>${numero(f['TARIFA 1']).toFixed(2)}</td>
+          <td style="text-align:center;"><input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}></td>
+          <td>${f['ESTADO'] || ''}</td>`;
+
+        tr.querySelector('.chk-depositado').addEventListener('click', function (ev) {
+          ev.stopPropagation();
+        });
+        tr.querySelector('.chk-depositado').addEventListener('change', async function () {
+          await llamarBackend('actualizarDepositado', { fila: f._fila, depositado: this.checked });
+        });
+
         tr.addEventListener('click', function () {
           tbody.querySelectorAll('tr').forEach(x => x.classList.remove('seleccionada'));
           tr.classList.add('seleccionada');
@@ -77,19 +130,11 @@ const FormSelServicioContabilidad = {
       });
     }
 
-    function formatoFecha(v) {
-      if (!v) return '';
-      const d = new Date(v);
-      if (isNaN(d.getTime())) return String(v);
-      return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-    }
-
-    ['filtroEmpresa', 'filtroEstado', 'filtroDesde', 'filtroHasta'].forEach(function (id) {
+    ['filtroEstado', 'filtroDesde', 'filtroHasta'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', cargar);
     });
 
     raiz.querySelector('#btnBorrarFiltro').addEventListener('click', function () {
-      raiz.querySelector('#filtroEmpresa').value = '';
       raiz.querySelector('#filtroEstado').value = '';
       raiz.querySelector('#filtroDesde').value = '';
       raiz.querySelector('#filtroHasta').value = '';

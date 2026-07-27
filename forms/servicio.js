@@ -83,7 +83,11 @@ const FormServicio = {
         </div>
         <div class="campo">
           <label>Tarifa 1</label>
-          <input type="text" id="txtTarifa1Servicio">
+          <div class="fila-combo-mas">
+            <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
+            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
+            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
+          </div>
         </div>
         <div class="campo">
           <label>Destino 2 (solo carga consolidado)</label>
@@ -92,7 +96,11 @@ const FormServicio = {
         </div>
         <div class="campo">
           <label>Tarifa 2 (solo carga consolidado)</label>
-          <input type="text" id="txtTarifa2Servicio" disabled>
+          <div class="fila-combo-mas">
+            <input type="text" id="txtTarifa2Servicio" placeholder="0.00" disabled>
+            <button type="button" class="boton-moneda" data-campo="txtTarifa2Servicio" data-moneda="S" disabled>S/</button>
+            <button type="button" class="boton-moneda" data-campo="txtTarifa2Servicio" data-moneda="D" disabled>$</button>
+          </div>
         </div>
         <div class="campo">
           <label>Depósito de retiro</label>
@@ -292,38 +300,39 @@ const FormServicio = {
       raiz.querySelector('#' + id).addEventListener('change', calcularCombustible);
     });
 
-    // Tarifa 1 / Tarifa 2: pregunta moneda al salir del campo, igual que
-    // el InputBox "S = Soles / D = Dólares" del VBA original.
-    function preguntarMoneda(input) {
-      // Importante: nunca abrir un prompt()/alert()/confirm() de forma
-      // síncrona dentro del propio manejador de "blur". Chrome, al cerrar
-      // un diálogo nativo abierto desde blur, reintenta devolver el foco al
-      // campo que lo disparó, lo que vuelve a lanzar "blur" y reabre el
-      // diálogo en bucle (parece que "no cierra"). Por eso se difiere con
-      // setTimeout, para que el diálogo se abra ya fuera del evento blur.
-      setTimeout(function () {
-        const valorTxt = input.value.trim();
-        if (valorTxt === '') return;
-        const monto = self._numero(valorTxt);
-        let opcion = window.prompt('Ingrese:\nS = Soles\nD = Dólares', 'S');
-        if (opcion === null) return;
-        opcion = opcion.trim().toUpperCase();
-        if (opcion === 'S') input.value = 'S/ ' + monto.toFixed(2);
-        else if (opcion === 'D') input.value = '$ ' + monto.toFixed(2);
-        else { mostrarMensaje('Ingrese S o D.', 'error'); input.focus(); }
-      }, 0);
-    }
-    raiz.querySelector('#txtTarifa1Servicio').addEventListener('blur', function () { preguntarMoneda(this); });
-    raiz.querySelector('#txtTarifa2Servicio').addEventListener('blur', function () { preguntarMoneda(this); });
+    // Tarifa 1 / Tarifa 2: selección de moneda mediante botones "S/" y "$"
+    // en vez del InputBox "S = Soles / D = Dólares" del VBA original (que
+    // generaba un messagebox molesto cada vez que se salía del campo).
+    raiz.querySelectorAll('.boton-moneda').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        const input = raiz.querySelector('#' + boton.dataset.campo);
+        const monto = self._numero(input.value);
+        const prefijo = boton.dataset.moneda === 'S' ? 'S/ ' : '$ ';
+        input.value = prefijo + monto.toFixed(2);
 
-    // Tipo de carga: habilita/bloquea Destino 2 y Tarifa 2.
+        // Marca visualmente el botón de moneda activo para ese campo.
+        raiz.querySelectorAll('.boton-moneda[data-campo="' + boton.dataset.campo + '"]').forEach(function (b) {
+          b.classList.remove('activo');
+        });
+        boton.classList.add('activo');
+        input.focus();
+      });
+    });
+
+    // Tipo de carga: habilita/bloquea Destino 2 y Tarifa 2 (campo + botones de moneda).
     raiz.querySelector('#cboTipoCarga').addEventListener('change', function () {
       const esConsolidado = this.value.trim().toUpperCase() === 'CARGA CONSOLIDADO';
       raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
       raiz.querySelector('#txtTarifa2Servicio').disabled = !esConsolidado;
+      raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa2Servicio"]').forEach(function (b) {
+        b.disabled = !esConsolidado;
+      });
       if (!esConsolidado) {
         raiz.querySelector('#cboDestino2Servicio').value = '';
         raiz.querySelector('#txtTarifa2Servicio').value = '';
+        raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa2Servicio"]').forEach(function (b) {
+          b.classList.remove('activo');
+        });
       }
     });
 
