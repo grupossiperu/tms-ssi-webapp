@@ -75,11 +75,28 @@ const FormSelServicioContabilidad = {
       return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
     }
 
+    function formatoHora(v) {
+      // Google Sheets guarda celdas de solo-hora como fecha/hora completa
+      // (epoch 1899-12-30) al leerlas via API; hay que extraer solo HH:mm
+      // en vez de mostrar el objeto Date/ISO string tal cual.
+      if (v === null || v === undefined || v === '' || v === '-') return '';
+      if (v instanceof Date) {
+        return String(v.getUTCHours()).padStart(2, '0') + ':' + String(v.getUTCMinutes()).padStart(2, '0');
+      }
+      const texto = String(v).trim();
+      if (/^\d{1,2}:\d{2}/.test(texto)) return texto.slice(0, 5);
+      const d = new Date(texto);
+      if (!isNaN(d.getTime()) && /T\d{2}:\d{2}/.test(texto)) {
+        return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+      }
+      return texto;
+    }
+
     function formatoFechaHora(fecha, hora) {
       const f = formatoFecha(fecha);
-      const h = String(hora || '').trim();
-      if (f === '' && (h === '' || h === '-')) return '';
-      if (h === '' || h === '-') return f;
+      const h = formatoHora(hora);
+      if (f === '' && h === '') return '';
+      if (h === '') return f;
       return (f + ' ' + h).trim();
     }
 
