@@ -141,6 +141,59 @@ const FormServicio = {
 
       <div class="fila-campos">
         <div class="campo">
+          <label>Thermoregistro</label>
+          <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Cantidad de thermoregistros</label>
+          <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
+        </div>
+        <div class="campo">
+          <label>Modelo de thermoregistro</label>
+          <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
+          <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Precinto de aduana</label>
+          <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Operador logístico</label>
+          <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
+          <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Filtro de etileno</label>
+          <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Cantidad de filtros de etileno</label>
+          <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Barras consolidado (solo carga consolidado)</label>
+          <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Cantidad de barras (solo carga consolidado)</label>
+          <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
           <label>Depósito de retiro</label>
           <input list="lst-depRetiro" id="cboDepositoRetiro">
           <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
@@ -158,7 +211,7 @@ const FormServicio = {
       <div class="fila-campos">
         <div class="campo">
           <label>Lugar de posicionamiento 1</label>
-          <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" readonly>
+          <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
         </div>
         <div class="campo">
           <label>Fecha de posicionamiento 1</label>
@@ -173,7 +226,7 @@ const FormServicio = {
       <div class="fila-campos">
         <div class="campo">
           <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
-          <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" readonly>
+          <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
         </div>
         <div class="campo">
           <label>Fecha de posicionamiento 2 (solo carga consolidado)</label>
@@ -317,6 +370,15 @@ const FormServicio = {
     set('cboCiudadRetiroServicio', f['CIUDAD DE RETIRO']);
     set('cboCiudadDevolucionServicio', f['CIUDAD DE DEVOLUCION']);
     set('cboPackingServicio', f['PACKING']);
+    set('cboThermoregistro', f['THERMOREGISTRO'] || 'NO');
+    set('txtCantidadThermoregistro', f['CANTIDAD THERMOREGISTRO'] || '');
+    set('cboModeloThermoregistro', f['MODELO THERMOREGISTRO']);
+    set('cboPrecintoAduana', f['PRECINTO DE ADUANA'] || 'NO');
+    set('cboOperadorLogistico', f['OPERADOR LOGISTICO']);
+    set('cboFiltroEtileno', f['FILTRO DE ETILENO'] || 'NO');
+    set('txtCantidadFiltroEtileno', f['CANTIDAD FILTRO DE ETILENO'] || '');
+    set('cboBarrasConsolidado', f['BARRAS CONSOLIDADO'] || 'NO');
+    set('txtCantidadBarras', f['CANTIDAD BARRAS CONSOLIDADO'] || '');
     set('txtFechaRetiroServicio', this._formatoFechaCampo(f['FECHA DE RETIRO']));
     set('txtHoraRetiroServicio', this._formatoHoraCampo(f['HORA DE RETIRO']));
     set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
@@ -341,7 +403,8 @@ const FormServicio = {
 
     const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
     raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
-    ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2'].forEach(function (id) {
+    ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2',
+     'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
       raiz.querySelector('#' + id).disabled = !esConsolidado;
     });
 
@@ -492,7 +555,9 @@ const FormServicio = {
     // posicionamiento 2. La tarifa es única y cubre la ruta completa.
     function aplicarTipoCarga(esConsolidado) {
       raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
-      ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2'].forEach(function (id) {
+      // Todo lo que solo aplica a carga consolidado.
+      ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2',
+       'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
         raiz.querySelector('#' + id).disabled = !esConsolidado;
       });
 
@@ -500,6 +565,8 @@ const FormServicio = {
         raiz.querySelector('#cboDestino2Servicio').value = '';
         raiz.querySelector('#txtFechaPosicionamiento2').value = '';
         raiz.querySelector('#txtHoraPosicionamiento2').value = '';
+        raiz.querySelector('#cboBarrasConsolidado').value = 'NO';
+        raiz.querySelector('#txtCantidadBarras').value = '';
       }
       sincronizarLugaresPosicionamiento();
     }
@@ -739,6 +806,15 @@ const FormServicio = {
         ciudadRetiro: v('cboCiudadRetiroServicio'),
         ciudadDevolucion: v('cboCiudadDevolucionServicio'),
         packing: v('cboPackingServicio'),
+        thermoregistro: v('cboThermoregistro'),
+        cantidadThermoregistro: v('txtCantidadThermoregistro'),
+        modeloThermoregistro: v('cboModeloThermoregistro'),
+        precintoAduana: v('cboPrecintoAduana'),
+        operadorLogistico: v('cboOperadorLogistico'),
+        filtroEtileno: v('cboFiltroEtileno'),
+        cantidadFiltroEtileno: v('txtCantidadFiltroEtileno'),
+        barrasConsolidado: v('cboBarrasConsolidado'),
+        cantidadBarras: v('txtCantidadBarras'),
         totalCombustible: v('txtTotalCombustible'),
         fechaRetiro: v('txtFechaRetiroServicio'),
         horaRetiro: v('txtHoraRetiroServicio'),

@@ -49,7 +49,8 @@ const FormSelServicioContabilidad = {
       <div style="max-height:460px; overflow:auto;">
         <table class="tabla-lista" id="tablaServicios">
           <thead><tr>
-            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Destino</th>
+            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th>
+            <th>Ciudad retiro</th><th>Destino 1</th><th>Destino 2</th><th>Ciudad devolución</th>
             <th>Retiro</th><th>Posicionamiento</th><th>Gl. tracto</th><th>Total combustible</th>
             <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th><th>Datos</th><th>Estado</th>
           </tr></thead>
@@ -187,7 +188,10 @@ const FormSelServicioContabilidad = {
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
           <td>${f['CONDUCTOR'] || ''}</td>
           <td>${f['PLACA TRACTO'] || ''}</td>
+          <td>${f['CIUDAD DE RETIRO'] || ''}</td>
           <td>${f['DESTINO 1'] || ''}</td>
+          <td>${f['DESTINO 2'] || ''}</td>
+          <td>${f['CIUDAD DE DEVOLUCION'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
           <td>${numero(f['GL TRACTO']).toFixed(2)}</td>
