@@ -138,10 +138,11 @@ const FormSelServicioContabilidad = {
       const campos = [
         'FECHA DE PROGRAMACION', 'CLIENTE PARA FACTURACIÓN', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR',
         'PLACA TRACTO', 'PLACA CARRETA', 'BOOKING', 'N° CONTENEDOR', 'TIPO DE CARGA', 'TIPO DE PRODUCTO',
-        'TIPO DE TRATAMIENTO', 'PACKING', 'DEPOSITO DE RETIRO', 'LUGAR DE RETIRO',
-        'LUGAR DE DEVOLUCION', 'CIUDAD DE RETIRO', 'CIUDAD DE DEVOLUCION',
+        'TIPO DE TRATAMIENTO', 'PACKING', 'DEPOSITO DE RETIRO',
+        'CIUDAD DE RETIRO', 'CIUDAD DE DEVOLUCION',
         'FECHA DE RETIRO', 'HORA DE RETIRO', 'DESTINO 1',
-        'FECHA DE POSICIONAMIENTO', 'HORA DE POSICIONAMIENTO', 'DEPOSITO DE DEVOLUCION',
+        'LUGAR DE POSICIONAMIENTO 1', 'FECHA DE POSICIONAMIENTO 1', 'HORA DE POSICIONAMIENTO 1',
+        'DEPOSITO DE DEVOLUCION',
         'COSTO DEL PETRÓLEO X GALÓN', 'GL TRACTO', 'GL GENERADOR', 'TIPO DE ABASTECIMIENTO',
         'VIATICO', 'PEAJE', 'COCHERA', 'TOTAL POR VIAJE', 'MONTO DEPOSITADO', 'TARIFA 1'
       ];
@@ -149,7 +150,13 @@ const FormSelServicioContabilidad = {
         if (vacio(f[campos[i]])) return false;
       }
 
-      if (esConsolidado && (vacio(f['DESTINO 2']) || String(f['DESTINO 2']).trim() === '-')) return false;
+      // El bloque de posicionamiento 2 solo es obligatorio en consolidado.
+      if (esConsolidado) {
+        if (vacio(f['DESTINO 2']) || String(f['DESTINO 2']).trim() === '-') return false;
+        if (vacio(f['LUGAR DE POSICIONAMIENTO 2'])) return false;
+        if (vacio(f['FECHA DE POSICIONAMIENTO 2'])) return false;
+        if (vacio(f['HORA DE POSICIONAMIENTO 2'])) return false;
+      }
       return true;
     }
 
@@ -182,7 +189,7 @@ const FormSelServicioContabilidad = {
           <td>${f['PLACA TRACTO'] || ''}</td>
           <td>${f['DESTINO 1'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO'], f['HORA DE POSICIONAMIENTO'])}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
           <td>${numero(f['GL TRACTO']).toFixed(2)}</td>
           <td>S/ ${numero(f['TOTAL TRACTO']).toFixed(2)}</td>
           <td>S/ ${numero(f['MONTO DEPOSITADO']).toFixed(2)}</td>

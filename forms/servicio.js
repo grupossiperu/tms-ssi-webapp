@@ -157,17 +157,31 @@ const FormServicio = {
 
       <div class="fila-campos">
         <div class="campo">
-          <label>Lugar de retiro</label>
-          <input list="lst-lugRetiro" id="cboLugarRetiroServicio" placeholder="Escriba o elija">
-          <datalist id="lst-lugRetiro">${(datos.lugaresRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          <label>Lugar de posicionamiento 1</label>
+          <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" readonly>
         </div>
         <div class="campo">
-          <label>Fecha de posicionamiento</label>
+          <label>Fecha de posicionamiento 1</label>
           <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
         </div>
         <div class="campo">
-          <label>Hora de posicionamiento</label>
+          <label>Hora de posicionamiento 1</label>
           <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
+          <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" readonly>
+        </div>
+        <div class="campo">
+          <label>Fecha de posicionamiento 2 (solo carga consolidado)</label>
+          <input type="text" id="txtFechaPosicionamiento2" placeholder="dd/mm/yyyy" disabled>
+        </div>
+        <div class="campo">
+          <label>Hora de posicionamiento 2 (solo carga consolidado)</label>
+          <input type="text" id="txtHoraPosicionamiento2" placeholder="hh:mm" disabled>
         </div>
       </div>
 
@@ -185,16 +199,6 @@ const FormServicio = {
           <label>Hora de devolución</label>
           <input type="text" id="txtHoraDevolucion" placeholder="hh:mm o -">
         </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Lugar de devolución</label>
-          <input list="lst-lugDevolucion" id="cboLugarDevolucionServicio" placeholder="Escriba o elija">
-          <datalist id="lst-lugDevolucion">${(datos.lugaresDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo"></div>
-        <div class="campo"></div>
       </div>
 
       <div class="fila-campos">
@@ -305,8 +309,11 @@ const FormServicio = {
     set('cboDestino1Servicio', f['DESTINO 1']);
     set('cboDestino2Servicio', f['DESTINO 2'] && f['DESTINO 2'] !== '-' ? f['DESTINO 2'] : '');
     set('cboDepositoRetiro', f['DEPOSITO DE RETIRO']);
-    set('cboLugarRetiroServicio', f['LUGAR DE RETIRO']);
-    set('cboLugarDevolucionServicio', f['LUGAR DE DEVOLUCION']);
+    set('txtLugarPosicionamiento1', f['LUGAR DE POSICIONAMIENTO 1'] || f['DESTINO 1']);
+    set('txtLugarPosicionamiento2', f['LUGAR DE POSICIONAMIENTO 2'] ||
+      (f['DESTINO 2'] && f['DESTINO 2'] !== '-' ? f['DESTINO 2'] : ''));
+    set('txtFechaPosicionamiento2', this._formatoFechaCampo(f['FECHA DE POSICIONAMIENTO 2']));
+    set('txtHoraPosicionamiento2', this._formatoHoraCampo(f['HORA DE POSICIONAMIENTO 2']));
     set('cboCiudadRetiroServicio', f['CIUDAD DE RETIRO']);
     set('cboCiudadDevolucionServicio', f['CIUDAD DE DEVOLUCION']);
     set('cboPackingServicio', f['PACKING']);
@@ -315,8 +322,8 @@ const FormServicio = {
     set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
     set('txtFechaDevolucion', f['FECHA DE DEVOLUCION'] && f['FECHA DE DEVOLUCION'] !== '-' ? this._formatoFechaCampo(f['FECHA DE DEVOLUCION']) : '');
     set('txtHoraDevolucion', f['HORA DE DEVOLUCION'] && f['HORA DE DEVOLUCION'] !== '-' ? this._formatoHoraCampo(f['HORA DE DEVOLUCION']) : '');
-    set('txtFechaPosicionamiento', this._formatoFechaCampo(f['FECHA DE POSICIONAMIENTO']));
-    set('txtHoraPosicionamiento', this._formatoHoraCampo(f['HORA DE POSICIONAMIENTO']));
+    set('txtFechaPosicionamiento', this._formatoFechaCampo(f['FECHA DE POSICIONAMIENTO 1']));
+    set('txtHoraPosicionamiento', this._formatoHoraCampo(f['HORA DE POSICIONAMIENTO 1']));
     set('cboTipoProductoServicio', f['TIPO DE PRODUCTO']);
     set('cboTipoTratamiento', f['TIPO DE TRATAMIENTO']);
     set('txtCostoPetroleoGalon', f['COSTO DEL PETRÓLEO X GALÓN'] || '');
@@ -334,6 +341,9 @@ const FormServicio = {
 
     const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
     raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
+    ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2'].forEach(function (id) {
+      raiz.querySelector('#' + id).disabled = !esConsolidado;
+    });
 
     function pintarTarifa(campo, monto, moneda) {
       const n = Number(monto) || 0;
@@ -466,12 +476,36 @@ const FormServicio = {
       });
     });
 
-    // Tipo de carga: habilita/bloquea Destino 2. La tarifa ahora es única y
-    // cubre la ruta completa, así que ya no hay una Tarifa 2 separada.
-    raiz.querySelector('#cboTipoCarga').addEventListener('change', function () {
-      const esConsolidado = this.value.trim().toUpperCase() === 'CARGA CONSOLIDADO';
+    // El lugar de posicionamiento es siempre el destino correspondiente, así
+    // que se copia solo y el campo queda de solo lectura para que no puedan
+    // quedar desincronizados.
+    function sincronizarLugaresPosicionamiento() {
+      raiz.querySelector('#txtLugarPosicionamiento1').value = raiz.querySelector('#cboDestino1Servicio').value.trim();
+      raiz.querySelector('#txtLugarPosicionamiento2').value = raiz.querySelector('#cboDestino2Servicio').value.trim();
+    }
+    raiz.querySelector('#cboDestino1Servicio').addEventListener('input', sincronizarLugaresPosicionamiento);
+    raiz.querySelector('#cboDestino1Servicio').addEventListener('change', sincronizarLugaresPosicionamiento);
+    raiz.querySelector('#cboDestino2Servicio').addEventListener('input', sincronizarLugaresPosicionamiento);
+    raiz.querySelector('#cboDestino2Servicio').addEventListener('change', sincronizarLugaresPosicionamiento);
+
+    // Tipo de carga: habilita/bloquea Destino 2 y todo el bloque de
+    // posicionamiento 2. La tarifa es única y cubre la ruta completa.
+    function aplicarTipoCarga(esConsolidado) {
       raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
-      if (!esConsolidado) raiz.querySelector('#cboDestino2Servicio').value = '';
+      ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2'].forEach(function (id) {
+        raiz.querySelector('#' + id).disabled = !esConsolidado;
+      });
+
+      if (!esConsolidado) {
+        raiz.querySelector('#cboDestino2Servicio').value = '';
+        raiz.querySelector('#txtFechaPosicionamiento2').value = '';
+        raiz.querySelector('#txtHoraPosicionamiento2').value = '';
+      }
+      sincronizarLugaresPosicionamiento();
+    }
+
+    raiz.querySelector('#cboTipoCarga').addEventListener('change', function () {
+      aplicarTipoCarga(this.value.trim().toUpperCase() === 'CARGA CONSOLIDADO');
     });
 
     // Destino 1 / Destino 2: busca costos automáticamente (Viático/Peaje/Cochera).
@@ -586,16 +620,26 @@ const FormServicio = {
 
     function validarCronologia(avisar) {
       const retiro = momento('txtFechaRetiroServicio', 'txtHoraRetiroServicio');
-      const posic = momento('txtFechaPosicionamiento', 'txtHoraPosicionamiento');
+      const posic1 = momento('txtFechaPosicionamiento', 'txtHoraPosicionamiento');
+      const posic2 = momento('txtFechaPosicionamiento2', 'txtHoraPosicionamiento2');
       const devol = momento('txtFechaDevolucion', 'txtHoraDevolucion');
 
+      // Secuencia real del viaje: retiro -> posicionamiento 1 ->
+      // posicionamiento 2 (si es consolidado) -> devolución. Solo se comparan
+      // los momentos que tengan fecha y hora cargadas.
+      const pasos = [
+        { t: retiro, nombre: 'retiro' },
+        { t: posic1, nombre: 'posicionamiento 1' },
+        { t: posic2, nombre: 'posicionamiento 2' },
+        { t: devol, nombre: 'devolución' }
+      ].filter(function (p) { return p.t !== null; });
+
       let error = null;
-      if (retiro !== null && posic !== null && posic <= retiro) {
-        error = 'La fecha y hora de posicionamiento debe ser posterior a la de retiro.';
-      } else if (posic !== null && devol !== null && devol <= posic) {
-        error = 'La fecha y hora de devolución debe ser posterior a la de posicionamiento.';
-      } else if (retiro !== null && devol !== null && devol <= retiro) {
-        error = 'La fecha y hora de devolución debe ser posterior a la de retiro.';
+      for (let i = 1; i < pasos.length && !error; i++) {
+        if (pasos[i].t <= pasos[i - 1].t) {
+          error = 'La fecha y hora de ' + pasos[i].nombre +
+            ' debe ser posterior a la de ' + pasos[i - 1].nombre + '.';
+        }
       }
 
       if (error && avisar) mostrarMensaje(error, 'error');
@@ -603,7 +647,8 @@ const FormServicio = {
     }
 
     ['txtFechaRetiroServicio', 'txtHoraRetiroServicio', 'txtFechaPosicionamiento',
-     'txtHoraPosicionamiento', 'txtFechaDevolucion', 'txtHoraDevolucion'].forEach(function (id) {
+     'txtHoraPosicionamiento', 'txtFechaPosicionamiento2', 'txtHoraPosicionamiento2',
+     'txtFechaDevolucion', 'txtHoraDevolucion'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', function () {
         setTimeout(function () { validarCronologia(true); }, 0);
       });
@@ -626,6 +671,7 @@ const FormServicio = {
     raiz.querySelector('#txtHoraRetiroServicio').addEventListener('blur', function () { validarHora(this, false); });
     raiz.querySelector('#txtHoraDevolucion').addEventListener('blur', function () { validarHora(this, true); });
     raiz.querySelector('#txtHoraPosicionamiento').addEventListener('blur', function () { validarHora(this, true); });
+    raiz.querySelector('#txtHoraPosicionamiento2').addEventListener('blur', function () { validarHora(this, true); });
 
     // Validación de contenedor (equivalente a txtContenedorServicio_Exit).
     raiz.querySelector('#txtContenedorServicio').addEventListener('input', function () {
@@ -686,8 +732,10 @@ const FormServicio = {
         booking: v('txtBookingServicio'),
         contenedor: v('txtContenedorServicio'),
         depositoRetiro: v('cboDepositoRetiro'),
-        lugarRetiro: v('cboLugarRetiroServicio'),
-        lugarDevolucion: v('cboLugarDevolucionServicio'),
+        lugarPosicionamiento1: v('txtLugarPosicionamiento1'),
+        lugarPosicionamiento2: v('txtLugarPosicionamiento2'),
+        fechaPosicionamiento2: v('txtFechaPosicionamiento2'),
+        horaPosicionamiento2: v('txtHoraPosicionamiento2'),
         ciudadRetiro: v('cboCiudadRetiroServicio'),
         ciudadDevolucion: v('cboCiudadDevolucionServicio'),
         packing: v('cboPackingServicio'),

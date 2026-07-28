@@ -74,6 +74,16 @@ const FormTarifas = {
         </div>
       </div>
 
+      <div class="barra-filtros">
+        <div class="campo"><label>Estado</label>
+          <select id="filtroEstadoTarifa">
+            <option value="">Todas</option>
+            <option value="vigente">Vigentes</option>
+            <option value="vencida">Vencidas</option>
+          </select>
+        </div>
+      </div>
+
       <div style="max-height:340px; overflow:auto; margin-top:6px;">
         <table class="tabla-lista" id="tablaTarifas">
           <thead><tr>
@@ -129,9 +139,11 @@ const FormTarifas = {
       const tbody = raiz.querySelector('#tablaTarifas tbody');
       tbody.innerHTML = '';
 
+      const filtro = raiz.querySelector('#filtroEstadoTarifa').value;
+
       // Marca cuál es la tarifa vigente de cada ruta (la primera que
       // aparece de cada combinación, porque vienen ordenadas de más
-      // reciente a más antigua).
+      // reciente a más antigua). El resto de esa ruta queda vencida.
       const vistas = {};
 
       (resp.tarifas || []).forEach(function (t) {
@@ -139,6 +151,9 @@ const FormTarifas = {
           .map(function (v) { return String(v || '').trim().toUpperCase(); }).join('|');
         const vigente = !vistas[clave];
         vistas[clave] = true;
+
+        if (filtro === 'vigente' && !vigente) return;
+        if (filtro === 'vencida' && vigente) return;
 
         const tr = document.createElement('tr');
         if (!vigente) tr.style.opacity = '.55';
@@ -152,10 +167,12 @@ const FormTarifas = {
           <td>${simbolo(t['MONEDA'])}${(Number(t['TARIFA']) || 0).toFixed(2)}</td>
           <td>${vigente
             ? '<span class="badge-datos completo">Vigente</span>'
-            : '<span class="badge-datos historico">Anterior</span>'}</td>`;
+            : '<span class="badge-datos historico">Vencida</span>'}</td>`;
         tbody.appendChild(tr);
       });
     }
+
+    raiz.querySelector('#filtroEstadoTarifa').addEventListener('change', cargar);
 
     raiz.querySelector('#btnGuardarTarifa').addEventListener('click', async function () {
       const v = function (id) { return raiz.querySelector('#' + id).value.trim(); };
