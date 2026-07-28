@@ -103,6 +103,16 @@ const FormServicio = {
           </div>
         </div>
         <div class="campo">
+          <label>Lugar de retiro</label>
+          <input list="lst-lugRetiro" id="cboLugarRetiroServicio" placeholder="Escriba o elija">
+          <datalist id="lst-lugRetiro">${(datos.lugaresRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Lugar de devolución</label>
+          <input list="lst-lugDevolucion" id="cboLugarDevolucionServicio" placeholder="Escriba o elija">
+          <datalist id="lst-lugDevolucion">${(datos.lugaresDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
           <label>Depósito de retiro</label>
           <input list="lst-depRetiro" id="cboDepositoRetiro">
           <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
@@ -239,6 +249,8 @@ const FormServicio = {
     set('cboDestino1Servicio', f['DESTINO 1']);
     set('cboDestino2Servicio', f['DESTINO 2'] && f['DESTINO 2'] !== '-' ? f['DESTINO 2'] : '');
     set('cboDepositoRetiro', f['DEPOSITO DE RETIRO']);
+    set('cboLugarRetiroServicio', f['LUGAR DE RETIRO']);
+    set('cboLugarDevolucionServicio', f['LUGAR DE DEVOLUCION']);
     set('txtFechaRetiroServicio', this._formatoFechaCampo(f['FECHA DE RETIRO']));
     set('txtHoraRetiroServicio', this._formatoHoraCampo(f['HORA DE RETIRO']));
     set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
@@ -457,6 +469,98 @@ const FormServicio = {
       if (raiz.querySelector('#cboTipoCarga').value.trim().toUpperCase() === 'CARGA CONSOLIDADO') setTimeout(function () { alCambiarDestino(2); }, 0);
     });
 
+    // Tarifa automática: en cuanto están los 5 campos de la ruta, busca en
+    // la matriz de TARIFAS la tarifa vigente (la más reciente) y la
+    // completa sola, con su moneda. Si el usuario ya escribió una tarifa a
+    // mano, no se pisa.
+    async function buscarTarifaAutomatica() {
+      const v = function (id) { return raiz.querySelector('#' + id).value.trim(); };
+
+      const cliente = v('cboClienteFacturacion');
+      const lugarRetiro = v('cboLugarRetiroServicio');
+      const destino1 = v('cboDestino1Servicio');
+      const destino2 = v('cboDestino2Servicio');
+      const lugarDevolucion = v('cboLugarDevolucionServicio');
+
+      if (cliente === '' || lugarRetiro === '' || destino1 === '' || lugarDevolucion === '') return;
+
+      const campoTarifa = raiz.querySelector('#txtTarifa1Servicio');
+      if (self._numero(campoTarifa.value) > 0 && !campoTarifa.dataset.autocompletada) return;
+
+      const resp = await llamarBackend('buscarTarifa', {
+        cliente: cliente,
+        lugarRetiro: lugarRetiro,
+        destino1: destino1,
+        destino2: destino2,
+        lugarDevolucion: lugarDevolucion
+      });
+
+      if (!resp.encontrado) return;
+
+      const prefijo = resp.moneda === 'D' ? '$ ' : 'S/ ';
+      campoTarifa.value = prefijo + Number(resp.tarifa).toFixed(2);
+      campoTarifa.dataset.autocompletada = '1';
+
+      raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa1Servicio"]').forEach(function (b) {
+        b.classList.toggle('activo', b.dataset.moneda === (resp.moneda === 'D' ? 'D' : 'S'));
+      });
+    }
+
+    ['cboClienteFacturacion', 'cboLugarRetiroServicio', 'cboDestino1Servicio',
+     'cboDestino2Servicio', 'cboLugarDevolucionServicio'].forEach(function (id) {
+      raiz.querySelector('#' + id).addEventListener('change', function () {
+        setTimeout(buscarTarifaAutomatica, 0);
+      });
+    });
+
+    // Si el usuario edita la tarifa a mano, deja de considerarse autocompletada.
+    raiz.querySelector('#txtTarifa1Servicio').addEventListener('input', function () {
+      delete this.dataset.autocompletada;
+    });
+
+    // Validación de orden cronológico: retiro < posicionamiento < devolución.
+    function momento(idFecha, idHora) {
+      const f = raiz.querySelector('#' + idFecha).value.trim();
+      const h = raiz.querySelector('#' + idHora).value.trim();
+      if (f === '' || f === '-' || h === '' || h === '-') return null;
+      const partesF = f.replace(/-/g, '/').split('/');
+      if (partesF.length !== 3) return null;
+      const partesH = h.split(':');
+      if (partesH.length < 2) return null;
+      let horas = parseInt(partesH[0], 10);
+      const minutos = parseInt(partesH[1], 10);
+      if (isNaN(horas) || isNaN(minutos)) return null;
+      if (/pm/i.test(h) && horas < 12) horas += 12;
+      if (/am/i.test(h) && horas === 12) horas = 0;
+      const d = new Date(parseInt(partesF[2], 10), parseInt(partesF[1], 10) - 1, parseInt(partesF[0], 10), horas, minutos);
+      return isNaN(d.getTime()) ? null : d.getTime();
+    }
+
+    function validarCronologia(avisar) {
+      const retiro = momento('txtFechaRetiroServicio', 'txtHoraRetiroServicio');
+      const posic = momento('txtFechaPosicionamiento', 'txtHoraPosicionamiento');
+      const devol = momento('txtFechaDevolucion', 'txtHoraDevolucion');
+
+      let error = null;
+      if (retiro !== null && posic !== null && posic <= retiro) {
+        error = 'La fecha y hora de posicionamiento debe ser posterior a la de retiro.';
+      } else if (posic !== null && devol !== null && devol <= posic) {
+        error = 'La fecha y hora de devolución debe ser posterior a la de posicionamiento.';
+      } else if (retiro !== null && devol !== null && devol <= retiro) {
+        error = 'La fecha y hora de devolución debe ser posterior a la de retiro.';
+      }
+
+      if (error && avisar) mostrarMensaje(error, 'error');
+      return error;
+    }
+
+    ['txtFechaRetiroServicio', 'txtHoraRetiroServicio', 'txtFechaPosicionamiento',
+     'txtHoraPosicionamiento', 'txtFechaDevolucion', 'txtHoraDevolucion'].forEach(function (id) {
+      raiz.querySelector('#' + id).addEventListener('change', function () {
+        setTimeout(function () { validarCronologia(true); }, 0);
+      });
+    });
+
     // Validación de horas (equivalente a HoraValidaServicio / ConvertirHoraServicio).
     function validarHora(input, opcional) {
       // Ver nota en preguntarMoneda: el alert() debe diferirse fuera del
@@ -519,6 +623,8 @@ const FormServicio = {
     raiz.querySelector('#btnGrabarServicio').addEventListener('click', async function () {
       const v = function (id) { return raiz.querySelector('#' + id).value; };
 
+      if (validarCronologia(true)) return;
+
       const payload = {
         fechaServicioRegistro: v('txtFechaServicioRegistro'),
         clienteFacturacion: v('cboClienteFacturacion'),
@@ -532,6 +638,8 @@ const FormServicio = {
         booking: v('txtBookingServicio'),
         contenedor: v('txtContenedorServicio'),
         depositoRetiro: v('cboDepositoRetiro'),
+        lugarRetiro: v('cboLugarRetiroServicio'),
+        lugarDevolucion: v('cboLugarDevolucionServicio'),
         fechaRetiro: v('txtFechaRetiroServicio'),
         horaRetiro: v('txtHoraRetiroServicio'),
         depositoDevolucion: v('cboDepositoDevolucion'),
