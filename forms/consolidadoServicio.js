@@ -284,7 +284,10 @@ const FormConsolidadoServicio = {
     raiz.querySelector('#btnGrabarConsol').addEventListener('click', async function () {
       const estado = String(self._estadoOrigen || '').trim().toUpperCase();
 
-      if (estado === 'CULMINADO') {
+      // El botón "Culminado" de la pantalla anterior deja el ESTADO en
+      // 'COMPLETADO' (no 'CULMINADO'); antes esta comparación nunca
+      // coincidía y la validación de obligatorios quedaba sin efecto.
+      if (estado === 'COMPLETADO') {
         const obligatorios = [
           'txtClienteFacturacionConsol','txtCantidadViajesConsol','txtFlotaConsol','txtEmpresaServicioConsol',
           'txtConductorConsol','txtPlacaTractoConsol','txtPlacaCarretaConsol','txtTipoCargaConsol','txtDestino1Consol',
