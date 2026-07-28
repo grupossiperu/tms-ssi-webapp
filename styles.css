@@ -154,7 +154,14 @@ body{
   box-shadow: 0 12px 40px rgba(0,0,0,.35);
   overflow:hidden;
 }
-.panel-modal.panel-ancho{ max-width: min(1360px, 96vw); }
+.panel-modal.panel-ancho{ max-width: min(1900px, 98vw); }
+/* El overlay reduce su padding lateral para aprovechar toda la pantalla en
+   las pantallas anchas (consolidado y tarifas). */
+.overlay-modal:has(.panel-ancho){ padding-left: 8px; padding-right: 8px; }
+/* Tablas con muchas columnas: fuente algo menor para que entren sin scroll. */
+.panel-ancho .tabla-lista{ font-size:.78rem; }
+.panel-ancho .tabla-lista th,
+.panel-ancho .tabla-lista td{ padding:6px 7px; }
 .panel-modal .panel-header{
   background: var(--azul-marino);
   color:#fff;
