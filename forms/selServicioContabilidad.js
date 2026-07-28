@@ -37,6 +37,13 @@ const FormSelServicioContabilidad = {
             <option value="no">No depositado</option>
           </select>
         </div>
+        <div class="campo"><label>Datos</label>
+          <select id="filtroDatos">
+            <option value="">Todos</option>
+            <option value="completo">Completo</option>
+            <option value="incompleto">Datos incompletos</option>
+          </select>
+        </div>
         <button class="boton-secundario" id="btnBorrarFiltro">Borrar filtro</button>
       </div>
       <div style="max-height:460px; overflow:auto;">
@@ -44,7 +51,7 @@ const FormSelServicioContabilidad = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Destino</th>
             <th>Retiro</th><th>Posicionamiento</th><th>Gl. tracto</th><th>Total combustible</th>
-            <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th><th>Estado</th>
+            <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th><th>Datos</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -111,6 +118,29 @@ const FormSelServicioContabilidad = {
       return v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim().toUpperCase() === 'SI';
     }
 
+    function simboloMoneda(m) {
+      return String(m || '').trim().toUpperCase() === 'D' ? '$ ' : 'S/ ';
+    }
+
+    // Campos obligatorios para considerar un registro "completo" (mismo
+    // criterio que las validaciones de btnGrabarServicio_Click).
+    function esServicioCompleto(f) {
+      const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
+      const obligatorios = [
+        'CLIENTE PARA FACTURACIÓN', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR', 'PLACA TRACTO',
+        'PLACA CARRETA', 'TIPO DE CARGA', 'DESTINO 1', 'DEPOSITO DE RETIRO', 'FECHA DE RETIRO',
+        'HORA DE RETIRO', 'DEPOSITO DE DEVOLUCION', 'TIPO DE PRODUCTO', 'TIPO DE TRATAMIENTO',
+        'TIPO DE ABASTECIMIENTO'
+      ];
+      for (let i = 0; i < obligatorios.length; i++) {
+        const v = f[obligatorios[i]];
+        if (v === null || v === undefined || String(v).trim() === '') return false;
+      }
+      if (esConsolidado && (!f['DESTINO 2'] || String(f['DESTINO 2']).trim() === '' || String(f['DESTINO 2']).trim() === '-')) return false;
+      if (!f['TOTAL POR VIAJE'] && f['TOTAL POR VIAJE'] !== 0) return false;
+      return true;
+    }
+
     async function cargar() {
       const filtros = {
         estado: raiz.querySelector('#filtroEstado').value.trim(),
@@ -123,9 +153,14 @@ const FormSelServicioContabilidad = {
       if (dep === 'si') filas = filas.filter(f => esVerdadero(f['DEPOSITADO']));
       if (dep === 'no') filas = filas.filter(f => !esVerdadero(f['DEPOSITADO']));
 
+      const datos = raiz.querySelector('#filtroDatos').value;
+      if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
+      if (datos === 'incompleto') filas = filas.filter(f => !esServicioCompleto(f));
+
       const tbody = raiz.querySelector('#tablaServicios tbody');
       tbody.innerHTML = '';
       filas.forEach(function (f) {
+        const completo = esServicioCompleto(f);
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
         tr.innerHTML = `
@@ -134,13 +169,18 @@ const FormSelServicioContabilidad = {
           <td>${f['CONDUCTOR'] || ''}</td>
           <td>${f['PLACA TRACTO'] || ''}</td>
           <td>${f['DESTINO 1'] || ''}</td>
-          <td>${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
-          <td>${formatoFechaHora(f['FECHA DE POSICIONAMIENTO'], f['HORA DE POSICIONAMIENTO'])}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO'], f['HORA DE POSICIONAMIENTO'])}</td>
           <td>${numero(f['GL TRACTO']).toFixed(2)}</td>
-          <td>${numero(f['TOTAL TRACTO']).toFixed(2)}</td>
-          <td>${numero(f['MONTO DEPOSITADO']).toFixed(2)}</td>
-          <td>${numero(f['TARIFA 1']).toFixed(2)}</td>
+          <td>S/ ${numero(f['TOTAL TRACTO']).toFixed(2)}</td>
+          <td>S/ ${numero(f['MONTO DEPOSITADO']).toFixed(2)}</td>
+          <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center;"><input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}></td>
+          <td style="text-align:center;">
+            ${completo
+              ? '<span class="badge-datos completo">Completo</span>'
+              : '<span class="badge-datos incompleto" title="Clic para completar los datos">Datos incompletos</span>'}
+          </td>
           <td>${f['ESTADO'] || ''}</td>`;
 
         tr.querySelector('.chk-depositado').addEventListener('click', function (ev) {
@@ -149,6 +189,13 @@ const FormSelServicioContabilidad = {
         tr.querySelector('.chk-depositado').addEventListener('change', async function () {
           await llamarBackend('actualizarDepositado', { fila: f._fila, depositado: this.checked });
         });
+
+        if (!completo) {
+          tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
+            ev.stopPropagation();
+            FormServicio.abrir(f._fila);
+          });
+        }
 
         tr.addEventListener('click', function () {
           tbody.querySelectorAll('tr').forEach(x => x.classList.remove('seleccionada'));
@@ -159,7 +206,7 @@ const FormSelServicioContabilidad = {
       });
     }
 
-    ['filtroEstado', 'filtroDesde', 'filtroHasta', 'filtroDepositado'].forEach(function (id) {
+    ['filtroEstado', 'filtroDesde', 'filtroHasta', 'filtroDepositado', 'filtroDatos'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', cargar);
     });
 
@@ -168,6 +215,7 @@ const FormSelServicioContabilidad = {
       raiz.querySelector('#filtroDesde').value = '';
       raiz.querySelector('#filtroHasta').value = '';
       raiz.querySelector('#filtroDepositado').value = '';
+      raiz.querySelector('#filtroDatos').value = '';
       cargar();
     });
 

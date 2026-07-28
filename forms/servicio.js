@@ -195,15 +195,87 @@ const FormServicio = {
         </div>
       </div>`;
 
-    abrirPanel('Registrar Servicio', html, (raiz) => this._wire(raiz));
+    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz));
 
     if (filaEdicion) {
-      // Carga los datos de la fila para edición (equivalente a
-      // CargarServicioEdicion en el VBA original).
-      const registro = await llamarBackend('cargarDatosServicioParaConsolidado', {}); // no aplica aquí directamente
+      // Carga los datos de la fila para edición/completado.
+      const registro = await llamarBackend('cargarDatosServicioParaConsolidado', { fila: filaEdicion });
+      if (registro) this._precargar(document.getElementById('cuerpo-panel'), registro);
     } else {
       document.getElementById('txtFechaServicioRegistro').value = this._fechaHoy();
     }
+  },
+
+  _formatoFechaCampo: function (v) {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+  },
+
+  _formatoHoraCampo: function (v) {
+    if (v === null || v === undefined || v === '' || v === '-') return '';
+    if (/^\d{1,2}:\d{2}/.test(String(v))) return String(v).slice(0, 5);
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) {
+      return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+    }
+    return String(v);
+  },
+
+  _precargar: function (raiz, f) {
+    const self = this;
+    const set = function (id, valor) { const el = raiz.querySelector('#' + id); if (el) el.value = valor || ''; };
+
+    set('txtFechaServicioRegistro', this._formatoFechaCampo(f['FECHA DE PROGRAMACION']));
+    set('cboClienteFacturacion', f['CLIENTE PARA FACTURACIÓN']);
+    set('cboEmpresaServicio', f['EMPRESA QUE DIO EL SERVICIO']);
+    set('cboConductorServicio', f['CONDUCTOR']);
+    set('cboPlacaTractoServicio', f['PLACA TRACTO']);
+    set('cboPlacaCarretaServicio', f['PLACA CARRETA']);
+    set('cboTipoCarga', f['TIPO DE CARGA']);
+    set('txtBookingServicio', f['BOOKING']);
+    set('txtContenedorServicio', f['N° CONTENEDOR']);
+    set('cboDestino1Servicio', f['DESTINO 1']);
+    set('cboDestino2Servicio', f['DESTINO 2'] && f['DESTINO 2'] !== '-' ? f['DESTINO 2'] : '');
+    set('cboDepositoRetiro', f['DEPOSITO DE RETIRO']);
+    set('txtFechaRetiroServicio', this._formatoFechaCampo(f['FECHA DE RETIRO']));
+    set('txtHoraRetiroServicio', this._formatoHoraCampo(f['HORA DE RETIRO']));
+    set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
+    set('txtFechaDevolucion', f['FECHA DE DEVOLUCION'] && f['FECHA DE DEVOLUCION'] !== '-' ? this._formatoFechaCampo(f['FECHA DE DEVOLUCION']) : '');
+    set('txtHoraDevolucion', f['HORA DE DEVOLUCION'] && f['HORA DE DEVOLUCION'] !== '-' ? this._formatoHoraCampo(f['HORA DE DEVOLUCION']) : '');
+    set('txtFechaPosicionamiento', this._formatoFechaCampo(f['FECHA DE POSICIONAMIENTO']));
+    set('txtHoraPosicionamiento', this._formatoHoraCampo(f['HORA DE POSICIONAMIENTO']));
+    set('cboTipoProductoServicio', f['TIPO DE PRODUCTO']);
+    set('cboTipoTratamiento', f['TIPO DE TRATAMIENTO']);
+    set('txtCostoPetroleoGalon', f['COSTO DEL PETRÓLEO X GALÓN'] || '');
+    set('txtGlTracto', f['GL TRACTO'] || '');
+    set('txtTotalTracto', (Number(f['TOTAL TRACTO']) || 0).toFixed(2));
+    set('txtGlGenerador', f['GL GENERADOR'] || '');
+    set('txtTotalGenerador', (Number(f['TOTAL GENERADOR']) || 0).toFixed(2));
+    set('txtViaticoServicio', f['VIATICO'] || '');
+    set('txtPeajeServicio', f['PEAJE'] || '');
+    set('txtCocheraServicio', f['COCHERA'] || '');
+    set('txtMontoDepositadoServicio', (Number(f['MONTO DEPOSITADO']) || 0).toFixed(2));
+    set('txtTotalViaje', (Number(f['TOTAL POR VIAJE']) || 0).toFixed(2));
+    self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || '';
+
+    const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
+    raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
+    raiz.querySelector('#txtTarifa2Servicio').disabled = !esConsolidado;
+    raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa2Servicio"]').forEach(function (b) { b.disabled = !esConsolidado; });
+
+    function pintarTarifa(campo, monto, moneda) {
+      const n = Number(monto) || 0;
+      if (n === 0 && !moneda) return;
+      const prefijo = String(moneda).toUpperCase() === 'D' ? '$ ' : 'S/ ';
+      set(campo, prefijo + n.toFixed(2));
+      raiz.querySelectorAll('.boton-moneda[data-campo="' + campo + '"]').forEach(function (b) {
+        b.classList.toggle('activo', b.dataset.moneda === (String(moneda).toUpperCase() === 'D' ? 'D' : 'S'));
+      });
+    }
+    pintarTarifa('txtTarifa1Servicio', f['TARIFA 1'], f['MONEDA TARIFA 1']);
+    if (esConsolidado) pintarTarifa('txtTarifa2Servicio', f['TARIFA 2'], f['MONEDA TARIFA 2']);
   },
 
   _fechaHoy: function () {
@@ -497,7 +569,11 @@ const FormServicio = {
       }
 
       mostrarMensaje(resp.mensaje, 'exito');
-      cerrarPanel();
+      if (self._modoEdicion && typeof FormSelServicioContabilidad !== 'undefined') {
+        FormSelServicioContabilidad.abrir();
+      } else {
+        cerrarPanel();
+      }
     });
 
     const idsMapeo = {
