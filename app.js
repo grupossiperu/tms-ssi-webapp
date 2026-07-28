@@ -114,6 +114,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormSelServicioContabilidad.abrir();
   });
 
+  document.getElementById('btn-deposito').addEventListener('click', function () {
+    FormDeposito.abrir();
+  });
+
   document.getElementById('btn-sobrecostos').addEventListener('click', function () {
     FormSobrecostos.abrir();
   });
