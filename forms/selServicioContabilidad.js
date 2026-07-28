@@ -51,8 +51,8 @@ const FormSelServicioContabilidad = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th>
             <th>Ciudad retiro</th><th>Destino 1</th><th>Destino 2</th><th>Ciudad devolución</th>
-            <th>Retiro</th><th>Posicionamiento</th><th>Gl. tracto</th><th>Total combustible</th>
-            <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th><th>Datos</th><th>Estado</th>
+            <th>Retiro</th><th>Posicionamiento</th><th>Booking</th>
+            <th>Monto a depositar</th><th>Depositado</th><th>Datos</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -194,10 +194,8 @@ const FormSelServicioContabilidad = {
           <td>${f['CIUDAD DE DEVOLUCION'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
-          <td>${numero(f['GL TRACTO']).toFixed(2)}</td>
-          <td>S/ ${numero(f['TOTAL TRACTO']).toFixed(2)}</td>
+          <td>${f['BOOKING'] || ''}</td>
           <td>S/ ${numero(f['MONTO DEPOSITADO']).toFixed(2)}</td>
-          <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center;"><input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}></td>
           <td style="text-align:center;">
             ${completo
