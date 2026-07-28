@@ -314,6 +314,7 @@ const FormServicio = {
         <button class="boton-secundario" id="btnInicioServicio">Inicio</button>
         <div style="display:flex; gap:10px;">
           <button class="boton-secundario" id="btnCalcularServicio">Calcular</button>
+          <button class="boton-secundario" id="btnImprimirServicio">Imprimir</button>
           <button class="boton-primario" id="btnGrabarServicio">Grabar</button>
         </div>
       </div>`;
@@ -423,6 +424,148 @@ const FormServicio = {
   _fechaHoy: function () {
     const hoy = new Date();
     return String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
+  },
+
+  /**
+   * Genera una vista imprimible en A4 con todos los datos del formulario,
+   * EXCEPTO la Tarifa (ese dato es confidencial y no debe salir impreso).
+   * Abre una ventana nueva con el documento listo y dispara el diálogo de
+   * impresión del navegador (desde ahí el usuario puede "Guardar como PDF").
+   */
+  _imprimir: function (raiz) {
+    const v = function (id) {
+      const el = raiz.querySelector('#' + id);
+      return el ? (el.value || '').trim() : '';
+    };
+    const moneda = function (id) {
+      const t = v(id);
+      if (t === '') return '';
+      if (/^[S$]/.test(t)) return t;
+      const n = Number(t);
+      return isNaN(n) ? t : 'S/ ' + n.toFixed(2);
+    };
+    const esc = function (t) {
+      return String(t || '').replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+    };
+    const campo = function (etiqueta, valor) {
+      return '<div class="campo-imp"><div class="lbl-imp">' + esc(etiqueta) + '</div><div class="val-imp">' + esc(valor) + '&nbsp;</div></div>';
+    };
+    const seccion = function (titulo, campos) {
+      return '<div class="seccion-imp"><div class="tit-imp">' + esc(titulo) + '</div><div class="fila-imp">' + campos.join('') + '</div></div>';
+    };
+
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de Servicio</title><style>' +
+      '@page{ size:A4; margin:11mm; }' +
+      '*{ box-sizing:border-box; }' +
+      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; font-size:10.5px; }' +
+      '.encabezado{ display:flex; align-items:flex-end; justify-content:space-between; border-bottom:2.5px solid #1c3a5e; padding-bottom:7px; margin-bottom:9px; }' +
+      '.encabezado h1{ font-size:14px; margin:0; color:#1c3a5e; }' +
+      '.encabezado p{ margin:2px 0 0; font-size:10px; color:#444; }' +
+      '.encabezado .fecha-imp{ font-size:9px; color:#444; text-align:right; }' +
+      '.seccion-imp{ margin-bottom:6px; page-break-inside:avoid; }' +
+      '.tit-imp{ background:#1c3a5e; color:#fff; font-size:9px; font-weight:700; padding:2.5px 7px; letter-spacing:.3px; }' +
+      '.fila-imp{ display:flex; flex-wrap:wrap; border:1px solid #c7ced8; border-top:none; }' +
+      '.campo-imp{ flex:1 1 0; min-width:118px; border-right:1px solid #dde3ea; border-bottom:1px solid #dde3ea; padding:3px 7px; }' +
+      '.campo-imp:last-child{ border-right:none; }' +
+      '.lbl-imp{ font-size:7.5px; font-weight:700; color:#556; text-transform:uppercase; letter-spacing:.2px; }' +
+      '.val-imp{ font-size:10.5px; min-height:13px; margin-top:1px; }' +
+      '.no-print{ text-align:center; margin:14px 0; }' +
+      '.no-print button{ padding:9px 22px; font-size:13px; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
+      '@media print{ .no-print{ display:none; } }' +
+      '</style></head><body>' +
+      '<div class="encabezado"><div><h1>TRANSPORTES SSI S.A.C.</h1><p>Registro de Servicio</p></div>' +
+      '<div class="fecha-imp">Impreso: ' + esc(new Date().toLocaleString('es-PE')) + '</div></div>' +
+      seccion('Datos generales', [
+        campo('Fecha de registro', v('txtFechaServicioRegistro')),
+        campo('Cliente para facturación', v('cboClienteFacturacion')),
+        campo('Empresa que dio el servicio', v('cboEmpresaServicio'))
+      ]) +
+      seccion('Conductor y unidad', [
+        campo('Conductor', v('cboConductorServicio')),
+        campo('Placa tracto', v('cboPlacaTractoServicio')),
+        campo('Placa carreta', v('cboPlacaCarretaServicio'))
+      ]) +
+      seccion('Carga y ruta', [
+        campo('Tipo de carga', v('cboTipoCarga')),
+        campo('Destino 1', v('cboDestino1Servicio')),
+        campo('Destino 2', v('cboDestino2Servicio')),
+        campo('Ciudad de retiro', v('cboCiudadRetiroServicio')),
+        campo('Ciudad de devolución', v('cboCiudadDevolucionServicio'))
+      ]) +
+      seccion('Documentación', [
+        campo('Booking', v('txtBookingServicio')),
+        campo('N° Contenedor', v('txtContenedorServicio'))
+      ]) +
+      seccion('Producto', [
+        campo('Tipo de producto', v('cboTipoProductoServicio')),
+        campo('Tipo de tratamiento', v('cboTipoTratamiento')),
+        campo('Packing', v('cboPackingServicio'))
+      ]) +
+      seccion('Thermoregistro', [
+        campo('Thermoregistro', v('cboThermoregistro')),
+        campo('Cantidad', v('txtCantidadThermoregistro')),
+        campo('Modelo', v('cboModeloThermoregistro'))
+      ]) +
+      seccion('Aduana', [
+        campo('Precinto de aduana', v('cboPrecintoAduana')),
+        campo('Operador logístico', v('cboOperadorLogistico'))
+      ]) +
+      seccion('Filtro de etileno', [
+        campo('Filtro de etileno', v('cboFiltroEtileno')),
+        campo('Cantidad', v('txtCantidadFiltroEtileno'))
+      ]) +
+      seccion('Barras consolidado', [
+        campo('Barras consolidado', v('cboBarrasConsolidado')),
+        campo('Cantidad', v('txtCantidadBarras'))
+      ]) +
+      seccion('Retiro', [
+        campo('Depósito de retiro', v('cboDepositoRetiro')),
+        campo('Fecha de retiro', v('txtFechaRetiroServicio')),
+        campo('Hora de retiro', v('txtHoraRetiroServicio'))
+      ]) +
+      seccion('Posicionamiento 1', [
+        campo('Lugar', v('txtLugarPosicionamiento1')),
+        campo('Fecha', v('txtFechaPosicionamiento')),
+        campo('Hora', v('txtHoraPosicionamiento'))
+      ]) +
+      seccion('Posicionamiento 2 (carga consolidada)', [
+        campo('Lugar', v('txtLugarPosicionamiento2')),
+        campo('Fecha', v('txtFechaPosicionamiento2')),
+        campo('Hora', v('txtHoraPosicionamiento2'))
+      ]) +
+      seccion('Devolución', [
+        campo('Depósito de devolución', v('cboDepositoDevolucion')),
+        campo('Fecha de devolución', v('txtFechaDevolucion')),
+        campo('Hora de devolución', v('txtHoraDevolucion'))
+      ]) +
+      seccion('Combustible', [
+        campo('Costo petróleo x galón', moneda('txtCostoPetroleoGalon')),
+        campo('Galones tracto', v('txtGlTracto')),
+        campo('Galones genset', v('txtGlGenerador')),
+        campo('Total tracto', moneda('txtTotalTracto')),
+        campo('Total genset', moneda('txtTotalGenerador')),
+        campo('Total combustible', moneda('txtTotalCombustible'))
+      ]) +
+      seccion('Gastos', [
+        campo('Viático', moneda('txtViaticoServicio')),
+        campo('Peaje', moneda('txtPeajeServicio')),
+        campo('Cochera', moneda('txtCocheraServicio'))
+      ]) +
+      seccion('Totales', [
+        campo('Monto para depositar', moneda('txtMontoDepositadoServicio')),
+        campo('Total por viaje', moneda('txtTotalViaje'))
+      ]) +
+      '<div class="no-print"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div>' +
+      '</body></html>';
+
+    const ventana = window.open('', '_blank');
+    if (!ventana) {
+      mostrarMensaje('El navegador bloqueó la ventana de impresión. Habilite las ventanas emergentes para este sitio.', 'error');
+      return;
+    }
+    ventana.document.open();
+    ventana.document.write(html);
+    ventana.document.close();
   },
 
   _numero: function (texto) {
@@ -780,6 +923,10 @@ const FormServicio = {
     });
 
     raiz.querySelector('#btnInicioServicio').addEventListener('click', cerrarPanel);
+
+    raiz.querySelector('#btnImprimirServicio').addEventListener('click', function () {
+      self._imprimir(raiz);
+    });
 
     raiz.querySelector('#btnGrabarServicio').addEventListener('click', async function () {
       const v = function (id) { return raiz.querySelector('#' + id).value; };
