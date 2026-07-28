@@ -13,9 +13,13 @@
  *
  * Filtros: por fecha (Desde/Hasta) y por si está depositado o no.
  * Clic en la fila abre Registrar Servicio para poder modificar los datos.
- * El botón "+" junto al check permite registrar un depósito PARCIAL (a
- * veces el monto se paga en más de una vez); cuando la suma de los
- * parciales cubre el total, el check se marca solo.
+ *
+ * El check "Depositado" es 100% manual: el usuario lo marca cuando ya
+ * depositó el monto completo, y eso es lo único que lo cambia.
+ * El botón "+" junto al check es para otra cosa: a veces hay que hacerle al
+ * conductor un depósito ADICIONAL, fuera del "Total a depositar" calculado
+ * (un imprevisto del viaje, por ejemplo). Ese botón solo deja un historial
+ * de esos depósitos extra — nunca marca ni desmarca el check.
  * -------------------------------------------------------------------------
  */
 const FormDeposito = {
@@ -116,7 +120,7 @@ const FormDeposito = {
 
       filas.forEach(function (f) {
         const objetivo = numero(f['MONTO DEPOSITADO']);
-        const acumulado = numero(resumen[f._fila]);
+        const adicional = numero(resumen[f._fila]);
 
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
@@ -136,11 +140,11 @@ const FormDeposito = {
           <td>S/ ${numero(f['VIATICO']).toFixed(2)}</td>
           <td>S/ ${numero(f['COCHERA']).toFixed(2)}</td>
           <td>${f['TIPO DE ABASTECIMIENTO'] || ''}</td>
-          <td title="${acumulado > 0 ? ('Acumulado: S/ ' + acumulado.toFixed(2) + ' de S/ ' + objetivo.toFixed(2)) : ''}">S/ ${objetivo.toFixed(2)}${acumulado > 0 && acumulado < objetivo ? ' <span style="color:#ad2b2b;font-size:.72rem;">(S/ ' + acumulado.toFixed(2) + ')</span>' : ''}</td>
+          <td>S/ ${objetivo.toFixed(2)}${adicional > 0 ? ' <span style="color:#1c3a5e;font-size:.72rem;" title="Depósitos adicionales registrados para este servicio">(+S/ ' + adicional.toFixed(2) + ')</span>' : ''}</td>
           <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center; white-space:nowrap;">
             <input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}>
-            <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Registrar un depósito parcial">+</button>
+            <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Registrar un depósito adicional (fuera del total a depositar)">+</button>
           </td>`;
 
         const chk = tr.querySelector('.chk-depositado');
@@ -154,8 +158,9 @@ const FormDeposito = {
           ev.stopPropagation();
 
           const montoTxt = window.prompt(
-            'Monto del depósito para ' + (f['CONDUCTOR'] || 'este servicio') +
-            (objetivo > 0 ? '\n(Objetivo total: S/ ' + objetivo.toFixed(2) + (acumulado > 0 ? ' — ya depositado: S/ ' + acumulado.toFixed(2) : '') + ')' : ''),
+            'Monto del depósito ADICIONAL para ' + (f['CONDUCTOR'] || 'este servicio') +
+            '\n(Esto es dinero extra, fuera del Total a depositar de S/ ' + objetivo.toFixed(2) + '. No afecta el check "Depositado".)' +
+            (adicional > 0 ? '\nYa registrado como adicional: S/ ' + adicional.toFixed(2) : ''),
             ''
           );
           if (montoTxt === null || montoTxt.trim() === '') return;
