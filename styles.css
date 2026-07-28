@@ -208,6 +208,7 @@ body{
 .badge-datos.completo{ background:#dff5e6; color:var(--verde-oscuro); }
 .badge-datos.incompleto{ background:#fde3e3; color:var(--rojo-oscuro); cursor:pointer; text-decoration:underline; }
 .badge-datos.incompleto:hover{ background:#fbc9c9; }
+.badge-datos.historico{ background:#eef1f5; color:#66707d; }
 
 .boton-primario, .boton-secundario, .boton-peligro{
   padding: 10px 20px; border-radius: 9px; border:none; font-weight:700; cursor:pointer; font-size:.92rem;

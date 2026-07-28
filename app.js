@@ -134,6 +134,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormConductores.abrir();
   });
 
+  document.getElementById('btn-tarifas').addEventListener('click', function () {
+    FormTarifas.abrir();
+  });
+
   document.getElementById('btn-ver').addEventListener('click', function () {
     FormAccesoServicios.abrir(function () {
       // Equivalente a hacer visibles las hojas del módulo: en la web
