@@ -4,8 +4,8 @@
  * Matriz de Tarifas. Pantalla nueva (no existía en el VBA original).
  *
  * Registra el precio acordado para una ruta completa:
- *   Fecha + Cliente + Lugar de retiro + Destino 1 + Destino 2 +
- *   Lugar de devolución + Tarifa (S/ o $)
+ *   Fecha + Cliente + Ciudad de retiro + Destino 1 + Destino 2 +
+ *   Ciudad de devolución + Tarifa (S/ o $)
  *
  * Todos los combos son de texto libre con lista sugerida (<datalist>), así
  * que se puede elegir un valor existente o escribir uno nuevo sin pasos
@@ -27,7 +27,7 @@ const FormTarifas = {
     const html = `
       <div class="aviso-caja">
         Registre aquí el precio acordado por ruta. Al registrar un servicio con la
-        misma combinación de cliente, lugar de retiro, destinos y lugar de devolución,
+        misma combinación de cliente, ciudad de retiro, destinos y ciudad de devolución,
         la tarifa se completará automáticamente. Si vuelve a registrar la misma ruta
         con otro precio, se conserva el historial y se usará siempre la más reciente.
       </div>
@@ -43,9 +43,9 @@ const FormTarifas = {
           <datalist id="lst-tarClientes">${opciones(datos.clientes)}</datalist>
         </div>
         <div class="campo">
-          <label>Lugar de retiro</label>
-          <input list="lst-tarRetiro" id="cboLugarRetiroTarifa" placeholder="Escriba o elija">
-          <datalist id="lst-tarRetiro">${opciones(datos.lugaresRetiro)}</datalist>
+          <label>Ciudad de retiro</label>
+          <input list="lst-tarRetiro" id="cboCiudadRetiroTarifa" placeholder="Escriba o elija">
+          <datalist id="lst-tarRetiro">${opciones(datos.ciudadesRetiro)}</datalist>
         </div>
         <div class="campo">
           <label>Destino 1</label>
@@ -57,9 +57,9 @@ const FormTarifas = {
           <datalist id="lst-tarDestinos">${opciones(datos.destinos)}</datalist>
         </div>
         <div class="campo">
-          <label>Lugar de devolución</label>
-          <input list="lst-tarDevolucion" id="cboLugarDevolucionTarifa" placeholder="Escriba o elija">
-          <datalist id="lst-tarDevolucion">${opciones(datos.lugaresDevolucion)}</datalist>
+          <label>Ciudad de devolución</label>
+          <input list="lst-tarDevolucion" id="cboCiudadDevolucionTarifa" placeholder="Escriba o elija">
+          <datalist id="lst-tarDevolucion">${opciones(datos.ciudadesDevolucion)}</datalist>
         </div>
         <div class="campo">
           <label>Tarifa</label>
@@ -77,8 +77,8 @@ const FormTarifas = {
       <div style="max-height:340px; overflow:auto; margin-top:6px;">
         <table class="tabla-lista" id="tablaTarifas">
           <thead><tr>
-            <th>Fecha</th><th>Cliente</th><th>Lugar de retiro</th><th>Destino 1</th>
-            <th>Destino 2</th><th>Lugar de devolución</th><th>Tarifa</th><th></th>
+            <th>Fecha</th><th>Cliente</th><th>Ciudad de retiro</th><th>Destino 1</th>
+            <th>Destino 2</th><th>Ciudad de devolución</th><th>Tarifa</th><th></th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -135,7 +135,7 @@ const FormTarifas = {
       const vistas = {};
 
       (resp.tarifas || []).forEach(function (t) {
-        const clave = [t['CLIENTE'], t['LUGAR DE RETIRO'], t['DESTINO 1'], t['DESTINO 2'], t['LUGAR DE DEVOLUCION']]
+        const clave = [t['CLIENTE'], t['CIUDAD DE RETIRO'], t['DESTINO 1'], t['DESTINO 2'], t['CIUDAD DE DEVOLUCION']]
           .map(function (v) { return String(v || '').trim().toUpperCase(); }).join('|');
         const vigente = !vistas[clave];
         vistas[clave] = true;
@@ -145,10 +145,10 @@ const FormTarifas = {
         tr.innerHTML = `
           <td>${formatoFecha(t['FECHA'])}</td>
           <td>${t['CLIENTE'] || ''}</td>
-          <td>${t['LUGAR DE RETIRO'] || ''}</td>
+          <td>${t['CIUDAD DE RETIRO'] || ''}</td>
           <td>${t['DESTINO 1'] || ''}</td>
           <td>${t['DESTINO 2'] || ''}</td>
-          <td>${t['LUGAR DE DEVOLUCION'] || ''}</td>
+          <td>${t['CIUDAD DE DEVOLUCION'] || ''}</td>
           <td>${simbolo(t['MONEDA'])}${(Number(t['TARIFA']) || 0).toFixed(2)}</td>
           <td>${vigente
             ? '<span class="badge-datos completo">Vigente</span>'
@@ -163,10 +163,10 @@ const FormTarifas = {
       const resp = await llamarBackend('agregarTarifa', {
         fecha: v('txtFechaTarifa'),
         cliente: v('cboClienteTarifa'),
-        lugarRetiro: v('cboLugarRetiroTarifa'),
+        ciudadRetiro: v('cboCiudadRetiroTarifa'),
         destino1: v('cboDestino1Tarifa'),
         destino2: v('cboDestino2Tarifa'),
-        lugarDevolucion: v('cboLugarDevolucionTarifa'),
+        ciudadDevolucion: v('cboCiudadDevolucionTarifa'),
         tarifa: v('txtTarifaValor'),
         moneda: self._moneda
       });

@@ -28,6 +28,8 @@ const FormServicio = {
       }).join('');
     };
 
+    // El formulario se arma en filas de 3 campos, en el orden exacto que
+    // definió el usuario. Cada bloque .fila-campos es una fila visual.
     const html = `
       <div class="fila-campos">
         <div class="campo">
@@ -44,6 +46,9 @@ const FormServicio = {
           <input list="lst-empresas" id="cboEmpresaServicio">
           <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Conductor</label>
           <div class="fila-combo-mas">
@@ -65,10 +70,46 @@ const FormServicio = {
             <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
           </div>
         </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Tipo de carga</label>
           <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
         </div>
+        <div class="campo">
+          <label>Destino 1</label>
+          <input list="lst-destinos" id="cboDestino1Servicio">
+        </div>
+        <div class="campo">
+          <label>Destino 2 (solo carga consolidado)</label>
+          <input list="lst-destinos" id="cboDestino2Servicio" disabled>
+          <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Ciudad de retiro</label>
+          <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
+          <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Ciudad de devolución</label>
+          <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
+          <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Tarifa</label>
+          <div class="fila-combo-mas">
+            <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
+            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
+            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Booking</label>
           <input type="text" id="txtBookingServicio">
@@ -77,41 +118,28 @@ const FormServicio = {
           <label>N° Contenedor (ABCU1234567)</label>
           <input type="text" id="txtContenedorServicio">
         </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
-          <label>Destino 1</label>
-          <input list="lst-destinos" id="cboDestino1Servicio">
+          <label>Tipo de producto</label>
+          <input list="lst-tipoProd" id="cboTipoProductoServicio">
+          <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-          <label>Tarifa 1</label>
-          <div class="fila-combo-mas">
-            <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
-            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
-            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
-          </div>
+          <label>Tipo de tratamiento</label>
+          <input list="lst-tipoTrat" id="cboTipoTratamiento">
+          <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-          <label>Destino 2 (solo carga consolidado)</label>
-          <input list="lst-destinos" id="cboDestino2Servicio" disabled>
-          <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
+          <label>Packing</label>
+          <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
+          <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
-        <div class="campo">
-          <label>Tarifa 2 (solo carga consolidado)</label>
-          <div class="fila-combo-mas">
-            <input type="text" id="txtTarifa2Servicio" placeholder="0.00" disabled>
-            <button type="button" class="boton-moneda" data-campo="txtTarifa2Servicio" data-moneda="S" disabled>S/</button>
-            <button type="button" class="boton-moneda" data-campo="txtTarifa2Servicio" data-moneda="D" disabled>$</button>
-          </div>
-        </div>
-        <div class="campo">
-          <label>Lugar de retiro</label>
-          <input list="lst-lugRetiro" id="cboLugarRetiroServicio" placeholder="Escriba o elija">
-          <datalist id="lst-lugRetiro">${(datos.lugaresRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Lugar de devolución</label>
-          <input list="lst-lugDevolucion" id="cboLugarDevolucionServicio" placeholder="Escriba o elija">
-          <datalist id="lst-lugDevolucion">${(datos.lugaresDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Depósito de retiro</label>
           <input list="lst-depRetiro" id="cboDepositoRetiro">
@@ -125,6 +153,25 @@ const FormServicio = {
           <label>Hora de retiro</label>
           <input type="text" id="txtHoraRetiroServicio" placeholder="08:00">
         </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Lugar de retiro</label>
+          <input list="lst-lugRetiro" id="cboLugarRetiroServicio" placeholder="Escriba o elija">
+          <datalist id="lst-lugRetiro">${(datos.lugaresRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Fecha de posicionamiento</label>
+          <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
+        </div>
+        <div class="campo">
+          <label>Hora de posicionamiento</label>
+          <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
+        </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Depósito de devolución</label>
           <input list="lst-depDevolucion" id="cboDepositoDevolucion">
@@ -138,24 +185,19 @@ const FormServicio = {
           <label>Hora de devolución</label>
           <input type="text" id="txtHoraDevolucion" placeholder="hh:mm o -">
         </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
-          <label>Fecha de posicionamiento</label>
-          <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
+          <label>Lugar de devolución</label>
+          <input list="lst-lugDevolucion" id="cboLugarDevolucionServicio" placeholder="Escriba o elija">
+          <datalist id="lst-lugDevolucion">${(datos.lugaresDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
-        <div class="campo">
-          <label>Hora de posicionamiento</label>
-          <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
-        </div>
-        <div class="campo">
-          <label>Tipo de producto</label>
-          <input list="lst-tipoProd" id="cboTipoProductoServicio">
-          <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Tipo de tratamiento</label>
-          <input list="lst-tipoTrat" id="cboTipoTratamiento">
-          <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
+        <div class="campo"></div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Costo del petróleo x galón</label>
           <input type="text" id="txtCostoPetroleoGalon">
@@ -165,17 +207,27 @@ const FormServicio = {
           <input type="text" id="txtGlTracto">
         </div>
         <div class="campo">
+          <label>Galones genset</label>
+          <input type="text" id="txtGlGenerador">
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
           <label>Total tracto</label>
           <input type="text" id="txtTotalTracto" disabled>
         </div>
         <div class="campo">
-          <label>Galones generador</label>
-          <input type="text" id="txtGlGenerador">
-        </div>
-        <div class="campo">
-          <label>Total generador</label>
+          <label>Total genset</label>
           <input type="text" id="txtTotalGenerador" disabled>
         </div>
+        <div class="campo">
+          <label>Total combustible</label>
+          <input type="text" id="txtTotalCombustible" disabled>
+        </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
           <label>Viático</label>
           <input type="text" id="txtViaticoServicio">
@@ -188,14 +240,18 @@ const FormServicio = {
           <label>Cochera</label>
           <input type="text" id="txtCocheraServicio">
         </div>
+      </div>
+
+      <div class="fila-campos">
         <div class="campo">
-          <label>Monto depositado</label>
+          <label>Monto para depositar</label>
           <input type="text" id="txtMontoDepositadoServicio" disabled>
         </div>
         <div class="campo">
           <label>Total por viaje</label>
           <input type="text" id="txtTotalViaje" disabled>
         </div>
+        <div class="campo"></div>
       </div>
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <button class="boton-secundario" id="btnInicioServicio">Inicio</button>
@@ -251,6 +307,9 @@ const FormServicio = {
     set('cboDepositoRetiro', f['DEPOSITO DE RETIRO']);
     set('cboLugarRetiroServicio', f['LUGAR DE RETIRO']);
     set('cboLugarDevolucionServicio', f['LUGAR DE DEVOLUCION']);
+    set('cboCiudadRetiroServicio', f['CIUDAD DE RETIRO']);
+    set('cboCiudadDevolucionServicio', f['CIUDAD DE DEVOLUCION']);
+    set('cboPackingServicio', f['PACKING']);
     set('txtFechaRetiroServicio', this._formatoFechaCampo(f['FECHA DE RETIRO']));
     set('txtHoraRetiroServicio', this._formatoHoraCampo(f['HORA DE RETIRO']));
     set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
@@ -265,6 +324,7 @@ const FormServicio = {
     set('txtTotalTracto', (Number(f['TOTAL TRACTO']) || 0).toFixed(2));
     set('txtGlGenerador', f['GL GENERADOR'] || '');
     set('txtTotalGenerador', (Number(f['TOTAL GENERADOR']) || 0).toFixed(2));
+    set('txtTotalCombustible', ((Number(f['TOTAL TRACTO']) || 0) + (Number(f['TOTAL GENERADOR']) || 0)).toFixed(2));
     set('txtViaticoServicio', f['VIATICO'] || '');
     set('txtPeajeServicio', f['PEAJE'] || '');
     set('txtCocheraServicio', f['COCHERA'] || '');
@@ -274,8 +334,6 @@ const FormServicio = {
 
     const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
     raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
-    raiz.querySelector('#txtTarifa2Servicio').disabled = !esConsolidado;
-    raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa2Servicio"]').forEach(function (b) { b.disabled = !esConsolidado; });
 
     function pintarTarifa(campo, monto, moneda) {
       const n = Number(monto) || 0;
@@ -287,7 +345,6 @@ const FormServicio = {
       });
     }
     pintarTarifa('txtTarifa1Servicio', f['TARIFA 1'], f['MONEDA TARIFA 1']);
-    if (esConsolidado) pintarTarifa('txtTarifa2Servicio', f['TARIFA 2'], f['MONEDA TARIFA 2']);
   },
 
   _fechaHoy: function () {
@@ -371,8 +428,14 @@ const FormServicio = {
       const costoGalon = self._numero(raiz.querySelector('#txtCostoPetroleoGalon').value);
       const glTracto = self._numero(raiz.querySelector('#txtGlTracto').value);
       const glGenerador = self._numero(raiz.querySelector('#txtGlGenerador').value);
-      raiz.querySelector('#txtTotalTracto').value = (costoGalon * glTracto).toFixed(2);
-      raiz.querySelector('#txtTotalGenerador').value = (costoGalon * glGenerador).toFixed(2);
+      const totalTracto = costoGalon * glTracto;
+      const totalGenset = costoGalon * glGenerador;
+
+      raiz.querySelector('#txtTotalTracto').value = totalTracto.toFixed(2);
+      raiz.querySelector('#txtTotalGenerador').value = totalGenset.toFixed(2);
+      // Total combustible = tracto + genset (campo solo de lectura).
+      raiz.querySelector('#txtTotalCombustible').value = (totalTracto + totalGenset).toFixed(2);
+
       calcularMontoDepositado();
       actualizarTotalViaje();
     }
@@ -403,21 +466,12 @@ const FormServicio = {
       });
     });
 
-    // Tipo de carga: habilita/bloquea Destino 2 y Tarifa 2 (campo + botones de moneda).
+    // Tipo de carga: habilita/bloquea Destino 2. La tarifa ahora es única y
+    // cubre la ruta completa, así que ya no hay una Tarifa 2 separada.
     raiz.querySelector('#cboTipoCarga').addEventListener('change', function () {
       const esConsolidado = this.value.trim().toUpperCase() === 'CARGA CONSOLIDADO';
       raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
-      raiz.querySelector('#txtTarifa2Servicio').disabled = !esConsolidado;
-      raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa2Servicio"]').forEach(function (b) {
-        b.disabled = !esConsolidado;
-      });
-      if (!esConsolidado) {
-        raiz.querySelector('#cboDestino2Servicio').value = '';
-        raiz.querySelector('#txtTarifa2Servicio').value = '';
-        raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa2Servicio"]').forEach(function (b) {
-          b.classList.remove('activo');
-        });
-      }
+      if (!esConsolidado) raiz.querySelector('#cboDestino2Servicio').value = '';
     });
 
     // Destino 1 / Destino 2: busca costos automáticamente (Viático/Peaje/Cochera).
@@ -433,10 +487,7 @@ const FormServicio = {
           raiz.querySelector('#txtViaticoServicio').value = resp.viatico.toFixed(2);
           raiz.querySelector('#txtPeajeServicio').value = resp.peaje.toFixed(2);
           raiz.querySelector('#txtCocheraServicio').value = resp.cochera.toFixed(2);
-          raiz.querySelector('#txtTarifa1Servicio').value = '';
           calcularMontoDepositado();
-        } else {
-          raiz.querySelector('#txtTarifa2Servicio').value = '';
         }
         return;
       }
@@ -453,10 +504,7 @@ const FormServicio = {
         raiz.querySelector('#txtViaticoServicio').value = viatico.toFixed(2);
         raiz.querySelector('#txtPeajeServicio').value = peaje.toFixed(2);
         raiz.querySelector('#txtCocheraServicio').value = cochera.toFixed(2);
-        raiz.querySelector('#txtTarifa1Servicio').value = '';
         calcularMontoDepositado();
-      } else {
-        raiz.querySelector('#txtTarifa2Servicio').value = '';
       }
       mostrarMensaje('Destino agregado correctamente a la base de costos.', 'exito');
     }
@@ -477,22 +525,22 @@ const FormServicio = {
       const v = function (id) { return raiz.querySelector('#' + id).value.trim(); };
 
       const cliente = v('cboClienteFacturacion');
-      const lugarRetiro = v('cboLugarRetiroServicio');
+      const ciudadRetiro = v('cboCiudadRetiroServicio');
       const destino1 = v('cboDestino1Servicio');
       const destino2 = v('cboDestino2Servicio');
-      const lugarDevolucion = v('cboLugarDevolucionServicio');
+      const ciudadDevolucion = v('cboCiudadDevolucionServicio');
 
-      if (cliente === '' || lugarRetiro === '' || destino1 === '' || lugarDevolucion === '') return;
+      if (cliente === '' || ciudadRetiro === '' || destino1 === '' || ciudadDevolucion === '') return;
 
       const campoTarifa = raiz.querySelector('#txtTarifa1Servicio');
       if (self._numero(campoTarifa.value) > 0 && !campoTarifa.dataset.autocompletada) return;
 
       const resp = await llamarBackend('buscarTarifa', {
         cliente: cliente,
-        lugarRetiro: lugarRetiro,
+        ciudadRetiro: ciudadRetiro,
         destino1: destino1,
         destino2: destino2,
-        lugarDevolucion: lugarDevolucion
+        ciudadDevolucion: ciudadDevolucion
       });
 
       if (!resp.encontrado) return;
@@ -506,8 +554,8 @@ const FormServicio = {
       });
     }
 
-    ['cboClienteFacturacion', 'cboLugarRetiroServicio', 'cboDestino1Servicio',
-     'cboDestino2Servicio', 'cboLugarDevolucionServicio'].forEach(function (id) {
+    ['cboClienteFacturacion', 'cboCiudadRetiroServicio', 'cboDestino1Servicio',
+     'cboDestino2Servicio', 'cboCiudadDevolucionServicio'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', function () {
         setTimeout(buscarTarifaAutomatica, 0);
       });
@@ -640,6 +688,10 @@ const FormServicio = {
         depositoRetiro: v('cboDepositoRetiro'),
         lugarRetiro: v('cboLugarRetiroServicio'),
         lugarDevolucion: v('cboLugarDevolucionServicio'),
+        ciudadRetiro: v('cboCiudadRetiroServicio'),
+        ciudadDevolucion: v('cboCiudadDevolucionServicio'),
+        packing: v('cboPackingServicio'),
+        totalCombustible: v('txtTotalCombustible'),
         fechaRetiro: v('txtFechaRetiroServicio'),
         horaRetiro: v('txtHoraRetiroServicio'),
         depositoDevolucion: v('cboDepositoDevolucion'),
@@ -660,7 +712,6 @@ const FormServicio = {
         montoDepositado: v('txtMontoDepositadoServicio'),
         totalViaje: v('txtTotalViaje'),
         tarifa1: v('txtTarifa1Servicio'),
-        tarifa2: v('txtTarifa2Servicio'),
         tipoAbastecimiento: self._tipoAbastecimiento,
         modoEdicion: self._modoEdicion,
         filaEdicion: self._filaEdicion

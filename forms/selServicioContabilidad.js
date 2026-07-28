@@ -138,7 +138,8 @@ const FormSelServicioContabilidad = {
       const campos = [
         'FECHA DE PROGRAMACION', 'CLIENTE PARA FACTURACIÓN', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR',
         'PLACA TRACTO', 'PLACA CARRETA', 'BOOKING', 'N° CONTENEDOR', 'TIPO DE CARGA', 'TIPO DE PRODUCTO',
-        'TIPO DE TRATAMIENTO', 'DEPOSITO DE RETIRO', 'LUGAR DE RETIRO', 'LUGAR DE DEVOLUCION',
+        'TIPO DE TRATAMIENTO', 'PACKING', 'DEPOSITO DE RETIRO', 'LUGAR DE RETIRO',
+        'LUGAR DE DEVOLUCION', 'CIUDAD DE RETIRO', 'CIUDAD DE DEVOLUCION',
         'FECHA DE RETIRO', 'HORA DE RETIRO', 'DESTINO 1',
         'FECHA DE POSICIONAMIENTO', 'HORA DE POSICIONAMIENTO', 'DEPOSITO DE DEVOLUCION',
         'COSTO DEL PETRÓLEO X GALÓN', 'GL TRACTO', 'GL GENERADOR', 'TIPO DE ABASTECIMIENTO',
@@ -148,10 +149,7 @@ const FormSelServicioContabilidad = {
         if (vacio(f[campos[i]])) return false;
       }
 
-      if (esConsolidado) {
-        if (vacio(f['DESTINO 2']) || String(f['DESTINO 2']).trim() === '-') return false;
-        if (vacio(f['TARIFA 2'])) return false;
-      }
+      if (esConsolidado && (vacio(f['DESTINO 2']) || String(f['DESTINO 2']).trim() === '-')) return false;
       return true;
     }
 
