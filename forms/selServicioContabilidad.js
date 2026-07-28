@@ -122,22 +122,35 @@ const FormSelServicioContabilidad = {
       return String(m || '').trim().toUpperCase() === 'D' ? '$ ' : 'S/ ';
     }
 
-    // Campos obligatorios para considerar un registro "completo" (mismo
-    // criterio que las validaciones de btnGrabarServicio_Click).
+    // Un registro se considera "completo" cuando NINGUNA casilla del
+    // formulario de Registrar Servicio quedó vacía. En esta base de datos,
+    // "-" significa "no aplica" (usado a propósito para Destino 2, Fecha y
+    // Hora de devolución cuando no corresponden); en cambio "" (celda
+    // realmente vacía) significa que el campo simplemente no se llenó, y
+    // eso SÍ debe marcarse como incompleto (p. ej. N° Contenedor, Booking).
+    function vacio(v) {
+      return v === null || v === undefined || String(v).trim() === '';
+    }
+
     function esServicioCompleto(f) {
       const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
-      const obligatorios = [
-        'CLIENTE PARA FACTURACIÓN', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR', 'PLACA TRACTO',
-        'PLACA CARRETA', 'TIPO DE CARGA', 'DESTINO 1', 'DEPOSITO DE RETIRO', 'FECHA DE RETIRO',
-        'HORA DE RETIRO', 'DEPOSITO DE DEVOLUCION', 'TIPO DE PRODUCTO', 'TIPO DE TRATAMIENTO',
-        'TIPO DE ABASTECIMIENTO'
+
+      const campos = [
+        'FECHA DE PROGRAMACION', 'CLIENTE PARA FACTURACIÓN', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR',
+        'PLACA TRACTO', 'PLACA CARRETA', 'BOOKING', 'N° CONTENEDOR', 'TIPO DE CARGA', 'TIPO DE PRODUCTO',
+        'TIPO DE TRATAMIENTO', 'DEPOSITO DE RETIRO', 'FECHA DE RETIRO', 'HORA DE RETIRO', 'DESTINO 1',
+        'FECHA DE POSICIONAMIENTO', 'HORA DE POSICIONAMIENTO', 'DEPOSITO DE DEVOLUCION',
+        'COSTO DEL PETRÓLEO X GALÓN', 'GL TRACTO', 'GL GENERADOR', 'TIPO DE ABASTECIMIENTO',
+        'VIATICO', 'PEAJE', 'COCHERA', 'TOTAL POR VIAJE', 'MONTO DEPOSITADO', 'TARIFA 1'
       ];
-      for (let i = 0; i < obligatorios.length; i++) {
-        const v = f[obligatorios[i]];
-        if (v === null || v === undefined || String(v).trim() === '') return false;
+      for (let i = 0; i < campos.length; i++) {
+        if (vacio(f[campos[i]])) return false;
       }
-      if (esConsolidado && (!f['DESTINO 2'] || String(f['DESTINO 2']).trim() === '' || String(f['DESTINO 2']).trim() === '-')) return false;
-      if (!f['TOTAL POR VIAJE'] && f['TOTAL POR VIAJE'] !== 0) return false;
+
+      if (esConsolidado) {
+        if (vacio(f['DESTINO 2']) || String(f['DESTINO 2']).trim() === '-') return false;
+        if (vacio(f['TARIFA 2'])) return false;
+      }
       return true;
     }
 
