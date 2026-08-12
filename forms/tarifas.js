@@ -69,6 +69,14 @@ const FormTarifas = {
             <button type="button" class="boton-moneda" data-moneda="D">$</button>
           </div>
         </div>
+        <div class="campo">
+          <label>Reefer o Dry</label>
+          <select id="cboTipoTarifa">
+            <option value="">-</option>
+            <option value="REEFER">REEFER</option>
+            <option value="DRY">DRY</option>
+          </select>
+        </div>
         <div class="campo" style="display:flex; align-items:flex-end;">
           <button class="boton-primario" id="btnGuardarTarifa" style="width:100%;">Guardar tarifa</button>
         </div>
@@ -88,7 +96,7 @@ const FormTarifas = {
         <table class="tabla-lista" id="tablaTarifas">
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Ciudad de retiro</th><th>Destino 1</th>
-            <th>Destino 2</th><th>Ciudad de devolución</th><th>Tarifa</th><th></th>
+            <th>Destino 2</th><th>Ciudad de devolución</th><th>Reefer/Dry</th><th>Tarifa</th><th></th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -147,7 +155,7 @@ const FormTarifas = {
       const vistas = {};
 
       (resp.tarifas || []).forEach(function (t) {
-        const clave = [t['CLIENTE'], t['CIUDAD DE RETIRO'], t['DESTINO 1'], t['DESTINO 2'], t['CIUDAD DE DEVOLUCION']]
+        const clave = [t['CLIENTE'], t['CIUDAD DE RETIRO'], t['DESTINO 1'], t['DESTINO 2'], t['CIUDAD DE DEVOLUCION'], t['TIPO']]
           .map(function (v) { return String(v || '').trim().toUpperCase(); }).join('|');
         const vigente = !vistas[clave];
         vistas[clave] = true;
@@ -164,6 +172,7 @@ const FormTarifas = {
           <td>${t['DESTINO 1'] || ''}</td>
           <td>${t['DESTINO 2'] || ''}</td>
           <td>${t['CIUDAD DE DEVOLUCION'] || ''}</td>
+          <td>${t['TIPO'] || ''}</td>
           <td>${simbolo(t['MONEDA'])}${(Number(t['TARIFA']) || 0).toFixed(2)}</td>
           <td>${vigente
             ? '<span class="badge-datos completo">Vigente</span>'
@@ -185,7 +194,8 @@ const FormTarifas = {
         destino2: v('cboDestino2Tarifa'),
         ciudadDevolucion: v('cboCiudadDevolucionTarifa'),
         tarifa: v('txtTarifaValor'),
-        moneda: self._moneda
+        moneda: self._moneda,
+        tipo: v('cboTipoTarifa')
       });
 
       if (!resp.ok) {

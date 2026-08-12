@@ -78,6 +78,14 @@ const FormServicio = {
           <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
         </div>
         <div class="campo">
+          <label>Reefer o Dry</label>
+          <select id="cboReeferDry">
+            <option value="">-</option>
+            <option value="REEFER">REEFER</option>
+            <option value="DRY">DRY</option>
+          </select>
+        </div>
+        <div class="campo">
           <label>Destino 1</label>
           <input list="lst-destinos" id="cboDestino1Servicio">
         </div>
@@ -124,7 +132,10 @@ const FormServicio = {
       <div class="fila-campos">
         <div class="campo">
           <label>Tipo de producto</label>
-          <input list="lst-tipoProd" id="cboTipoProductoServicio">
+          <div class="fila-combo-mas">
+            <input list="lst-tipoProd" id="cboTipoProductoServicio">
+            <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
+          </div>
           <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
@@ -134,7 +145,10 @@ const FormServicio = {
         </div>
         <div class="campo">
           <label>Packing</label>
-          <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
+          <div class="fila-combo-mas">
+            <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
+            <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
+          </div>
           <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
       </div>
@@ -150,7 +164,10 @@ const FormServicio = {
         </div>
         <div class="campo">
           <label>Modelo de thermoregistro</label>
-          <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
+          <div class="fila-combo-mas">
+            <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
+            <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
+          </div>
           <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
       </div>
@@ -301,6 +318,24 @@ const FormServicio = {
 
       <div class="fila-campos">
         <div class="campo">
+          <label>¿Abastecido por proveedor?</label>
+          <div class="fila-combo-mas">
+            <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
+            <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
+          </div>
+        </div>
+        <div class="campo">
+          <label>Proveedor</label>
+          <div class="fila-combo-mas">
+            <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
+            <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
+          </div>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
           <label>Monto para depositar</label>
           <input type="text" id="txtMontoDepositadoServicio" disabled>
         </div>
@@ -313,7 +348,6 @@ const FormServicio = {
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <button class="boton-secundario" id="btnInicioServicio">Inicio</button>
         <div style="display:flex; gap:10px;">
-          <button class="boton-secundario" id="btnCalcularServicio">Calcular</button>
           <button class="boton-secundario" id="btnImprimirServicio">Imprimir</button>
           <button class="boton-primario" id="btnGrabarServicio">Grabar</button>
         </div>
@@ -400,7 +434,19 @@ const FormServicio = {
     set('txtCocheraServicio', f['COCHERA'] || '');
     set('txtMontoDepositadoServicio', (Number(f['MONTO DEPOSITADO']) || 0).toFixed(2));
     set('txtTotalViaje', (Number(f['TOTAL POR VIAJE']) || 0).toFixed(2));
-    self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || '';
+    set('cboReeferDry', f['REEFER O DRY']);
+    self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || 'CONTADO';
+
+    const esProveedorPrecargado = self._tipoAbastecimiento === 'PROVEEDOR';
+    raiz.querySelector('#btnAbastecidoSi').classList.toggle('activo', esProveedorPrecargado);
+    raiz.querySelector('#btnAbastecidoNo').classList.toggle('activo', !esProveedorPrecargado);
+    raiz.querySelector('#cboProveedorServicio').disabled = !esProveedorPrecargado;
+    raiz.querySelector('#btnAgregarProveedor').disabled = !esProveedorPrecargado;
+    set('cboProveedorServicio', f['PROVEEDOR']);
+
+    if (String(f['REEFER O DRY'] || '').trim().toUpperCase() === 'DRY') {
+      raiz.querySelector('#txtGlGenerador').disabled = true;
+    }
 
     const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
     raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
@@ -414,6 +460,11 @@ const FormServicio = {
       if (n === 0 && !moneda) return;
       const prefijo = String(moneda).toUpperCase() === 'D' ? '$ ' : 'S/ ';
       set(campo, prefijo + n.toFixed(2));
+      // Viene de un servicio ya grabado, no es una tarifa "nueva" escrita a
+      // mano en esta sesión: si el usuario no la toca, no se debe duplicar
+      // en el módulo de Tarifas al volver a grabar.
+      const elCampo = raiz.querySelector('#' + campo);
+      if (elCampo) elCampo.dataset.autocompletada = '1';
       raiz.querySelectorAll('.boton-moneda[data-campo="' + campo + '"]').forEach(function (b) {
         b.classList.toggle('activo', b.dataset.moneda === (String(moneda).toUpperCase() === 'D' ? 'D' : 'S'));
       });
@@ -637,7 +688,17 @@ const FormServicio = {
       const viatico = self._numero(raiz.querySelector('#txtViaticoServicio').value);
       const peaje = self._numero(raiz.querySelector('#txtPeajeServicio').value);
       const cochera = self._numero(raiz.querySelector('#txtCocheraServicio').value);
-      raiz.querySelector('#txtMontoDepositadoServicio').value = (viatico + peaje + cochera).toFixed(2);
+      const tracto = self._numero(raiz.querySelector('#txtTotalTracto').value);
+      const generador = self._numero(raiz.querySelector('#txtTotalGenerador').value);
+
+      // Si el abastecimiento fue por PROVEEDOR, el combustible ya se lo
+      // factura el proveedor directamente y no forma parte de lo que hay
+      // que depositarle al conductor. Si fue al CONTADO, sí se incluye.
+      const montoDepositado = self._tipoAbastecimiento === 'PROVEEDOR'
+        ? (viatico + peaje + cochera)
+        : (viatico + peaje + cochera + tracto + generador);
+
+      raiz.querySelector('#txtMontoDepositadoServicio').value = montoDepositado.toFixed(2);
     }
 
     function calcularCombustible() {
@@ -784,7 +845,8 @@ const FormServicio = {
         ciudadRetiro: ciudadRetiro,
         destino1: destino1,
         destino2: destino2,
-        ciudadDevolucion: ciudadDevolucion
+        ciudadDevolucion: ciudadDevolucion,
+        reeferDry: v('cboReeferDry')
       });
 
       if (!resp.encontrado) return;
@@ -799,7 +861,7 @@ const FormServicio = {
     }
 
     ['cboClienteFacturacion', 'cboCiudadRetiroServicio', 'cboDestino1Servicio',
-     'cboDestino2Servicio', 'cboCiudadDevolucionServicio'].forEach(function (id) {
+     'cboDestino2Servicio', 'cboCiudadDevolucionServicio', 'cboReeferDry'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', function () {
         setTimeout(buscarTarifaAutomatica, 0);
       });
@@ -901,25 +963,76 @@ const FormServicio = {
       }, 0);
     });
 
-    // Botón Calcular: pregunta si el abastecimiento fue por proveedor.
-    raiz.querySelector('#btnCalcularServicio').addEventListener('click', function () {
-      const viatico = self._numero(raiz.querySelector('#txtViaticoServicio').value);
-      const peaje = self._numero(raiz.querySelector('#txtPeajeServicio').value);
-      const cochera = self._numero(raiz.querySelector('#txtCocheraServicio').value);
-      const tracto = self._numero(raiz.querySelector('#txtTotalTracto').value);
-      const generador = self._numero(raiz.querySelector('#txtTotalGenerador').value);
+    // Toggle "¿Abastecido por proveedor?": Sí/No, recalcula el monto a
+    // depositar al instante (sin necesitar un botón "Calcular" aparte) y
+    // habilita/deshabilita el combo de Proveedor.
+    self._tipoAbastecimiento = 'CONTADO';
 
-      const esProveedor = confirmar('¿El abastecimiento fue por proveedor?\n(Aceptar = Sí / Cancelar = No)');
-      let montoDepositado;
-      if (esProveedor) {
-        self._tipoAbastecimiento = 'PROVEEDOR';
-        montoDepositado = viatico + peaje + cochera;
-      } else {
-        self._tipoAbastecimiento = 'CONTADO';
-        montoDepositado = viatico + peaje + cochera + tracto + generador;
+    function aplicarToggleAbastecimiento(esProveedor) {
+      self._tipoAbastecimiento = esProveedor ? 'PROVEEDOR' : 'CONTADO';
+      raiz.querySelector('#btnAbastecidoSi').classList.toggle('activo', esProveedor);
+      raiz.querySelector('#btnAbastecidoNo').classList.toggle('activo', !esProveedor);
+
+      const cboProveedor = raiz.querySelector('#cboProveedorServicio');
+      const btnMasProveedor = raiz.querySelector('#btnAgregarProveedor');
+      cboProveedor.disabled = !esProveedor;
+      btnMasProveedor.disabled = !esProveedor;
+      if (!esProveedor) cboProveedor.value = '';
+
+      calcularMontoDepositado();
+    }
+
+    raiz.querySelector('#btnAbastecidoSi').addEventListener('click', function () { aplicarToggleAbastecimiento(true); });
+    raiz.querySelector('#btnAbastecidoNo').addEventListener('click', function () { aplicarToggleAbastecimiento(false); });
+
+    raiz.querySelector('#btnAgregarProveedor').addEventListener('click', async function () {
+      const nombre = prompt('Nombre del proveedor:');
+      if (nombre === null || nombre.trim() === '') return;
+      const resp = await llamarBackend('agregarProveedor', { valor: nombre });
+      if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
+      const select = raiz.querySelector('#cboProveedorServicio');
+      const opt = document.createElement('option');
+      opt.value = resp.valor; opt.textContent = resp.valor;
+      select.appendChild(opt);
+      select.value = resp.valor;
+      mostrarMensaje(resp.mensaje, 'exito');
+    });
+
+    // Botones "+" de Producto / Packing / Modelo de thermoregistro: dan de
+    // alta el valor en su lista maestra para que quede disponible en el
+    // datalist ni bien se agrega, sin tener que grabar antes un servicio.
+    function wireAgregarValorMaestro(idBoton, idCampo, accion, etiqueta, idDatalist) {
+      raiz.querySelector('#' + idBoton).addEventListener('click', async function () {
+        const campo = raiz.querySelector('#' + idCampo);
+        const valorActual = campo.value.trim();
+        const valor = prompt('Nuevo ' + etiqueta + ':', valorActual);
+        if (valor === null || valor.trim() === '') return;
+        const resp = await llamarBackend(accion, { valor: valor });
+        if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
+        const datalist = raiz.querySelector('#' + idDatalist);
+        if (datalist && !datalist.querySelector('option[value="' + resp.valor + '"]')) {
+          const opt = document.createElement('option');
+          opt.value = resp.valor;
+          datalist.appendChild(opt);
+        }
+        campo.value = resp.valor;
+        mostrarMensaje(resp.mensaje, 'exito');
+      });
+    }
+    wireAgregarValorMaestro('btnAgregarProducto', 'cboTipoProductoServicio', 'agregarProducto', 'producto', 'lst-tipoProd');
+    wireAgregarValorMaestro('btnAgregarPacking', 'cboPackingServicio', 'agregarPacking', 'packing', 'lst-packing');
+    wireAgregarValorMaestro('btnAgregarModeloThermo', 'cboModeloThermoregistro', 'agregarModeloThermoregistro', 'modelo de thermoregistro', 'lst-modeloThermo');
+
+    // Reefer o Dry: si es DRY no hay generador, así que se bloquea (y
+    // limpia) el campo de Galones genset.
+    raiz.querySelector('#cboReeferDry').addEventListener('change', function () {
+      const esDry = this.value.trim().toUpperCase() === 'DRY';
+      const campoGenset = raiz.querySelector('#txtGlGenerador');
+      campoGenset.disabled = esDry;
+      if (esDry) {
+        campoGenset.value = '';
+        calcularCombustible();
       }
-      raiz.querySelector('#txtMontoDepositadoServicio').value = montoDepositado.toFixed(2);
-      mostrarMensaje('Monto depositado calculado correctamente.', 'exito');
     });
 
     raiz.querySelector('#btnInicioServicio').addEventListener('click', cerrarPanel);
@@ -984,6 +1097,12 @@ const FormServicio = {
         totalViaje: v('txtTotalViaje'),
         tarifa1: v('txtTarifa1Servicio'),
         tipoAbastecimiento: self._tipoAbastecimiento,
+        reeferDry: v('cboReeferDry'),
+        proveedor: v('cboProveedorServicio'),
+        // Si el usuario dejó la tarifa autocompletada por el buscador, no es
+        // nueva. Si la tipeó/modificó a mano, se guarda como tarifa vigente
+        // nueva en el módulo de Tarifas.
+        tarifaEsNueva: !raiz.querySelector('#txtTarifa1Servicio').dataset.autocompletada,
         modoEdicion: self._modoEdicion,
         filaEdicion: self._filaEdicion
       };
