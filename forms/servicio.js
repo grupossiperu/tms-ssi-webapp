@@ -1156,5 +1156,15 @@ const FormServicio = {
       contenedor: 'txtContenedorServicio', tipoProducto: 'cboTipoProductoServicio',
       tipoTratamiento: 'cboTipoTratamiento', btnCalcular: 'btnCalcularServicio'
     };
+  },
+
+  // Abre el servicio en segundo plano, dispara la ventana de impresión y
+  // cierra el panel de edición automáticamente. Usado por el botón de
+  // impresión rápida en la fila de Consolidado de Servicios - Selección.
+  imprimirDesdeFila: async function (fila) {
+    await this.abrir(fila);
+    const raiz = document.getElementById('cuerpo-panel');
+    if (raiz) this._imprimir(raiz);
+    cerrarPanel();
   }
 };
