@@ -9,17 +9,27 @@
  * Columnas (en este orden): Fecha, Cliente, Conductor, Placa, Ciudad de
  * retiro, Destino 1, Destino 2, Ciudad de devolución, Retiro, Gl. tracto,
  * Gl. genset, Total S/. tracto, Total S/. genset, Peajes, Viático, Cochera,
- * Monto total de viaje, Abastecimiento (proveedor u otros), Monto a
- * depositar, Tarifa, y un check "Depositado" editable.
+ * Monto total de viaje, Proveedor (SI/NO), Monto a depositar, Depósito
+ * adicional, Persona / Medio, Tarifa, y un check "Depositado" editable.
+ *
+ * "Monto a depositar" es el cálculo automático (misma lógica que
+ * calcularMontoDepositado() en Registrar Servicio: si Proveedor = SI se
+ * excluye el combustible). Es independiente del botón "+".
  *
  * Filtros: por fecha (Desde/Hasta) y por si está depositado o no.
  * Clic en la fila abre Registrar Servicio para poder modificar los datos.
  *
  * El check "Depositado" es 100% manual: el usuario lo marca cuando ya
  * depositó el monto completo, y eso es lo único que lo cambia.
- * El botón "+" junto al check registra un depósito adicional (un imprevisto
- * del viaje, por ejemplo) y lo SUMA de inmediato al "Monto a depositar" que
- * se muestra en la tabla. No marca ni desmarca el check "Depositado".
+ * El botón "+" junto al check registra un DEPÓSITO ADICIONAL (un
+ * imprevisto del viaje, por ejemplo): pide monto, persona que lo deposita
+ * y medio de pago (Transferencia, Yape o Efectivo). Ese adicional se
+ * muestra en su propia columna "Depósito adicional" (con quién lo
+ * depositó al lado) y NO se suma al "Monto a depositar". Queda guardado
+ * tanto en el historial (hoja DEPOSITOS) como en la propia fila del
+ * servicio en SERVICIOS (columnas DEPOSITO ADICIONAL, PERSONA DEPOSITO
+ * ADICIONAL y MEDIO DEPOSITO ADICIONAL). El botón "+" no marca ni
+ * desmarca el check "Depositado".
  * -------------------------------------------------------------------------
  */
 const FormDeposito = {
@@ -47,7 +57,8 @@ const FormDeposito = {
             <th>Total S/. tracto</th><th>Total S/. genset</th>
             <th>Peajes</th><th>Viático</th><th>Cochera</th><th>Monto total de viaje</th>
             <th>Proveedor</th>
-            <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th>
+            <th>Monto a depositar</th><th>Depósito adicional</th><th>Persona / Medio</th>
+            <th>Tarifa</th><th>Depositado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -60,6 +71,8 @@ const FormDeposito = {
   },
 
   _wire: function (raiz) {
+
+    const MEDIOS_VALIDOS = ['TRANSFERENCIA', 'YAPE', 'EFECTIVO'];
 
     function numero(v) {
       if (v === null || v === undefined) return 0;
@@ -104,6 +117,19 @@ const FormDeposito = {
       return String(m || '').trim().toUpperCase() === 'D' ? '$ ' : 'S/ ';
     }
 
+    function pedirMedioDePago() {
+      let intento = 0;
+      while (intento < 5) {
+        const texto = window.prompt('Medio de pago (escriba: Transferencia, Yape o Efectivo):', '');
+        if (texto === null) return null;
+        const medio = texto.trim().toUpperCase();
+        if (MEDIOS_VALIDOS.indexOf(medio) !== -1) return medio;
+        mostrarMensaje('Medio inválido. Escriba exactamente: Transferencia, Yape o Efectivo.', 'error');
+        intento++;
+      }
+      return null;
+    }
+
     async function cargar() {
       const filtros = {
         fechaDesde: raiz.querySelector('#filtroDepDesde').value.trim(),
@@ -114,8 +140,6 @@ const FormDeposito = {
       const dep = raiz.querySelector('#filtroDepEstado').value;
       if (dep === 'si') filas = filas.filter(f => esVerdadero(f['DEPOSITADO']));
       if (dep === 'no') filas = filas.filter(f => !esVerdadero(f['DEPOSITADO']));
-
-      const resumen = await llamarBackend('resumenDepositos', {});
 
       const tbody = raiz.querySelector('#tablaDepositos tbody');
       tbody.innerHTML = '';
@@ -129,11 +153,16 @@ const FormDeposito = {
         const objetivo = esProveedor
           ? (numero(f['VIATICO']) + numero(f['PEAJE']) + numero(f['COCHERA']))
           : (numero(f['VIATICO']) + numero(f['PEAJE']) + numero(f['COCHERA']) + numero(f['TOTAL TRACTO']) + numero(f['TOTAL GENERADOR']));
-        const adicional = numero(resumen[f._fila]);
+
+        const depositoAdicional = numero(f['DEPOSITO ADICIONAL']);
+        const personaAdicional = f['PERSONA DEPOSITO ADICIONAL'] || '';
+        const medioAdicional = f['MEDIO DEPOSITO ADICIONAL'] || '';
+        const personaMedioTexto = personaAdicional
+          ? (personaAdicional + (medioAdicional ? ' (' + medioAdicional + ')' : ''))
+          : '';
 
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
-        const totalDepositar = objetivo + adicional;
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
@@ -153,11 +182,13 @@ const FormDeposito = {
           <td>S/ ${numero(f['COCHERA']).toFixed(2)}</td>
           <td>S/ ${numero(f['TOTAL POR VIAJE']).toFixed(2)}</td>
           <td>${esProveedor ? 'SI' : 'NO'}</td>
-          <td>S/ ${totalDepositar.toFixed(2)}${adicional > 0 ? ' <span style="color:#1c3a5e;font-size:.72rem;" title="Incluye S/ ' + adicional.toFixed(2) + ' de depósitos adicionales registrados con +">*</span>' : ''}</td>
+          <td>S/ ${objetivo.toFixed(2)}</td>
+          <td>${depositoAdicional > 0 ? 'S/ ' + depositoAdicional.toFixed(2) : ''}</td>
+          <td>${personaMedioTexto}</td>
           <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center; white-space:nowrap;">
             <input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}>
-            <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Sumar un depósito adicional al monto a depositar">+</button>
+            <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Registrar un depósito adicional">+</button>
           </td>`;
 
         const chk = tr.querySelector('.chk-depositado');
@@ -171,8 +202,8 @@ const FormDeposito = {
           ev.stopPropagation();
 
           const montoTxt = window.prompt(
-            'Monto adicional a sumar al Monto a depositar de ' + (f['CONDUCTOR'] || 'este servicio') +
-            '\n(Se sumará al monto actual de S/ ' + totalDepositar.toFixed(2) + '. No afecta el check "Depositado".)',
+            'Monto del depósito adicional para ' + (f['CONDUCTOR'] || 'este servicio') +
+            (depositoAdicional > 0 ? '\n(Ya tiene S/ ' + depositoAdicional.toFixed(2) + ' registrado; esto se sumará a eso.)' : ''),
             ''
           );
           if (montoTxt === null || montoTxt.trim() === '') return;
@@ -181,9 +212,22 @@ const FormDeposito = {
             mostrarMensaje('Ingrese un monto válido mayor a 0.', 'error');
             return;
           }
-          const medio = window.prompt('Medio de pago (efectivo, transferencia, etc.) - opcional:', '') || '';
 
-          const resp = await llamarBackend('registrarDeposito', { fila: f._fila, monto: monto, medio: medio });
+          const personaTxt = window.prompt('¿Quién realiza el depósito?', '');
+          if (personaTxt === null || personaTxt.trim() === '') {
+            mostrarMensaje('Debe indicar quién realiza el depósito.', 'error');
+            return;
+          }
+
+          const medio = pedirMedioDePago();
+          if (!medio) return;
+
+          const resp = await llamarBackend('registrarDeposito', {
+            fila: f._fila,
+            monto: monto,
+            persona: personaTxt.trim(),
+            medio: medio
+          });
           if (!resp.ok) {
             mostrarMensaje(resp.mensaje, 'error');
             return;
