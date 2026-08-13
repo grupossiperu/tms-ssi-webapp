@@ -57,8 +57,8 @@ const FormDeposito = {
             <th>Total S/. tracto</th><th>Total S/. genset</th>
             <th>Peajes</th><th>Viático</th><th>Cochera</th><th>Monto total de viaje</th>
             <th>Proveedor</th>
-            <th>Monto a depositar</th><th>Depósito adicional</th><th>Persona / Medio</th>
-            <th>Tarifa</th><th>Depositado</th>
+            <th>Monto a depositar</th><th>Tarifa</th><th>Depósito adicional</th><th>Persona / Medio</th>
+            <th>Depositado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -183,9 +183,9 @@ const FormDeposito = {
           <td>S/ ${numero(f['TOTAL POR VIAJE']).toFixed(2)}</td>
           <td>${esProveedor ? 'SI' : 'NO'}</td>
           <td>S/ ${objetivo.toFixed(2)}</td>
+          <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td>${depositoAdicional > 0 ? 'S/ ' + depositoAdicional.toFixed(2) : ''}</td>
           <td>${personaMedioTexto}</td>
-          <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center; white-space:nowrap;">
             <input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}>
             <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Registrar un depósito adicional">+</button>
