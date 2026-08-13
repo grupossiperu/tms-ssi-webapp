@@ -28,323 +28,298 @@ const FormServicio = {
       }).join('');
     };
 
-    // El formulario se arma en filas de 3 campos, en el orden exacto que
+    // El formulario se arma en filas de 4 campos, en el orden exacto que
     // definió el usuario. Cada bloque .fila-campos es una fila visual.
     const html = `
       <div class="fila-campos">
         <div class="campo">
-          <label>Fecha de registro</label>
-          <input type="text" id="txtFechaServicioRegistro" placeholder="dd/mm/yyyy">
+        <label>Fecha de registro</label>
+        <input type="text" id="txtFechaServicioRegistro" placeholder="dd/mm/yyyy">
         </div>
         <div class="campo">
-          <label>Cliente para facturación</label>
-          <input list="lst-clientes" id="cboClienteFacturacion">
-          <datalist id="lst-clientes">${datos.clientesFacturacion.map(v => `<option value="${v}">`).join('')}</datalist>
+        <label>Cliente para facturación</label>
+        <input list="lst-clientes" id="cboClienteFacturacion">
+        <datalist id="lst-clientes">${datos.clientesFacturacion.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-          <label>Empresa que dio el servicio</label>
-          <input list="lst-empresas" id="cboEmpresaServicio">
-          <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Conductor</label>
-          <div class="fila-combo-mas">
-            <select id="cboConductorServicio"><option value=""></option>${datos.conductores.map(v => `<option value="${v}">${v}</option>`).join('')}</select>
-            <button type="button" id="btnAgregarConductor" class="boton-mas" title="Agregar conductor nuevo">+</button>
-          </div>
+        <label>Empresa que dio el servicio</label>
+        <input list="lst-empresas" id="cboEmpresaServicio">
+        <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-          <label>Placa tracto</label>
-          <div class="fila-combo-mas">
-            <select id="cboPlacaTractoServicio">${opciones(datos.placasTracto)}</select>
-            <button type="button" id="btnAgregarTracto" class="boton-mas" title="Agregar placa de tracto nueva">+</button>
-          </div>
+        <label>Conductor</label>
+        <div class="fila-combo-mas">
+        <select id="cboConductorServicio"><option value=""></option>${datos.conductores.map(v => `<option value="${v}">${v}</option>`).join('')}</select>
+        <button type="button" id="btnAgregarConductor" class="boton-mas" title="Agregar conductor nuevo">+</button>
         </div>
-        <div class="campo">
-          <label>Placa carreta</label>
-          <div class="fila-combo-mas">
-            <select id="cboPlacaCarretaServicio">${opciones(datos.placasCarreta)}</select>
-            <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
-          </div>
         </div>
       </div>
-
       <div class="fila-campos">
         <div class="campo">
-          <label>Tipo de carga</label>
-          <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
+        <label>Placa tracto</label>
+        <div class="fila-combo-mas">
+        <select id="cboPlacaTractoServicio">${opciones(datos.placasTracto)}</select>
+        <button type="button" id="btnAgregarTracto" class="boton-mas" title="Agregar placa de tracto nueva">+</button>
+        </div>
         </div>
         <div class="campo">
-          <label>Reefer o Dry</label>
-          <select id="cboReeferDry">
-            <option value="">-</option>
-            <option value="REEFER">REEFER</option>
-            <option value="DRY">DRY</option>
-          </select>
+        <label>Placa carreta</label>
+        <div class="fila-combo-mas">
+        <select id="cboPlacaCarretaServicio">${opciones(datos.placasCarreta)}</select>
+        <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
+        </div>
         </div>
         <div class="campo">
-          <label>Destino 1</label>
-          <input list="lst-destinos" id="cboDestino1Servicio">
+        <label>Tipo de carga</label>
+        <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
         </div>
         <div class="campo">
-          <label>Destino 2 (solo carga consolidado)</label>
-          <input list="lst-destinos" id="cboDestino2Servicio" disabled>
-          <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
+        <label>Reefer o Dry</label>
+        <select id="cboReeferDry">
+        <option value="">-</option>
+        <option value="REEFER">REEFER</option>
+        <option value="DRY">DRY</option>
+        </select>
         </div>
       </div>
-
       <div class="fila-campos">
         <div class="campo">
-          <label>Ciudad de retiro</label>
-          <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
-          <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        <label>Destino 1</label>
+        <input list="lst-destinos" id="cboDestino1Servicio">
         </div>
         <div class="campo">
-          <label>Ciudad de devolución</label>
-          <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
-          <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        <label>Destino 2 (solo carga consolidado)</label>
+        <input list="lst-destinos" id="cboDestino2Servicio" disabled>
+        <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-          <label>Tarifa</label>
-          <div class="fila-combo-mas">
-            <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
-            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
-            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
-          </div>
+        <label>Ciudad de retiro</label>
+        <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
+        <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+        <label>Ciudad de devolución</label>
+        <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
+        <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
       </div>
-
       <div class="fila-campos">
         <div class="campo">
-          <label>Booking</label>
-          <input type="text" id="txtBookingServicio">
+        <label>Tarifa</label>
+        <div class="fila-combo-mas">
+        <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
+        <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
+        <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
+        </div>
         </div>
         <div class="campo">
-          <label>N° Contenedor (ABCU1234567)</label>
-          <input type="text" id="txtContenedorServicio">
+        <label>Booking</label>
+        <input type="text" id="txtBookingServicio">
+        </div>
+        <div class="campo">
+        <label>N° Contenedor (ABCU1234567)</label>
+        <input type="text" id="txtContenedorServicio">
+        </div>
+        <div class="campo"></div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Tipo de producto</label>
+        <div class="fila-combo-mas">
+        <input list="lst-tipoProd" id="cboTipoProductoServicio">
+        <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
+        </div>
+        <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+        <label>Tipo de tratamiento</label>
+        <input list="lst-tipoTrat" id="cboTipoTratamiento">
+        <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+        <label>Packing</label>
+        <div class="fila-combo-mas">
+        <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
+        <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
+        </div>
+        <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+        <label>Thermoregistro</label>
+        <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Cantidad de thermoregistros</label>
+        <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
+        </div>
+        <div class="campo">
+        <label>Modelo de thermoregistro</label>
+        <div class="fila-combo-mas">
+        <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
+        <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
+        </div>
+        <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+        <label>Precinto de aduana</label>
+        <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+        <label>Operador logístico</label>
+        <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
+        <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo"></div>
+        <div class="campo">
+        <label>Filtro de etileno</label>
+        <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+        <label>Cantidad de filtros de etileno</label>
+        <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
+        </div>
+        <div class="campo"></div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Barras consolidado (solo carga consolidado)</label>
+        <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+        <label>Cantidad de barras (solo carga consolidado)</label>
+        <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
+        </div>
+        <div class="campo"></div>
+        <div class="campo">
+        <label>Depósito de retiro</label>
+        <input list="lst-depRetiro" id="cboDepositoRetiro">
+        <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Fecha de retiro</label>
+        <input type="text" id="txtFechaRetiroServicio" placeholder="dd/mm/yyyy">
+        </div>
+        <div class="campo">
+        <label>Hora de retiro</label>
+        <input type="text" id="txtHoraRetiroServicio" placeholder="08:00">
+        </div>
+        <div class="campo">
+        <label>Lugar de posicionamiento 1</label>
+        <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
+        </div>
+        <div class="campo">
+        <label>Fecha de posicionamiento 1</label>
+        <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Hora de posicionamiento 1</label>
+        <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
+        </div>
+        <div class="campo">
+        <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
+        <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
+        </div>
+        <div class="campo">
+        <label>Fecha de posicionamiento 2 (solo carga consolidado)</label>
+        <input type="text" id="txtFechaPosicionamiento2" placeholder="dd/mm/yyyy" disabled>
+        </div>
+        <div class="campo">
+        <label>Hora de posicionamiento 2 (solo carga consolidado)</label>
+        <input type="text" id="txtHoraPosicionamiento2" placeholder="hh:mm" disabled>
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Depósito de devolución</label>
+        <input list="lst-depDevolucion" id="cboDepositoDevolucion">
+        <datalist id="lst-depDevolucion">${datos.depositosDevolucion.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+        <label>Fecha de devolución</label>
+        <input type="text" id="txtFechaDevolucion" placeholder="dd/mm/yyyy o -">
+        </div>
+        <div class="campo">
+        <label>Hora de devolución</label>
+        <input type="text" id="txtHoraDevolucion" placeholder="hh:mm o -">
+        </div>
+        <div class="campo">
+        <label>Costo del petróleo x galón</label>
+        <input type="text" id="txtCostoPetroleoGalon">
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Galones tracto</label>
+        <input type="text" id="txtGlTracto">
+        </div>
+        <div class="campo">
+        <label>Galones genset</label>
+        <input type="text" id="txtGlGenerador">
+        </div>
+        <div class="campo">
+        <label>Total tracto</label>
+        <input type="text" id="txtTotalTracto" disabled>
+        </div>
+        <div class="campo">
+        <label>Total genset</label>
+        <input type="text" id="txtTotalGenerador" disabled>
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Total combustible</label>
+        <input type="text" id="txtTotalCombustible" disabled>
+        </div>
+        <div class="campo">
+        <label>Viático</label>
+        <input type="text" id="txtViaticoServicio">
+        </div>
+        <div class="campo">
+        <label>Peaje</label>
+        <input type="text" id="txtPeajeServicio">
+        </div>
+        <div class="campo">
+        <label>Cochera</label>
+        <input type="text" id="txtCocheraServicio">
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>¿Abastecido por proveedor?</label>
+        <div class="fila-combo-mas">
+        <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
+        <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
+        </div>
+        </div>
+        <div class="campo">
+        <label>Proveedor</label>
+        <div class="fila-combo-mas">
+        <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
+        <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
+        </div>
+        </div>
+        <div class="campo"></div>
+        <div class="campo">
+        <label>Monto para depositar</label>
+        <input type="text" id="txtMontoDepositadoServicio" disabled>
+        </div>
+      </div>
+      <div class="fila-campos">
+        <div class="campo">
+        <label>Total por viaje</label>
+        <input type="text" id="txtTotalViaje" disabled>
         </div>
         <div class="campo"></div>
       </div>
 
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Tipo de producto</label>
-          <div class="fila-combo-mas">
-            <input list="lst-tipoProd" id="cboTipoProductoServicio">
-            <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
-          </div>
-          <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Tipo de tratamiento</label>
-          <input list="lst-tipoTrat" id="cboTipoTratamiento">
-          <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Packing</label>
-          <div class="fila-combo-mas">
-            <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
-            <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
-          </div>
-          <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Thermoregistro</label>
-          <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Cantidad de thermoregistros</label>
-          <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
-        </div>
-        <div class="campo">
-          <label>Modelo de thermoregistro</label>
-          <div class="fila-combo-mas">
-            <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
-            <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
-          </div>
-          <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Precinto de aduana</label>
-          <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Operador logístico</label>
-          <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
-          <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Filtro de etileno</label>
-          <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Cantidad de filtros de etileno</label>
-          <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Barras consolidado (solo carga consolidado)</label>
-          <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Cantidad de barras (solo carga consolidado)</label>
-          <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Depósito de retiro</label>
-          <input list="lst-depRetiro" id="cboDepositoRetiro">
-          <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Fecha de retiro</label>
-          <input type="text" id="txtFechaRetiroServicio" placeholder="dd/mm/yyyy">
-        </div>
-        <div class="campo">
-          <label>Hora de retiro</label>
-          <input type="text" id="txtHoraRetiroServicio" placeholder="08:00">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Lugar de posicionamiento 1</label>
-          <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
-        </div>
-        <div class="campo">
-          <label>Fecha de posicionamiento 1</label>
-          <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
-        </div>
-        <div class="campo">
-          <label>Hora de posicionamiento 1</label>
-          <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
-          <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
-        </div>
-        <div class="campo">
-          <label>Fecha de posicionamiento 2 (solo carga consolidado)</label>
-          <input type="text" id="txtFechaPosicionamiento2" placeholder="dd/mm/yyyy" disabled>
-        </div>
-        <div class="campo">
-          <label>Hora de posicionamiento 2 (solo carga consolidado)</label>
-          <input type="text" id="txtHoraPosicionamiento2" placeholder="hh:mm" disabled>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Depósito de devolución</label>
-          <input list="lst-depDevolucion" id="cboDepositoDevolucion">
-          <datalist id="lst-depDevolucion">${datos.depositosDevolucion.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Fecha de devolución</label>
-          <input type="text" id="txtFechaDevolucion" placeholder="dd/mm/yyyy o -">
-        </div>
-        <div class="campo">
-          <label>Hora de devolución</label>
-          <input type="text" id="txtHoraDevolucion" placeholder="hh:mm o -">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Costo del petróleo x galón</label>
-          <input type="text" id="txtCostoPetroleoGalon">
-        </div>
-        <div class="campo">
-          <label>Galones tracto</label>
-          <input type="text" id="txtGlTracto">
-        </div>
-        <div class="campo">
-          <label>Galones genset</label>
-          <input type="text" id="txtGlGenerador">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Total tracto</label>
-          <input type="text" id="txtTotalTracto" disabled>
-        </div>
-        <div class="campo">
-          <label>Total genset</label>
-          <input type="text" id="txtTotalGenerador" disabled>
-        </div>
-        <div class="campo">
-          <label>Total combustible</label>
-          <input type="text" id="txtTotalCombustible" disabled>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Viático</label>
-          <input type="text" id="txtViaticoServicio">
-        </div>
-        <div class="campo">
-          <label>Peaje</label>
-          <input type="text" id="txtPeajeServicio">
-        </div>
-        <div class="campo">
-          <label>Cochera</label>
-          <input type="text" id="txtCocheraServicio">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>¿Abastecido por proveedor?</label>
-          <div class="fila-combo-mas">
-            <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
-            <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
-          </div>
-        </div>
-        <div class="campo">
-          <label>Proveedor</label>
-          <div class="fila-combo-mas">
-            <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
-            <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
-          </div>
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Monto para depositar</label>
-          <input type="text" id="txtMontoDepositadoServicio" disabled>
-        </div>
-        <div class="campo">
-          <label>Total por viaje</label>
-          <input type="text" id="txtTotalViaje" disabled>
-        </div>
-        <div class="campo"></div>
-      </div>
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <button class="boton-secundario" id="btnInicioServicio">Inicio</button>
         <div style="display:flex; gap:10px;">
@@ -353,7 +328,7 @@ const FormServicio = {
         </div>
       </div>`;
 
-    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz));
+    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz), { clase: 'panel-servicio' });
 
     if (filaEdicion) {
       // Carga los datos de la fila para edición/completado.
@@ -414,6 +389,18 @@ const FormServicio = {
     set('txtCantidadFiltroEtileno', f['CANTIDAD FILTRO DE ETILENO'] || '');
     set('cboBarrasConsolidado', f['BARRAS CONSOLIDADO'] || 'NO');
     set('txtCantidadBarras', f['CANTIDAD BARRAS CONSOLIDADO'] || '');
+
+    // Los combos SI/NO recién cargados ya trajeron sus valores; aplicamos
+    // el habilitado/deshabilitado de sus campos dependientes según corresponda.
+    const esThermo = String(f['THERMOREGISTRO'] || 'NO').trim().toUpperCase() === 'SI';
+    ['txtCantidadThermoregistro', 'cboModeloThermoregistro', 'btnAgregarModeloThermo'].forEach(function (id) {
+      const el = raiz.querySelector('#' + id);
+      if (el) el.disabled = !esThermo;
+    });
+    const esPrecinto = String(f['PRECINTO DE ADUANA'] || 'NO').trim().toUpperCase() === 'SI';
+    raiz.querySelector('#cboOperadorLogistico').disabled = !esPrecinto;
+    const esFiltroEtileno = String(f['FILTRO DE ETILENO'] || 'NO').trim().toUpperCase() === 'SI';
+    raiz.querySelector('#txtCantidadFiltroEtileno').disabled = !esFiltroEtileno;
     set('txtFechaRetiroServicio', this._formatoFechaCampo(f['FECHA DE RETIRO']));
     set('txtHoraRetiroServicio', this._formatoHoraCampo(f['HORA DE RETIRO']));
     set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
@@ -505,25 +492,38 @@ const FormServicio = {
       return '<div class="seccion-imp"><div class="tit-imp">' + esc(titulo) + '</div><div class="fila-imp">' + campos.join('') + '</div></div>';
     };
 
-    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de Servicio</title><style>' +
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de Servicio</title>' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<style>' +
       '@page{ size:A4; margin:11mm; }' +
       '*{ box-sizing:border-box; }' +
-      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; font-size:10.5px; }' +
-      '.encabezado{ display:flex; align-items:flex-end; justify-content:space-between; border-bottom:2.5px solid #1c3a5e; padding-bottom:7px; margin-bottom:9px; }' +
-      '.encabezado h1{ font-size:14px; margin:0; color:#1c3a5e; }' +
-      '.encabezado p{ margin:2px 0 0; font-size:10px; color:#444; }' +
-      '.encabezado .fecha-imp{ font-size:9px; color:#444; text-align:right; }' +
-      '.seccion-imp{ margin-bottom:6px; page-break-inside:avoid; }' +
-      '.tit-imp{ background:#1c3a5e; color:#fff; font-size:9px; font-weight:700; padding:2.5px 7px; letter-spacing:.3px; }' +
+      // En pantalla se usa letra grande y un layout fluido (clamp según el
+      // ancho de la ventana); al imprimir/exportar a PDF se compacta para
+      // que siga entrando bien en A4.
+      'html{ font-size: clamp(15px, 1.05vw + 9px, 19px); }' +
+      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; background:#eef1f5; }' +
+      '.hoja{ max-width:1100px; margin:0 auto; padding:22px 26px 40px; background:#fff; }' +
+      '.encabezado{ display:flex; align-items:flex-end; justify-content:space-between; border-bottom:3px solid #1c3a5e; padding-bottom:10px; margin-bottom:14px; }' +
+      '.encabezado h1{ font-size:1.7rem; margin:0; color:#1c3a5e; }' +
+      '.encabezado p{ margin:3px 0 0; font-size:1rem; color:#444; }' +
+      '.encabezado .fecha-imp{ font-size:.85rem; color:#444; text-align:right; }' +
+      '.seccion-imp{ margin-bottom:10px; page-break-inside:avoid; }' +
+      '.tit-imp{ background:#1c3a5e; color:#fff; font-size:.85rem; font-weight:700; padding:5px 10px; letter-spacing:.3px; }' +
       '.fila-imp{ display:flex; flex-wrap:wrap; border:1px solid #c7ced8; border-top:none; }' +
-      '.campo-imp{ flex:1 1 0; min-width:118px; border-right:1px solid #dde3ea; border-bottom:1px solid #dde3ea; padding:3px 7px; }' +
+      '.campo-imp{ flex:1 1 180px; min-width:160px; border-right:1px solid #dde3ea; border-bottom:1px solid #dde3ea; padding:6px 10px; }' +
       '.campo-imp:last-child{ border-right:none; }' +
-      '.lbl-imp{ font-size:7.5px; font-weight:700; color:#556; text-transform:uppercase; letter-spacing:.2px; }' +
-      '.val-imp{ font-size:10.5px; min-height:13px; margin-top:1px; }' +
-      '.no-print{ text-align:center; margin:14px 0; }' +
-      '.no-print button{ padding:9px 22px; font-size:13px; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
-      '@media print{ .no-print{ display:none; } }' +
-      '</style></head><body>' +
+      '.lbl-imp{ font-size:.72rem; font-weight:700; color:#556; text-transform:uppercase; letter-spacing:.2px; }' +
+      '.val-imp{ font-size:1rem; min-height:1.3em; margin-top:2px; }' +
+      '.no-print{ text-align:center; margin:18px 0; }' +
+      '.no-print button{ padding:11px 26px; font-size:1rem; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
+      '@media print{' +
+      '  .no-print{ display:none; } body{ background:#fff; } .hoja{ max-width:none; padding:0; }' +
+      '  html{ font-size:10.5px; }' +
+      '  .encabezado h1{ font-size:14px; } .encabezado p{ font-size:10px; } .encabezado .fecha-imp{ font-size:9px; }' +
+      '  .tit-imp{ font-size:9px; padding:2.5px 7px; } .campo-imp{ min-width:118px; padding:3px 7px; }' +
+      '  .lbl-imp{ font-size:7.5px; } .val-imp{ font-size:10.5px; min-height:13px; }' +
+      '}' +
+      '</style></head><body><div class="hoja">' +
       '<div class="encabezado"><div><h1>TRANSPORTES SSI S.A.C.</h1><p>Registro de Servicio</p></div>' +
       '<div class="fecha-imp">Impreso: ' + esc(new Date().toLocaleString('es-PE')) + '</div></div>' +
       seccion('Datos generales', [
@@ -607,7 +607,7 @@ const FormServicio = {
         campo('Total por viaje', moneda('txtTotalViaje'))
       ]) +
       '<div class="no-print"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div>' +
-      '</body></html>';
+      '</div></body></html>';
 
     const ventana = window.open('', '_blank');
     if (!ventana) {
@@ -1035,7 +1035,27 @@ const FormServicio = {
       }
     });
 
-    raiz.querySelector('#btnInicioServicio').addEventListener('click', cerrarPanel);
+    // Combos SI/NO que habilitan/deshabilitan (y limpian) sus campos
+    // dependientes: Thermoregistro, Precinto de aduana y Filtro de etileno.
+    function wireDependeSiNo(idSelect, idsDependientes) {
+      const sel = raiz.querySelector('#' + idSelect);
+      function aplicar() {
+        const activo = sel.value.trim().toUpperCase() === 'SI';
+        idsDependientes.forEach(function (id) {
+          const el = raiz.querySelector('#' + id);
+          if (!el) return;
+          el.disabled = !activo;
+          if (!activo && (el.tagName === 'INPUT' || el.tagName === 'BUTTON') && el.type !== 'button') el.value = '';
+        });
+      }
+      sel.addEventListener('change', aplicar);
+      aplicar();
+    }
+    wireDependeSiNo('cboThermoregistro', ['txtCantidadThermoregistro', 'cboModeloThermoregistro', 'btnAgregarModeloThermo']);
+    wireDependeSiNo('cboPrecintoAduana', ['cboOperadorLogistico']);
+    wireDependeSiNo('cboFiltroEtileno', ['txtCantidadFiltroEtileno']);
+
+    raiz.querySelector('#btnInicioServicio').addEventListener('click', solicitarCierrePanel);
 
     raiz.querySelector('#btnImprimirServicio').addEventListener('click', function () {
       self._imprimir(raiz);
