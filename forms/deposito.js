@@ -6,20 +6,20 @@
  * SERVICIOS (mismo campo DEPOSITADO que usa Consolidado de Servicios, así
  * que marcar/desmarcar acá se refleja también allá y viceversa).
  *
- * Columnas: Fecha, Cliente, Conductor, Placa, Ciudad de retiro, Destino 1,
- * Destino 2, Ciudad de devolución, Retiro, Gl. tracto, Gl. genset, Peajes,
- * Viático, Cochera, Proveedor (si el abastecimiento fue por proveedor o al
- * contado), Total a depositar, Tarifa, y un check "Depositado" editable.
+ * Columnas (en este orden): Fecha, Cliente, Conductor, Placa, Ciudad de
+ * retiro, Destino 1, Destino 2, Ciudad de devolución, Retiro, Gl. tracto,
+ * Gl. genset, Total S/. tracto, Total S/. genset, Peajes, Viático, Cochera,
+ * Monto total de viaje, Abastecimiento (proveedor u otros), Monto a
+ * depositar, Tarifa, y un check "Depositado" editable.
  *
  * Filtros: por fecha (Desde/Hasta) y por si está depositado o no.
  * Clic en la fila abre Registrar Servicio para poder modificar los datos.
  *
  * El check "Depositado" es 100% manual: el usuario lo marca cuando ya
  * depositó el monto completo, y eso es lo único que lo cambia.
- * El botón "+" junto al check es para otra cosa: a veces hay que hacerle al
- * conductor un depósito ADICIONAL, fuera del "Total a depositar" calculado
- * (un imprevisto del viaje, por ejemplo). Ese botón solo deja un historial
- * de esos depósitos extra — nunca marca ni desmarca el check.
+ * El botón "+" junto al check registra un depósito adicional (un imprevisto
+ * del viaje, por ejemplo) y lo SUMA de inmediato al "Monto a depositar" que
+ * se muestra en la tabla. No marca ni desmarca el check "Depositado".
  * -------------------------------------------------------------------------
  */
 const FormDeposito = {
@@ -44,8 +44,10 @@ const FormDeposito = {
             <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th>
             <th>Ciudad retiro</th><th>Destino 1</th><th>Destino 2</th><th>Ciudad devolución</th>
             <th>Retiro</th><th>Gl. tracto</th><th>Gl. genset</th>
-            <th>Peajes</th><th>Viático</th><th>Cochera</th><th>Proveedor</th>
-            <th>Total a depositar</th><th>Tarifa</th><th>Depositado</th>
+            <th>Total S/. tracto</th><th>Total S/. genset</th>
+            <th>Peajes</th><th>Viático</th><th>Cochera</th><th>Monto total de viaje</th>
+            <th>Abastecimiento (proveedor u otros)</th>
+            <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -124,6 +126,7 @@ const FormDeposito = {
 
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
+        const totalDepositar = objetivo + adicional;
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
@@ -136,15 +139,18 @@ const FormDeposito = {
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
           <td>${numero(f['GL TRACTO']).toFixed(2)}</td>
           <td>${numero(f['GL GENERADOR']).toFixed(2)}</td>
+          <td>S/ ${numero(f['TOTAL TRACTO']).toFixed(2)}</td>
+          <td>S/ ${numero(f['TOTAL GENERADOR']).toFixed(2)}</td>
           <td>S/ ${numero(f['PEAJE']).toFixed(2)}</td>
           <td>S/ ${numero(f['VIATICO']).toFixed(2)}</td>
           <td>S/ ${numero(f['COCHERA']).toFixed(2)}</td>
+          <td>S/ ${numero(f['TOTAL POR VIAJE']).toFixed(2)}</td>
           <td>${f['TIPO DE ABASTECIMIENTO'] || ''}</td>
-          <td>S/ ${objetivo.toFixed(2)}${adicional > 0 ? ' <span style="color:#1c3a5e;font-size:.72rem;" title="Depósitos adicionales registrados para este servicio">(+S/ ' + adicional.toFixed(2) + ')</span>' : ''}</td>
+          <td>S/ ${totalDepositar.toFixed(2)}${adicional > 0 ? ' <span style="color:#1c3a5e;font-size:.72rem;" title="Incluye S/ ' + adicional.toFixed(2) + ' de depósitos adicionales registrados con +">*</span>' : ''}</td>
           <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center; white-space:nowrap;">
             <input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}>
-            <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Registrar un depósito adicional (fuera del total a depositar)">+</button>
+            <button type="button" class="boton-mas" style="width:22px; height:22px; padding:0; font-size:.9rem; vertical-align:middle;" title="Sumar un depósito adicional al monto a depositar">+</button>
           </td>`;
 
         const chk = tr.querySelector('.chk-depositado');
@@ -158,9 +164,8 @@ const FormDeposito = {
           ev.stopPropagation();
 
           const montoTxt = window.prompt(
-            'Monto del depósito ADICIONAL para ' + (f['CONDUCTOR'] || 'este servicio') +
-            '\n(Esto es dinero extra, fuera del Total a depositar de S/ ' + objetivo.toFixed(2) + '. No afecta el check "Depositado".)' +
-            (adicional > 0 ? '\nYa registrado como adicional: S/ ' + adicional.toFixed(2) : ''),
+            'Monto adicional a sumar al Monto a depositar de ' + (f['CONDUCTOR'] || 'este servicio') +
+            '\n(Se sumará al monto actual de S/ ' + totalDepositar.toFixed(2) + '. No afecta el check "Depositado".)',
             ''
           );
           if (montoTxt === null || montoTxt.trim() === '') return;
