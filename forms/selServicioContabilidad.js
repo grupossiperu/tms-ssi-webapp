@@ -24,19 +24,13 @@ const FormSelServicioContabilidad = {
         <div class="campo"><label>Estado</label>
           <select id="filtroEstado">
             <option value="">Todos</option>
-            <option>EN RUTA</option><option>COMPLETADO</option>
-            <option>FF COMPLET.</option><option>CANCELADO</option>
+            <option>PROGRAMADO</option><option>EN RUTA</option>
+            <option>CULMINADO</option><option>FALSO FLETE</option>
+            <option>CANCELADO</option>
           </select>
         </div>
         <div class="campo"><label>Desde</label><input type="text" id="filtroDesde" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Hasta</label><input type="text" id="filtroHasta" placeholder="dd/mm/yyyy"></div>
-        <div class="campo"><label>Depositado</label>
-          <select id="filtroDepositado">
-            <option value="">Todos</option>
-            <option value="si">Depositado</option>
-            <option value="no">No depositado</option>
-          </select>
-        </div>
         <div class="campo"><label>Datos</label>
           <select id="filtroDatos">
             <option value="">Todos</option>
@@ -49,10 +43,11 @@ const FormSelServicioContabilidad = {
       <div style="max-height:460px; overflow:auto;">
         <table class="tabla-lista" id="tablaServicios">
           <thead><tr>
-            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th>
-            <th>Ciudad retiro</th><th>Destino 1</th><th>Destino 2</th><th>Ciudad devolución</th>
-            <th>Retiro</th><th>Posicionamiento</th><th>Booking</th>
-            <th>Monto a depositar</th><th>Depositado</th><th>Datos</th><th>Estado</th>
+            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Booking</th>
+            <th>Reefer o Seco</th><th>Ciudad de retiro</th><th>Depósito de retiro</th><th>Retiro</th>
+            <th>Destino 1</th><th>Posicionamiento</th><th>Destino 2</th><th>Posicionamiento 2</th>
+            <th>Depósito de devolución</th><th>Fecha y hora de devolución</th>
+            <th>Datos</th><th>Imprimir</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -169,10 +164,6 @@ const FormSelServicioContabilidad = {
       };
       let filas = await llamarBackend('listarServiciosPendientes', filtros);
 
-      const dep = raiz.querySelector('#filtroDepositado').value;
-      if (dep === 'si') filas = filas.filter(f => esVerdadero(f['DEPOSITADO']));
-      if (dep === 'no') filas = filas.filter(f => !esVerdadero(f['DEPOSITADO']));
-
       const datos = raiz.querySelector('#filtroDatos').value;
       if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
       if (datos === 'incompleto') filas = filas.filter(f => !esServicioCompleto(f));
@@ -183,40 +174,40 @@ const FormSelServicioContabilidad = {
         const completo = esServicioCompleto(f);
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
+        const reeferSeco = String(f['REEFER O DRY'] || '').trim().toUpperCase() === 'DRY' ? 'SECO' : (f['REEFER O DRY'] || '');
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
           <td>${f['CONDUCTOR'] || ''}</td>
           <td>${f['PLACA TRACTO'] || ''}</td>
-          <td>${f['CIUDAD DE RETIRO'] || ''}</td>
-          <td>${f['DESTINO 1'] || ''}</td>
-          <td>${f['DESTINO 2'] || ''}</td>
-          <td>${f['CIUDAD DE DEVOLUCION'] || ''}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
           <td>${f['BOOKING'] || ''}</td>
-          <td>S/ ${numero(f['MONTO DEPOSITADO']).toFixed(2)}</td>
-          <td style="text-align:center;"><input type="checkbox" class="chk-depositado" ${esVerdadero(f['DEPOSITADO']) ? 'checked' : ''}></td>
+          <td>${reeferSeco}</td>
+          <td>${f['CIUDAD DE RETIRO'] || ''}</td>
+          <td>${f['DEPOSITO DE RETIRO'] || ''}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
+          <td>${f['DESTINO 1'] || ''}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
+          <td>${f['DESTINO 2'] || ''}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2'])}</td>
+          <td>${f['DEPOSITO DE DEVOLUCION'] || ''}</td>
+          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
           <td style="text-align:center;">
             ${completo
-              ? '<span class="badge-datos completo">Completo</span>'
+              ? '<span class="badge-datos completo" title="Clic para revisar o modificar">Completo</span>'
               : '<span class="badge-datos incompleto" title="Clic para completar los datos">Datos incompletos</span>'}
           </td>
+          <td style="text-align:center;"><button type="button" class="btn-imprimir-fila" title="Imprimir este servicio" style="cursor:pointer; font-size:16px; border:none; background:transparent;">🖨️</button></td>
           <td>${f['ESTADO'] || ''}</td>`;
 
-        tr.querySelector('.chk-depositado').addEventListener('click', function (ev) {
+        tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
           ev.stopPropagation();
-        });
-        tr.querySelector('.chk-depositado').addEventListener('change', async function () {
-          await llamarBackend('actualizarDepositado', { fila: f._fila, depositado: this.checked });
+          FormServicio.abrir(f._fila);
         });
 
-        if (!completo) {
-          tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
-            ev.stopPropagation();
-            FormServicio.abrir(f._fila);
-          });
-        }
+        tr.querySelector('.btn-imprimir-fila').addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          FormServicio.imprimirDesdeFila(f._fila);
+        });
 
         tr.addEventListener('click', function () {
           tbody.querySelectorAll('tr').forEach(x => x.classList.remove('seleccionada'));
@@ -227,7 +218,7 @@ const FormSelServicioContabilidad = {
       });
     }
 
-    ['filtroEstado', 'filtroDesde', 'filtroHasta', 'filtroDepositado', 'filtroDatos'].forEach(function (id) {
+    ['filtroEstado', 'filtroDesde', 'filtroHasta', 'filtroDatos'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', cargar);
     });
 
@@ -235,7 +226,6 @@ const FormSelServicioContabilidad = {
       raiz.querySelector('#filtroEstado').value = '';
       raiz.querySelector('#filtroDesde').value = '';
       raiz.querySelector('#filtroHasta').value = '';
-      raiz.querySelector('#filtroDepositado').value = '';
       raiz.querySelector('#filtroDatos').value = '';
       cargar();
     });
@@ -249,8 +239,8 @@ const FormSelServicioContabilidad = {
       cargar();
     }
     raiz.querySelector('#btnEnRuta').addEventListener('click', function () { cambiarEstado('EN RUTA'); });
-    raiz.querySelector('#btnCulminado').addEventListener('click', function () { cambiarEstado('COMPLETADO'); });
-    raiz.querySelector('#btnFalsoFlete').addEventListener('click', function () { cambiarEstado('FF COMPLET.'); });
+    raiz.querySelector('#btnCulminado').addEventListener('click', function () { cambiarEstado('CULMINADO'); });
+    raiz.querySelector('#btnFalsoFlete').addEventListener('click', function () { cambiarEstado('FALSO FLETE'); });
     raiz.querySelector('#btnViajeCancelado').addEventListener('click', function () { cambiarEstado('CANCELADO'); });
 
     raiz.querySelector('#btnCancelarSelServicio').addEventListener('click', cerrarPanel);
