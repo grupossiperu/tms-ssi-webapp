@@ -54,12 +54,13 @@ const contenedorPanel = document.getElementById('contenedor-panel');
  */
 function abrirPanel(titulo, htmlContenido, alInicializar, opciones) {
   const claseAncho = (opciones && opciones.ancho) ? ' panel-ancho' : '';
+  const claseExtra = (opciones && opciones.clase) ? ' ' + opciones.clase : '';
   contenedorPanel.innerHTML = `
     <div class="overlay-modal" id="overlay-panel">
-      <div class="panel-modal${claseAncho}">
+      <div class="panel-modal${claseAncho}${claseExtra}">
         <div class="panel-header">
           <h2>${titulo}</h2>
-          <button class="cerrar-panel" title="Cerrar" onclick="cerrarPanel()">&times;</button>
+          <button class="cerrar-panel" title="Cerrar" onclick="solicitarCierrePanel()">&times;</button>
         </div>
         <div class="panel-body" id="cuerpo-panel">${htmlContenido}</div>
       </div>
@@ -67,16 +68,58 @@ function abrirPanel(titulo, htmlContenido, alInicializar, opciones) {
 
   const overlay = document.getElementById('overlay-panel');
   overlay.addEventListener('click', function (ev) {
-    if (ev.target === overlay) cerrarPanel();
+    if (ev.target === overlay) solicitarCierrePanel();
   });
 
   if (typeof alInicializar === 'function') {
     alInicializar(document.getElementById('cuerpo-panel'));
   }
+
+  _snapshotFormulario = _serializarFormulario(document.getElementById('cuerpo-panel'));
+}
+
+/**
+ * Serializa los valores actuales de todos los campos del formulario abierto,
+ * para poder detectar si el usuario avanzó algo antes de cerrar el panel.
+ */
+function _serializarFormulario(raiz) {
+  if (!raiz) return '';
+  return Array.from(raiz.querySelectorAll('input, select, textarea')).map(function (el) {
+    return el.id + '=' + (el.type === 'checkbox' ? el.checked : el.value);
+  }).join('|');
+}
+
+let _snapshotFormulario = null;
+
+/**
+ * Vuelve a tomar la foto del estado del formulario (usar después de
+ * navegar de una vista a otra dentro del mismo panel con actualizarPanel).
+ */
+function _refrescarSnapshotFormulario() {
+  _snapshotFormulario = _serializarFormulario(document.getElementById('cuerpo-panel'));
+}
+
+/**
+ * Cierra el panel, pero si el usuario ya avanzó datos en el formulario
+ * (clic afuera del modal o el botón "x"), pide confirmación primero para
+ * no perder el avance sin querer.
+ */
+function solicitarCierrePanel() {
+  const cuerpo = document.getElementById('cuerpo-panel');
+  if (cuerpo && _snapshotFormulario !== null) {
+    const actual = _serializarFormulario(cuerpo);
+    if (actual !== _snapshotFormulario) {
+      if (!window.confirm('Tienes datos sin guardar en este formulario. ¿Seguro que deseas cerrarlo y perder el avance?')) {
+        return;
+      }
+    }
+  }
+  cerrarPanel();
 }
 
 function cerrarPanel() {
   contenedorPanel.innerHTML = '';
+  _snapshotFormulario = null;
 }
 
 /**
@@ -89,6 +132,7 @@ function actualizarPanel(titulo, htmlContenido, alInicializar) {
   const cuerpo = document.getElementById('cuerpo-panel');
   cuerpo.innerHTML = htmlContenido;
   if (typeof alInicializar === 'function') alInicializar(cuerpo);
+  _refrescarSnapshotFormulario();
 }
 
 /* ============================ Mensajes / avisos ============================ */
