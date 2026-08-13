@@ -46,7 +46,7 @@ const FormDeposito = {
             <th>Retiro</th><th>Gl. tracto</th><th>Gl. genset</th>
             <th>Total S/. tracto</th><th>Total S/. genset</th>
             <th>Peajes</th><th>Viático</th><th>Cochera</th><th>Monto total de viaje</th>
-            <th>Abastecimiento (proveedor u otros)</th>
+            <th>Proveedor</th>
             <th>Monto a depositar</th><th>Tarifa</th><th>Depositado</th>
           </tr></thead>
           <tbody></tbody>
@@ -121,7 +121,14 @@ const FormDeposito = {
       tbody.innerHTML = '';
 
       filas.forEach(function (f) {
-        const objetivo = numero(f['MONTO DEPOSITADO']);
+        // Misma lógica que calcularMontoDepositado() en Registrar Servicio:
+        // si el abastecimiento fue por PROVEEDOR, el combustible no entra
+        // en el monto a depositar (el proveedor lo factura directo); si
+        // fue al CONTADO, sí se incluye.
+        const esProveedor = String(f['TIPO DE ABASTECIMIENTO'] || '').trim().toUpperCase() === 'PROVEEDOR';
+        const objetivo = esProveedor
+          ? (numero(f['VIATICO']) + numero(f['PEAJE']) + numero(f['COCHERA']))
+          : (numero(f['VIATICO']) + numero(f['PEAJE']) + numero(f['COCHERA']) + numero(f['TOTAL TRACTO']) + numero(f['TOTAL GENERADOR']));
         const adicional = numero(resumen[f._fila]);
 
         const tr = document.createElement('tr');
@@ -145,7 +152,7 @@ const FormDeposito = {
           <td>S/ ${numero(f['VIATICO']).toFixed(2)}</td>
           <td>S/ ${numero(f['COCHERA']).toFixed(2)}</td>
           <td>S/ ${numero(f['TOTAL POR VIAJE']).toFixed(2)}</td>
-          <td>${f['TIPO DE ABASTECIMIENTO'] || ''}</td>
+          <td>${esProveedor ? 'SI' : 'NO'}</td>
           <td>S/ ${totalDepositar.toFixed(2)}${adicional > 0 ? ' <span style="color:#1c3a5e;font-size:.72rem;" title="Incluye S/ ' + adicional.toFixed(2) + ' de depósitos adicionales registrados con +">*</span>' : ''}</td>
           <td>${simboloMoneda(f['MONEDA TARIFA 1'])}${numero(f['TARIFA 1']).toFixed(2)}</td>
           <td style="text-align:center; white-space:nowrap;">
