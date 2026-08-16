@@ -162,6 +162,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormServiciosCulminados.abrir();
   });
 
+  document.getElementById('btn-datos-viaje').addEventListener('click', function () {
+    FormDatosViaje.abrir();
+  });
+
   document.getElementById('btn-deposito').addEventListener('click', function () {
     FormDeposito.abrir();
   });
