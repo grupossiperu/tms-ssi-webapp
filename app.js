@@ -158,6 +158,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormSelServicioContabilidad.abrir();
   });
 
+  document.getElementById('btn-servicios-culminados').addEventListener('click', function () {
+    FormServiciosCulminados.abrir();
+  });
+
   document.getElementById('btn-deposito').addEventListener('click', function () {
     FormDeposito.abrir();
   });
