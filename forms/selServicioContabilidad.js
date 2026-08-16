@@ -45,7 +45,7 @@ const FormSelServicioContabilidad = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Booking</th>
             <th>Reefer o Seco</th><th>Ciudad de retiro</th><th>Depósito de retiro</th><th>Retiro</th>
-            <th>Destino 1</th><th>Posicionamiento</th><th>Destino 2</th><th>Posicionamiento 2</th>
+            <th>Destino 1</th><th>Packing</th><th>Posicionamiento</th><th>Destino 2</th><th>Posicionamiento 2</th>
             <th>Depósito de devolución</th><th>Fecha y hora de devolución</th>
             <th>Datos</th><th>Imprimir</th><th>Estado</th>
           </tr></thead>
@@ -168,6 +168,28 @@ const FormSelServicioContabilidad = {
       if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
       if (datos === 'incompleto') filas = filas.filter(f => !esServicioCompleto(f));
 
+      function prioridadEstado(estado) {
+        const e = String(estado || '').trim().toUpperCase();
+        if (e === '') return 0;
+        if (e === 'EN RUTA') return 1;
+        if (e === 'FF COMPLET.' || e === 'CANCELADO') return 2;
+        return 3;
+      }
+      function distanciaHoy(f) {
+        const d = new Date(f['FECHA DE PROGRAMACION']);
+        if (isNaN(d.getTime())) return Infinity;
+        return Math.abs(d.getTime() - Date.now());
+      }
+      filas = filas.slice().sort(function (a, b) {
+        const pa = prioridadEstado(a['ESTADO']);
+        const pb = prioridadEstado(b['ESTADO']);
+        if (pa !== pb) return pa - pb;
+        const ca = esServicioCompleto(a) ? 1 : 0;
+        const cb = esServicioCompleto(b) ? 1 : 0;
+        if (ca !== cb) return ca - cb;
+        return distanciaHoy(a) - distanciaHoy(b);
+      });
+
       const tbody = raiz.querySelector('#tablaServicios tbody');
       tbody.innerHTML = '';
       filas.forEach(function (f) {
@@ -186,6 +208,7 @@ const FormSelServicioContabilidad = {
           <td>${f['DEPOSITO DE RETIRO'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
           <td>${f['DESTINO 1'] || ''}</td>
+          <td>${f['PACKING'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
           <td>${f['DESTINO 2'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2'])}</td>
