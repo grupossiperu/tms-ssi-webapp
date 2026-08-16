@@ -54,6 +54,7 @@ const FormSelServicioContabilidad = {
       </div>
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <div style="display:flex; gap:8px;">
+          <button class="boton-secundario" id="btnProgramado">Programado</button>
           <button class="boton-secundario" id="btnEnRuta">En Ruta</button>
           <button class="boton-secundario" id="btnCulminado">Culminado</button>
           <button class="boton-secundario" id="btnFalsoFlete">Falso Flete</button>
@@ -61,11 +62,10 @@ const FormSelServicioContabilidad = {
         </div>
         <div style="display:flex; gap:8px;">
           <button class="boton-secundario" id="btnCancelarSelServicio">Cerrar</button>
-          <button class="boton-primario" id="btnContinuarConsolidado">Continuar</button>
         </div>
       </div>`;
 
-    abrirPanel('Consolidado de Servicios - Selección', html, (raiz) => this._wire(raiz), { ancho: true });
+    abrirPanel('Acarreo - Selección', html, (raiz) => this._wire(raiz), { ancho: true });
   },
 
   _wire: function (raiz) {
@@ -170,11 +170,11 @@ const FormSelServicioContabilidad = {
 
       function prioridadEstado(estado) {
         const e = String(estado || '').trim().toUpperCase();
-        if (e === '') return 0;
+        if (e === '' || e === 'PROGRAMADO') return 0;
         if (e === 'EN RUTA') return 1;
-        if (e === 'FF COMPLET.' || e === 'CANCELADO') return 2;
+        if (e === 'FALSO FLETE' || e === 'CANCELADO') return 2;
         return 3;
-      }
+            }
       function distanciaHoy(f) {
         const d = new Date(f['FECHA DE PROGRAMACION']);
         if (isNaN(d.getTime())) return Infinity;
@@ -236,6 +236,7 @@ const FormSelServicioContabilidad = {
           tbody.querySelectorAll('tr').forEach(x => x.classList.remove('seleccionada'));
           tr.classList.add('seleccionada');
           self._filaSeleccionada = Number(tr.dataset.fila);
+          self._servicioSeleccionado = f;
         });
         tbody.appendChild(tr);
       });
@@ -258,9 +259,14 @@ const FormSelServicioContabilidad = {
         mostrarMensaje('Seleccione un servicio para continuar.', 'error');
         return;
       }
+      if (nuevoEstado === 'CULMINADO' && self._servicioSeleccionado && !esServicioCompleto(self._servicioSeleccionado)) {
+        mostrarMensaje('No se puede marcar como Culminado: el servicio tiene datos incompletos.', 'error');
+        return;
+      }
       await llamarBackend('cambiarEstadoServicio', { fila: self._filaSeleccionada, nuevoEstado: nuevoEstado });
       cargar();
     }
+    raiz.querySelector('#btnProgramado').addEventListener('click', function () { cambiarEstado('PROGRAMADO'); });
     raiz.querySelector('#btnEnRuta').addEventListener('click', function () { cambiarEstado('EN RUTA'); });
     raiz.querySelector('#btnCulminado').addEventListener('click', function () { cambiarEstado('CULMINADO'); });
     raiz.querySelector('#btnFalsoFlete').addEventListener('click', function () { cambiarEstado('FALSO FLETE'); });
@@ -268,18 +274,7 @@ const FormSelServicioContabilidad = {
 
     raiz.querySelector('#btnCancelarSelServicio').addEventListener('click', cerrarPanel);
 
-    raiz.querySelector('#btnContinuarConsolidado').addEventListener('click', async function () {
-      if (self._filaSeleccionada === null) {
-        mostrarMensaje('Seleccione un servicio para continuar.', 'error');
-        return;
-      }
-      const resp = await llamarBackend('validarContinuarConsolidado', { fila: self._filaSeleccionada });
-      if (!resp.ok) {
-        mostrarMensaje(resp.mensaje, 'error');
-        return;
-      }
-      FormConsolidadoServicio.abrir(self._filaSeleccionada, resp.servicio['ESTADO']);
-    });
+    
 
     cargar();
   }
