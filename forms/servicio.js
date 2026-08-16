@@ -28,298 +28,311 @@ const FormServicio = {
       }).join('');
     };
 
-    // El formulario se arma en filas de 4 campos, en el orden exacto que
+    // El formulario se arma en filas de 3 campos, en el orden exacto que
     // definió el usuario. Cada bloque .fila-campos es una fila visual.
     const html = `
       <div class="fila-campos">
         <div class="campo">
-        <label>Fecha de registro</label>
-        <input type="text" id="txtFechaServicioRegistro" placeholder="dd/mm/yyyy">
+          <label>Fecha de registro</label>
+          <input type="date" id="txtFechaServicioRegistro">
         </div>
         <div class="campo">
-        <label>Cliente para facturación</label>
-        <input list="lst-clientes" id="cboClienteFacturacion">
-        <datalist id="lst-clientes">${datos.clientesFacturacion.map(v => `<option value="${v}">`).join('')}</datalist>
+          <label>Cliente para facturación</label>
+          <input list="lst-clientes" id="cboClienteFacturacion">
+          <datalist id="lst-clientes">${datos.clientesFacturacion.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-        <label>Empresa que dio el servicio</label>
-        <input list="lst-empresas" id="cboEmpresaServicio">
-        <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-        <label>Conductor</label>
-        <div class="fila-combo-mas">
-        <select id="cboConductorServicio"><option value=""></option>${datos.conductores.map(v => `<option value="${v}">${v}</option>`).join('')}</select>
-        <button type="button" id="btnAgregarConductor" class="boton-mas" title="Agregar conductor nuevo">+</button>
-        </div>
+          <label>Empresa que dio el servicio</label>
+          <input list="lst-empresas" id="cboEmpresaServicio">
+          <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
       </div>
+
       <div class="fila-campos">
         <div class="campo">
-        <label>Placa tracto</label>
-        <div class="fila-combo-mas">
-        <select id="cboPlacaTractoServicio">${opciones(datos.placasTracto)}</select>
-        <button type="button" id="btnAgregarTracto" class="boton-mas" title="Agregar placa de tracto nueva">+</button>
-        </div>
-        </div>
-        <div class="campo">
-        <label>Placa carreta</label>
-        <div class="fila-combo-mas">
-        <select id="cboPlacaCarretaServicio">${opciones(datos.placasCarreta)}</select>
-        <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
-        </div>
+          <label>Conductor</label>
+          <div class="fila-combo-mas">
+            <select id="cboConductorServicio"><option value=""></option>${datos.conductores.map(v => `<option value="${v}">${v}</option>`).join('')}</select>
+            <button type="button" id="btnAgregarConductor" class="boton-mas" title="Agregar conductor nuevo">+</button>
+          </div>
         </div>
         <div class="campo">
-        <label>Tipo de carga</label>
-        <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
+          <label>Placa tracto</label>
+          <div class="fila-combo-mas">
+            <select id="cboPlacaTractoServicio">${opciones(datos.placasTracto)}</select>
+            <button type="button" id="btnAgregarTracto" class="boton-mas" title="Agregar placa de tracto nueva">+</button>
+          </div>
         </div>
         <div class="campo">
-        <label>Reefer o Dry</label>
-        <select id="cboReeferDry">
-        <option value="">-</option>
-        <option value="REEFER">REEFER</option>
-        <option value="DRY">DRY</option>
-        </select>
+          <label>Placa carreta</label>
+          <div class="fila-combo-mas">
+            <select id="cboPlacaCarretaServicio">${opciones(datos.placasCarreta)}</select>
+            <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
+          </div>
         </div>
       </div>
+
       <div class="fila-campos">
         <div class="campo">
-        <label>Destino 1</label>
-        <input list="lst-destinos" id="cboDestino1Servicio">
+          <label>Tipo de carga</label>
+          <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
         </div>
         <div class="campo">
-        <label>Destino 2 (solo carga consolidado)</label>
-        <input list="lst-destinos" id="cboDestino2Servicio" disabled>
-        <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
+          <label>Reefer o Dry</label>
+          <select id="cboReeferDry">
+            <option value="">-</option>
+            <option value="REEFER">REEFER</option>
+            <option value="DRY">DRY</option>
+          </select>
         </div>
         <div class="campo">
-        <label>Ciudad de retiro</label>
-        <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
-        <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          <label>Destino 1</label>
+          <input list="lst-destinos" id="cboDestino1Servicio">
         </div>
         <div class="campo">
-        <label>Ciudad de devolución</label>
-        <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
-        <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          <label>Destino 2 (solo carga consolidado)</label>
+          <input list="lst-destinos" id="cboDestino2Servicio" disabled>
+          <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
       </div>
+
       <div class="fila-campos">
         <div class="campo">
-        <label>Tarifa</label>
-        <div class="fila-combo-mas">
-        <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
-        <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
-        <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
-        </div>
+          <label>Ciudad de retiro</label>
+          <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
+          <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-        <label>Booking</label>
-        <input type="text" id="txtBookingServicio">
+          <label>Ciudad de devolución</label>
+          <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
+          <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
-        <label>N° Contenedor (ABCU1234567)</label>
-        <input type="text" id="txtContenedorServicio">
-        </div>
-        <div class="campo"></div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Tipo de producto</label>
-        <div class="fila-combo-mas">
-        <input list="lst-tipoProd" id="cboTipoProductoServicio">
-        <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
-        </div>
-        <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-        <label>Tipo de tratamiento</label>
-        <input list="lst-tipoTrat" id="cboTipoTratamiento">
-        <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-        <label>Packing</label>
-        <div class="fila-combo-mas">
-        <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
-        <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
-        </div>
-        <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-        <label>Thermoregistro</label>
-        <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
+          <label>Tarifa</label>
+          <div class="fila-combo-mas">
+            <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
+            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
+            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
+          </div>
         </div>
       </div>
+
       <div class="fila-campos">
         <div class="campo">
-        <label>Cantidad de thermoregistros</label>
-        <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
+          <label>Booking</label>
+          <input type="text" id="txtBookingServicio">
         </div>
         <div class="campo">
-        <label>Modelo de thermoregistro</label>
-        <div class="fila-combo-mas">
-        <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
-        <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
-        </div>
-        <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-        <label>Precinto de aduana</label>
-        <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-        <label>Operador logístico</label>
-        <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
-        <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo"></div>
-        <div class="campo">
-        <label>Filtro de etileno</label>
-        <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-        <label>Cantidad de filtros de etileno</label>
-        <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
-        </div>
-        <div class="campo"></div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Barras consolidado (solo carga consolidado)</label>
-        <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-        <label>Cantidad de barras (solo carga consolidado)</label>
-        <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
-        </div>
-        <div class="campo"></div>
-        <div class="campo">
-        <label>Depósito de retiro</label>
-        <input list="lst-depRetiro" id="cboDepositoRetiro">
-        <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Fecha de retiro</label>
-        <input type="text" id="txtFechaRetiroServicio" placeholder="dd/mm/yyyy">
-        </div>
-        <div class="campo">
-        <label>Hora de retiro</label>
-        <input type="text" id="txtHoraRetiroServicio" placeholder="08:00">
-        </div>
-        <div class="campo">
-        <label>Lugar de posicionamiento 1</label>
-        <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
-        </div>
-        <div class="campo">
-        <label>Fecha de posicionamiento 1</label>
-        <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Hora de posicionamiento 1</label>
-        <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
-        </div>
-        <div class="campo">
-        <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
-        <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
-        </div>
-        <div class="campo">
-        <label>Fecha de posicionamiento 2 (solo carga consolidado)</label>
-        <input type="text" id="txtFechaPosicionamiento2" placeholder="dd/mm/yyyy" disabled>
-        </div>
-        <div class="campo">
-        <label>Hora de posicionamiento 2 (solo carga consolidado)</label>
-        <input type="text" id="txtHoraPosicionamiento2" placeholder="hh:mm" disabled>
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Depósito de devolución</label>
-        <input list="lst-depDevolucion" id="cboDepositoDevolucion">
-        <datalist id="lst-depDevolucion">${datos.depositosDevolucion.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-        <label>Fecha de devolución</label>
-        <input type="text" id="txtFechaDevolucion" placeholder="dd/mm/yyyy o -">
-        </div>
-        <div class="campo">
-        <label>Hora de devolución</label>
-        <input type="text" id="txtHoraDevolucion" placeholder="hh:mm o -">
-        </div>
-        <div class="campo">
-        <label>Costo del petróleo x galón</label>
-        <input type="text" id="txtCostoPetroleoGalon">
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Galones tracto</label>
-        <input type="text" id="txtGlTracto">
-        </div>
-        <div class="campo">
-        <label>Galones genset</label>
-        <input type="text" id="txtGlGenerador">
-        </div>
-        <div class="campo">
-        <label>Total tracto</label>
-        <input type="text" id="txtTotalTracto" disabled>
-        </div>
-        <div class="campo">
-        <label>Total genset</label>
-        <input type="text" id="txtTotalGenerador" disabled>
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Total combustible</label>
-        <input type="text" id="txtTotalCombustible" disabled>
-        </div>
-        <div class="campo">
-        <label>Viático</label>
-        <input type="text" id="txtViaticoServicio">
-        </div>
-        <div class="campo">
-        <label>Peaje</label>
-        <input type="text" id="txtPeajeServicio">
-        </div>
-        <div class="campo">
-        <label>Cochera</label>
-        <input type="text" id="txtCocheraServicio">
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>¿Abastecido por proveedor?</label>
-        <div class="fila-combo-mas">
-        <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
-        <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
-        </div>
-        </div>
-        <div class="campo">
-        <label>Proveedor</label>
-        <div class="fila-combo-mas">
-        <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
-        <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
-        </div>
-        </div>
-        <div class="campo"></div>
-        <div class="campo">
-        <label>Monto para depositar</label>
-        <input type="text" id="txtMontoDepositadoServicio" disabled>
-        </div>
-      </div>
-      <div class="fila-campos">
-        <div class="campo">
-        <label>Total por viaje</label>
-        <input type="text" id="txtTotalViaje" disabled>
+          <label>N° Contenedor (ABCU1234567)</label>
+          <input type="text" id="txtContenedorServicio">
         </div>
         <div class="campo"></div>
       </div>
 
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Tipo de producto</label>
+          <div class="fila-combo-mas">
+            <input list="lst-tipoProd" id="cboTipoProductoServicio">
+            <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
+          </div>
+          <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Tipo de tratamiento</label>
+          <input list="lst-tipoTrat" id="cboTipoTratamiento">
+          <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Packing</label>
+          <div class="fila-combo-mas">
+            <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
+            <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
+          </div>
+          <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Thermoregistro</label>
+          <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Cantidad de thermoregistros</label>
+          <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
+        </div>
+        <div class="campo">
+          <label>Modelo de thermoregistro</label>
+          <div class="fila-combo-mas">
+            <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
+            <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
+          </div>
+          <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Precinto de aduana</label>
+          <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Operador logístico</label>
+          <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
+          <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Filtro de etileno</label>
+          <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Cantidad de filtros de etileno</label>
+          <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Barras consolidado (solo carga consolidado)</label>
+          <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
+        </div>
+        <div class="campo">
+          <label>Cantidad de barras (solo carga consolidado)</label>
+          <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Depósito de retiro</label>
+          <input list="lst-depRetiro" id="cboDepositoRetiro">
+          <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Fecha y hora de retiro</label>
+          <input type="datetime-local" id="dtRetiroServicio">
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Lugar de posicionamiento 1</label>
+          <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
+        </div>
+        <div class="campo">
+          <label>Fecha y hora de posicionamiento 1</label>
+          <input type="datetime-local" id="dtPosicionamiento1Servicio">
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
+          <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
+        </div>
+        <div class="campo">
+          <label>Fecha y hora de posicionamiento 2 (solo carga consolidado)</label>
+          <input type="datetime-local" id="dtPosicionamiento2Servicio" disabled>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Depósito de devolución</label>
+          <input list="lst-depDevolucion" id="cboDepositoDevolucion">
+          <datalist id="lst-depDevolucion">${datos.depositosDevolucion.map(v => `<option value="${v}">`).join('')}</datalist>
+        </div>
+        <div class="campo">
+          <label>Fecha y hora de devolución</label>
+          <input type="datetime-local" id="dtDevolucionServicio">
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Costo del petróleo x galón</label>
+          <input type="text" id="txtCostoPetroleoGalon">
+        </div>
+        <div class="campo">
+          <label>Galones tracto</label>
+          <input type="text" id="txtGlTracto">
+        </div>
+        <div class="campo">
+          <label>Galones genset</label>
+          <input type="text" id="txtGlGenerador">
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Total tracto</label>
+          <input type="text" id="txtTotalTracto" disabled>
+        </div>
+        <div class="campo">
+          <label>Total genset</label>
+          <input type="text" id="txtTotalGenerador" disabled>
+        </div>
+        <div class="campo">
+          <label>Total combustible</label>
+          <input type="text" id="txtTotalCombustible" disabled>
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Viático</label>
+          <input type="text" id="txtViaticoServicio">
+        </div>
+        <div class="campo">
+          <label>Peaje</label>
+          <input type="text" id="txtPeajeServicio">
+        </div>
+        <div class="campo">
+          <label>Cochera</label>
+          <input type="text" id="txtCocheraServicio">
+        </div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>¿Abastecido por proveedor?</label>
+          <div class="fila-combo-mas">
+            <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
+            <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
+          </div>
+        </div>
+        <div class="campo">
+          <label>Proveedor</label>
+          <div class="fila-combo-mas">
+            <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
+            <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
+          </div>
+        </div>
+        <div class="campo"></div>
+      </div>
+
+      <div class="fila-campos">
+        <div class="campo">
+          <label>Monto para depositar</label>
+          <input type="text" id="txtMontoDepositadoServicio" disabled>
+        </div>
+        <div class="campo">
+          <label>Total por viaje</label>
+          <input type="text" id="txtTotalViaje" disabled>
+        </div>
+        <div class="campo"></div>
+      </div>
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <button class="boton-secundario" id="btnInicioServicio">Inicio</button>
         <div style="display:flex; gap:10px;">
@@ -328,14 +341,14 @@ const FormServicio = {
         </div>
       </div>`;
 
-    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz), { clase: 'panel-servicio' });
+    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz));
 
     if (filaEdicion) {
       // Carga los datos de la fila para edición/completado.
       const registro = await llamarBackend('cargarDatosServicioParaConsolidado', { fila: filaEdicion });
       if (registro) this._precargar(document.getElementById('cuerpo-panel'), registro);
     } else {
-      document.getElementById('txtFechaServicioRegistro').value = this._fechaHoy();
+      document.getElementById('txtFechaServicioRegistro').value = this._fechaHoyISO();
     }
   },
 
@@ -356,11 +369,57 @@ const FormServicio = {
     return String(v);
   },
 
+  _formatoFechaISO: function (v) {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  },
+
+  _fechaHoyISO: function () {
+    const hoy = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return hoy.getFullYear() + '-' + pad(hoy.getMonth() + 1) + '-' + pad(hoy.getDate());
+  },
+
+  _fechaISOaDDMM: function (valor) {
+    if (!valor) return '';
+    const p = String(valor).split('-');
+    if (p.length !== 3) return '';
+    return p[2] + '/' + p[1] + '/' + p[0];
+  },
+
+  _datetimeLocalDeFechaHora: function (fechaValor, horaValor) {
+    const fecha = this._formatoFechaISO(fechaValor);
+    if (!fecha) return '';
+    const hora = this._formatoHoraCampo(horaValor);
+    if (!hora || !/^\d{1,2}:\d{2}/.test(hora)) return '';
+    const partes = hora.split(':');
+    const pad = n => String(n).padStart(2, '0');
+    return fecha + 'T' + pad(partes[0]) + ':' + pad(partes[1]);
+  },
+
+  _fechaDeDatetimeLocal: function (valor) {
+    if (!valor) return '';
+    const partes = String(valor).split('T');
+    const fecha = partes[0].split('-');
+    if (fecha.length !== 3) return '';
+    return fecha[2] + '/' + fecha[1] + '/' + fecha[0];
+  },
+
+  _horaDeDatetimeLocal: function (valor) {
+    if (!valor) return '';
+    const partes = String(valor).split('T');
+    if (partes.length < 2) return '';
+    return partes[1].slice(0, 5);
+  },
+
   _precargar: function (raiz, f) {
     const self = this;
     const set = function (id, valor) { const el = raiz.querySelector('#' + id); if (el) el.value = valor || ''; };
 
-    set('txtFechaServicioRegistro', this._formatoFechaCampo(f['FECHA DE PROGRAMACION']));
+    set('txtFechaServicioRegistro', this._formatoFechaISO(f['FECHA DE PROGRAMACION']));
     set('cboClienteFacturacion', f['CLIENTE PARA FACTURACIÓN']);
     set('cboEmpresaServicio', f['EMPRESA QUE DIO EL SERVICIO']);
     set('cboConductorServicio', f['CONDUCTOR']);
@@ -375,8 +434,7 @@ const FormServicio = {
     set('txtLugarPosicionamiento1', f['LUGAR DE POSICIONAMIENTO 1'] || f['DESTINO 1']);
     set('txtLugarPosicionamiento2', f['LUGAR DE POSICIONAMIENTO 2'] ||
       (f['DESTINO 2'] && f['DESTINO 2'] !== '-' ? f['DESTINO 2'] : ''));
-    set('txtFechaPosicionamiento2', this._formatoFechaCampo(f['FECHA DE POSICIONAMIENTO 2']));
-    set('txtHoraPosicionamiento2', this._formatoHoraCampo(f['HORA DE POSICIONAMIENTO 2']));
+    set('dtPosicionamiento2Servicio', this._datetimeLocalDeFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2']));
     set('cboCiudadRetiroServicio', f['CIUDAD DE RETIRO']);
     set('cboCiudadDevolucionServicio', f['CIUDAD DE DEVOLUCION']);
     set('cboPackingServicio', f['PACKING']);
@@ -389,25 +447,10 @@ const FormServicio = {
     set('txtCantidadFiltroEtileno', f['CANTIDAD FILTRO DE ETILENO'] || '');
     set('cboBarrasConsolidado', f['BARRAS CONSOLIDADO'] || 'NO');
     set('txtCantidadBarras', f['CANTIDAD BARRAS CONSOLIDADO'] || '');
-
-    // Los combos SI/NO recién cargados ya trajeron sus valores; aplicamos
-    // el habilitado/deshabilitado de sus campos dependientes según corresponda.
-    const esThermo = String(f['THERMOREGISTRO'] || 'NO').trim().toUpperCase() === 'SI';
-    ['txtCantidadThermoregistro', 'cboModeloThermoregistro', 'btnAgregarModeloThermo'].forEach(function (id) {
-      const el = raiz.querySelector('#' + id);
-      if (el) el.disabled = !esThermo;
-    });
-    const esPrecinto = String(f['PRECINTO DE ADUANA'] || 'NO').trim().toUpperCase() === 'SI';
-    raiz.querySelector('#cboOperadorLogistico').disabled = !esPrecinto;
-    const esFiltroEtileno = String(f['FILTRO DE ETILENO'] || 'NO').trim().toUpperCase() === 'SI';
-    raiz.querySelector('#txtCantidadFiltroEtileno').disabled = !esFiltroEtileno;
-    set('txtFechaRetiroServicio', this._formatoFechaCampo(f['FECHA DE RETIRO']));
-    set('txtHoraRetiroServicio', this._formatoHoraCampo(f['HORA DE RETIRO']));
+    set('dtRetiroServicio', this._datetimeLocalDeFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO']));
     set('cboDepositoDevolucion', f['DEPOSITO DE DEVOLUCION']);
-    set('txtFechaDevolucion', f['FECHA DE DEVOLUCION'] && f['FECHA DE DEVOLUCION'] !== '-' ? this._formatoFechaCampo(f['FECHA DE DEVOLUCION']) : '');
-    set('txtHoraDevolucion', f['HORA DE DEVOLUCION'] && f['HORA DE DEVOLUCION'] !== '-' ? this._formatoHoraCampo(f['HORA DE DEVOLUCION']) : '');
-    set('txtFechaPosicionamiento', this._formatoFechaCampo(f['FECHA DE POSICIONAMIENTO 1']));
-    set('txtHoraPosicionamiento', this._formatoHoraCampo(f['HORA DE POSICIONAMIENTO 1']));
+    set('dtDevolucionServicio', (f['FECHA DE DEVOLUCION'] && f['FECHA DE DEVOLUCION'] !== '-') ? this._datetimeLocalDeFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION']) : '');
+    set('dtPosicionamiento1Servicio', this._datetimeLocalDeFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1']));
     set('cboTipoProductoServicio', f['TIPO DE PRODUCTO']);
     set('cboTipoTratamiento', f['TIPO DE TRATAMIENTO']);
     set('txtCostoPetroleoGalon', f['COSTO DEL PETRÓLEO X GALÓN'] || '');
@@ -437,8 +480,7 @@ const FormServicio = {
 
     const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
     raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
-    ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2',
-     'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
+    ['dtPosicionamiento2Servicio', 'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
       raiz.querySelector('#' + id).disabled = !esConsolidado;
     });
 
@@ -475,6 +517,8 @@ const FormServicio = {
       const el = raiz.querySelector('#' + id);
       return el ? (el.value || '').trim() : '';
     };
+    const vF = (idDT) => this._fechaDeDatetimeLocal(v(idDT));
+    const vH = (idDT) => this._horaDeDatetimeLocal(v(idDT));
     const moneda = function (id) {
       const t = v(id);
       if (t === '') return '';
@@ -492,42 +536,29 @@ const FormServicio = {
       return '<div class="seccion-imp"><div class="tit-imp">' + esc(titulo) + '</div><div class="fila-imp">' + campos.join('') + '</div></div>';
     };
 
-    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de Servicio</title>' +
-      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-      '<style>' +
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de Servicio</title><style>' +
       '@page{ size:A4; margin:11mm; }' +
       '*{ box-sizing:border-box; }' +
-      // En pantalla se usa letra grande y un layout fluido (clamp según el
-      // ancho de la ventana); al imprimir/exportar a PDF se compacta para
-      // que siga entrando bien en A4.
-      'html{ font-size: clamp(15px, 1.05vw + 9px, 19px); }' +
-      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; background:#eef1f5; }' +
-      '.hoja{ max-width:1100px; margin:0 auto; padding:22px 26px 40px; background:#fff; }' +
-      '.encabezado{ display:flex; align-items:flex-end; justify-content:space-between; border-bottom:3px solid #1c3a5e; padding-bottom:10px; margin-bottom:14px; }' +
-      '.encabezado h1{ font-size:1.7rem; margin:0; color:#1c3a5e; }' +
-      '.encabezado p{ margin:3px 0 0; font-size:1rem; color:#444; }' +
-      '.encabezado .fecha-imp{ font-size:.85rem; color:#444; text-align:right; }' +
-      '.seccion-imp{ margin-bottom:10px; page-break-inside:avoid; }' +
-      '.tit-imp{ background:#1c3a5e; color:#fff; font-size:.85rem; font-weight:700; padding:5px 10px; letter-spacing:.3px; }' +
+      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; font-size:10.5px; }' +
+      '.encabezado{ display:flex; align-items:flex-end; justify-content:space-between; border-bottom:2.5px solid #1c3a5e; padding-bottom:7px; margin-bottom:9px; }' +
+      '.encabezado h1{ font-size:14px; margin:0; color:#1c3a5e; }' +
+      '.encabezado p{ margin:2px 0 0; font-size:10px; color:#444; }' +
+      '.encabezado .fecha-imp{ font-size:9px; color:#444; text-align:right; }' +
+      '.seccion-imp{ margin-bottom:6px; page-break-inside:avoid; }' +
+      '.tit-imp{ background:#1c3a5e; color:#fff; font-size:9px; font-weight:700; padding:2.5px 7px; letter-spacing:.3px; }' +
       '.fila-imp{ display:flex; flex-wrap:wrap; border:1px solid #c7ced8; border-top:none; }' +
-      '.campo-imp{ flex:1 1 180px; min-width:160px; border-right:1px solid #dde3ea; border-bottom:1px solid #dde3ea; padding:6px 10px; }' +
+      '.campo-imp{ flex:1 1 0; min-width:118px; border-right:1px solid #dde3ea; border-bottom:1px solid #dde3ea; padding:3px 7px; }' +
       '.campo-imp:last-child{ border-right:none; }' +
-      '.lbl-imp{ font-size:.72rem; font-weight:700; color:#556; text-transform:uppercase; letter-spacing:.2px; }' +
-      '.val-imp{ font-size:1rem; min-height:1.3em; margin-top:2px; }' +
-      '.no-print{ text-align:center; margin:18px 0; }' +
-      '.no-print button{ padding:11px 26px; font-size:1rem; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
-      '@media print{' +
-      '  .no-print{ display:none; } body{ background:#fff; } .hoja{ max-width:none; padding:0; }' +
-      '  html{ font-size:10.5px; }' +
-      '  .encabezado h1{ font-size:14px; } .encabezado p{ font-size:10px; } .encabezado .fecha-imp{ font-size:9px; }' +
-      '  .tit-imp{ font-size:9px; padding:2.5px 7px; } .campo-imp{ min-width:118px; padding:3px 7px; }' +
-      '  .lbl-imp{ font-size:7.5px; } .val-imp{ font-size:10.5px; min-height:13px; }' +
-      '}' +
-      '</style></head><body><div class="hoja">' +
+      '.lbl-imp{ font-size:7.5px; font-weight:700; color:#556; text-transform:uppercase; letter-spacing:.2px; }' +
+      '.val-imp{ font-size:10.5px; min-height:13px; margin-top:1px; }' +
+      '.no-print{ text-align:center; margin:14px 0; }' +
+      '.no-print button{ padding:9px 22px; font-size:13px; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
+      '@media print{ .no-print{ display:none; } }' +
+      '</style></head><body>' +
       '<div class="encabezado"><div><h1>TRANSPORTES SSI S.A.C.</h1><p>Registro de Servicio</p></div>' +
       '<div class="fecha-imp">Impreso: ' + esc(new Date().toLocaleString('es-PE')) + '</div></div>' +
       seccion('Datos generales', [
-        campo('Fecha de registro', v('txtFechaServicioRegistro')),
+        campo('Fecha de registro', this._formatoFechaCampo(v('txtFechaServicioRegistro'))),
         campo('Cliente para facturación', v('cboClienteFacturacion')),
         campo('Empresa que dio el servicio', v('cboEmpresaServicio'))
       ]) +
@@ -571,35 +602,32 @@ const FormServicio = {
       ]) +
       seccion('Retiro', [
         campo('Depósito de retiro', v('cboDepositoRetiro')),
-        campo('Fecha de retiro', v('txtFechaRetiroServicio')),
-        campo('Hora de retiro', v('txtHoraRetiroServicio'))
+        campo('Fecha de retiro', vF('dtRetiroServicio')),
+        campo('Hora de retiro', vH('dtRetiroServicio'))
       ]) +
       seccion('Posicionamiento 1', [
         campo('Lugar', v('txtLugarPosicionamiento1')),
-        campo('Fecha', v('txtFechaPosicionamiento')),
-        campo('Hora', v('txtHoraPosicionamiento'))
+        campo('Fecha', vF('dtPosicionamiento1Servicio')),
+        campo('Hora', vH('dtPosicionamiento1Servicio'))
       ]) +
       seccion('Posicionamiento 2 (carga consolidada)', [
         campo('Lugar', v('txtLugarPosicionamiento2')),
-        campo('Fecha', v('txtFechaPosicionamiento2')),
-        campo('Hora', v('txtHoraPosicionamiento2'))
+        campo('Fecha', vF('dtPosicionamiento2Servicio')),
+        campo('Hora', vH('dtPosicionamiento2Servicio'))
       ]) +
       seccion('Devolución', [
         campo('Depósito de devolución', v('cboDepositoDevolucion')),
-        campo('Fecha de devolución', v('txtFechaDevolucion')),
-        campo('Hora de devolución', v('txtHoraDevolucion'))
+        campo('Fecha de devolución', vF('dtDevolucionServicio')),
+        campo('Hora de devolución', vH('dtDevolucionServicio'))
       ]) +
-      seccion('Combustible', (this._tipoAbastecimiento === 'PROVEEDOR' ? [
-        campo('Galones tracto', v('txtGlTracto')),
-        campo('Galones genset', v('txtGlGenerador'))
-      ] : [
+      seccion('Combustible', [
         campo('Costo petróleo x galón', moneda('txtCostoPetroleoGalon')),
         campo('Galones tracto', v('txtGlTracto')),
         campo('Galones genset', v('txtGlGenerador')),
         campo('Total tracto', moneda('txtTotalTracto')),
         campo('Total genset', moneda('txtTotalGenerador')),
         campo('Total combustible', moneda('txtTotalCombustible'))
-      ])) +
+      ]) +
       seccion('Gastos', [
         campo('Viático', moneda('txtViaticoServicio')),
         campo('Peaje', moneda('txtPeajeServicio')),
@@ -610,7 +638,7 @@ const FormServicio = {
         campo('Total por viaje', moneda('txtTotalViaje'))
       ]) +
       '<div class="no-print"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div>' +
-      '</div></body></html>';
+      '</body></html>';
 
     const ventana = window.open('', '_blank');
     if (!ventana) {
@@ -632,7 +660,7 @@ const FormServicio = {
 
   _wire: function (raiz) {
     const self = this;
-    document.getElementById('txtFechaServicioRegistro').value = this._fechaHoy();
+    document.getElementById('txtFechaServicioRegistro').value = this._fechaHoyISO();
 
     // Botones "+" para dar de alta conductor / placa tracto / placa carreta
     // sin salir del formulario (equivalente a mantener PERSONAL/TRACTO/
@@ -763,15 +791,13 @@ const FormServicio = {
     function aplicarTipoCarga(esConsolidado) {
       raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
       // Todo lo que solo aplica a carga consolidado.
-      ['txtFechaPosicionamiento2', 'txtHoraPosicionamiento2',
-       'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
+      ['dtPosicionamiento2Servicio', 'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
         raiz.querySelector('#' + id).disabled = !esConsolidado;
       });
 
       if (!esConsolidado) {
         raiz.querySelector('#cboDestino2Servicio').value = '';
-        raiz.querySelector('#txtFechaPosicionamiento2').value = '';
-        raiz.querySelector('#txtHoraPosicionamiento2').value = '';
+        raiz.querySelector('#dtPosicionamiento2Servicio').value = '';
         raiz.querySelector('#cboBarrasConsolidado').value = 'NO';
         raiz.querySelector('#txtCantidadBarras').value = '';
       }
@@ -876,28 +902,18 @@ const FormServicio = {
     });
 
     // Validación de orden cronológico: retiro < posicionamiento < devolución.
-    function momento(idFecha, idHora) {
-      const f = raiz.querySelector('#' + idFecha).value.trim();
-      const h = raiz.querySelector('#' + idHora).value.trim();
-      if (f === '' || f === '-' || h === '' || h === '-') return null;
-      const partesF = f.replace(/-/g, '/').split('/');
-      if (partesF.length !== 3) return null;
-      const partesH = h.split(':');
-      if (partesH.length < 2) return null;
-      let horas = parseInt(partesH[0], 10);
-      const minutos = parseInt(partesH[1], 10);
-      if (isNaN(horas) || isNaN(minutos)) return null;
-      if (/pm/i.test(h) && horas < 12) horas += 12;
-      if (/am/i.test(h) && horas === 12) horas = 0;
-      const d = new Date(parseInt(partesF[2], 10), parseInt(partesF[1], 10) - 1, parseInt(partesF[0], 10), horas, minutos);
+    function momento(idDT) {
+      const v = raiz.querySelector('#' + idDT).value;
+      if (!v) return null;
+      const d = new Date(v);
       return isNaN(d.getTime()) ? null : d.getTime();
     }
 
     function validarCronologia(avisar) {
-      const retiro = momento('txtFechaRetiroServicio', 'txtHoraRetiroServicio');
-      const posic1 = momento('txtFechaPosicionamiento', 'txtHoraPosicionamiento');
-      const posic2 = momento('txtFechaPosicionamiento2', 'txtHoraPosicionamiento2');
-      const devol = momento('txtFechaDevolucion', 'txtHoraDevolucion');
+      const retiro = momento('dtRetiroServicio');
+      const posic1 = momento('dtPosicionamiento1Servicio');
+      const posic2 = momento('dtPosicionamiento2Servicio');
+      const devol = momento('dtDevolucionServicio');
 
       // Secuencia real del viaje: retiro -> posicionamiento 1 ->
       // posicionamiento 2 (si es consolidado) -> devolución. Solo se comparan
@@ -921,32 +937,12 @@ const FormServicio = {
       return error;
     }
 
-    ['txtFechaRetiroServicio', 'txtHoraRetiroServicio', 'txtFechaPosicionamiento',
-     'txtHoraPosicionamiento', 'txtFechaPosicionamiento2', 'txtHoraPosicionamiento2',
-     'txtFechaDevolucion', 'txtHoraDevolucion'].forEach(function (id) {
+    ['dtRetiroServicio', 'dtPosicionamiento1Servicio', 'dtPosicionamiento2Servicio',
+     'dtDevolucionServicio'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', function () {
         setTimeout(function () { validarCronologia(true); }, 0);
       });
     });
-
-    // Validación de horas (equivalente a HoraValidaServicio / ConvertirHoraServicio).
-    function validarHora(input, opcional) {
-      // Ver nota en preguntarMoneda: el alert() debe diferirse fuera del
-      // manejador de "blur" para no quedar en bucle al cerrar el diálogo.
-      setTimeout(function () {
-        const v = input.value.trim();
-        if (v === '' || (opcional && v === '-')) return;
-        if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](\s?(AM|PM|am|pm))?$/.test(v)) {
-          mostrarMensaje('Ingrese una hora válida. Ejemplo: 08:00, 13:00, 12:00 PM.', 'error');
-          input.value = '';
-          input.focus();
-        }
-      }, 0);
-    }
-    raiz.querySelector('#txtHoraRetiroServicio').addEventListener('blur', function () { validarHora(this, false); });
-    raiz.querySelector('#txtHoraDevolucion').addEventListener('blur', function () { validarHora(this, true); });
-    raiz.querySelector('#txtHoraPosicionamiento').addEventListener('blur', function () { validarHora(this, true); });
-    raiz.querySelector('#txtHoraPosicionamiento2').addEventListener('blur', function () { validarHora(this, true); });
 
     // Validación de contenedor (equivalente a txtContenedorServicio_Exit).
     raiz.querySelector('#txtContenedorServicio').addEventListener('input', function () {
@@ -1038,27 +1034,7 @@ const FormServicio = {
       }
     });
 
-    // Combos SI/NO que habilitan/deshabilitan (y limpian) sus campos
-    // dependientes: Thermoregistro, Precinto de aduana y Filtro de etileno.
-    function wireDependeSiNo(idSelect, idsDependientes) {
-      const sel = raiz.querySelector('#' + idSelect);
-      function aplicar() {
-        const activo = sel.value.trim().toUpperCase() === 'SI';
-        idsDependientes.forEach(function (id) {
-          const el = raiz.querySelector('#' + id);
-          if (!el) return;
-          el.disabled = !activo;
-          if (!activo && (el.tagName === 'INPUT' || el.tagName === 'BUTTON') && el.type !== 'button') el.value = '';
-        });
-      }
-      sel.addEventListener('change', aplicar);
-      aplicar();
-    }
-    wireDependeSiNo('cboThermoregistro', ['txtCantidadThermoregistro', 'cboModeloThermoregistro', 'btnAgregarModeloThermo']);
-    wireDependeSiNo('cboPrecintoAduana', ['cboOperadorLogistico']);
-    wireDependeSiNo('cboFiltroEtileno', ['txtCantidadFiltroEtileno']);
-
-    raiz.querySelector('#btnInicioServicio').addEventListener('click', solicitarCierrePanel);
+    raiz.querySelector('#btnInicioServicio').addEventListener('click', cerrarPanel);
 
     raiz.querySelector('#btnImprimirServicio').addEventListener('click', function () {
       self._imprimir(raiz);
@@ -1070,7 +1046,7 @@ const FormServicio = {
       if (validarCronologia(true)) return;
 
       const payload = {
-        fechaServicioRegistro: v('txtFechaServicioRegistro'),
+        fechaServicioRegistro: self._fechaISOaDDMM(v('txtFechaServicioRegistro')),
         clienteFacturacion: v('cboClienteFacturacion'),
         empresaServicio: v('cboEmpresaServicio'),
         conductor: v('cboConductorServicio'),
@@ -1084,8 +1060,8 @@ const FormServicio = {
         depositoRetiro: v('cboDepositoRetiro'),
         lugarPosicionamiento1: v('txtLugarPosicionamiento1'),
         lugarPosicionamiento2: v('txtLugarPosicionamiento2'),
-        fechaPosicionamiento2: v('txtFechaPosicionamiento2'),
-        horaPosicionamiento2: v('txtHoraPosicionamiento2'),
+        fechaPosicionamiento2: self._fechaDeDatetimeLocal(v('dtPosicionamiento2Servicio')),
+        horaPosicionamiento2: self._horaDeDatetimeLocal(v('dtPosicionamiento2Servicio')),
         ciudadRetiro: v('cboCiudadRetiroServicio'),
         ciudadDevolucion: v('cboCiudadDevolucionServicio'),
         packing: v('cboPackingServicio'),
@@ -1099,13 +1075,13 @@ const FormServicio = {
         barrasConsolidado: v('cboBarrasConsolidado'),
         cantidadBarras: v('txtCantidadBarras'),
         totalCombustible: v('txtTotalCombustible'),
-        fechaRetiro: v('txtFechaRetiroServicio'),
-        horaRetiro: v('txtHoraRetiroServicio'),
+        fechaRetiro: self._fechaDeDatetimeLocal(v('dtRetiroServicio')),
+        horaRetiro: self._horaDeDatetimeLocal(v('dtRetiroServicio')),
         depositoDevolucion: v('cboDepositoDevolucion'),
-        fechaDevolucion: v('txtFechaDevolucion'),
-        horaDevolucion: v('txtHoraDevolucion'),
-        fechaPosicionamiento: v('txtFechaPosicionamiento'),
-        horaPosicionamiento: v('txtHoraPosicionamiento'),
+        fechaDevolucion: self._fechaDeDatetimeLocal(v('dtDevolucionServicio')),
+        horaDevolucion: self._horaDeDatetimeLocal(v('dtDevolucionServicio')),
+        fechaPosicionamiento: self._fechaDeDatetimeLocal(v('dtPosicionamiento1Servicio')),
+        horaPosicionamiento: self._horaDeDatetimeLocal(v('dtPosicionamiento1Servicio')),
         tipoProducto: v('cboTipoProductoServicio'),
         tipoTratamiento: v('cboTipoTratamiento'),
         costoPetroleoGalon: v('txtCostoPetroleoGalon'),
@@ -1153,21 +1129,11 @@ const FormServicio = {
       conductor: 'cboConductorServicio', placaTracto: 'cboPlacaTractoServicio',
       placaCarreta: 'cboPlacaCarretaServicio', tipoCarga: 'cboTipoCarga',
       destino1: 'cboDestino1Servicio', destino2: 'cboDestino2Servicio',
-      depositoRetiro: 'cboDepositoRetiro', fechaRetiro: 'txtFechaRetiroServicio',
-      horaRetiro: 'txtHoraRetiroServicio', depositoDevolucion: 'cboDepositoDevolucion',
-      fechaDevolucion: 'txtFechaDevolucion', horaDevolucion: 'txtHoraDevolucion',
+      depositoRetiro: 'cboDepositoRetiro', fechaRetiro: 'dtRetiroServicio',
+      horaRetiro: 'dtRetiroServicio', depositoDevolucion: 'cboDepositoDevolucion',
+      fechaDevolucion: 'dtDevolucionServicio', horaDevolucion: 'dtDevolucionServicio',
       contenedor: 'txtContenedorServicio', tipoProducto: 'cboTipoProductoServicio',
       tipoTratamiento: 'cboTipoTratamiento', btnCalcular: 'btnCalcularServicio'
     };
-  },
-
-  // Abre el servicio en segundo plano, dispara la ventana de impresión y
-  // cierra el panel de edición automáticamente. Usado por el botón de
-  // impresión rápida en la fila de Consolidado de Servicios - Selección.
-  imprimirDesdeFila: async function (fila) {
-    await this.abrir(fila);
-    const raiz = document.getElementById('cuerpo-panel');
-    if (raiz) this._imprimir(raiz);
-    cerrarPanel();
   }
 };
