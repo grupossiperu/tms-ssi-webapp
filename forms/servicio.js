@@ -589,14 +589,17 @@ const FormServicio = {
         campo('Fecha de devolución', v('txtFechaDevolucion')),
         campo('Hora de devolución', v('txtHoraDevolucion'))
       ]) +
-      seccion('Combustible', [
+      seccion('Combustible', (this._tipoAbastecimiento === 'PROVEEDOR' ? [
+        campo('Galones tracto', v('txtGlTracto')),
+        campo('Galones genset', v('txtGlGenerador'))
+      ] : [
         campo('Costo petróleo x galón', moneda('txtCostoPetroleoGalon')),
         campo('Galones tracto', v('txtGlTracto')),
         campo('Galones genset', v('txtGlGenerador')),
         campo('Total tracto', moneda('txtTotalTracto')),
         campo('Total genset', moneda('txtTotalGenerador')),
         campo('Total combustible', moneda('txtTotalCombustible'))
-      ]) +
+      ])) +
       seccion('Gastos', [
         campo('Viático', moneda('txtViaticoServicio')),
         campo('Peaje', moneda('txtPeajeServicio')),
