@@ -141,6 +141,17 @@ const FormDeposito = {
       if (dep === 'si') filas = filas.filter(f => esVerdadero(f['DEPOSITADO']));
       if (dep === 'no') filas = filas.filter(f => !esVerdadero(f['DEPOSITADO']));
 
+      filas = filas.slice().sort(function (a, b) {
+        const da = esVerdadero(a['DEPOSITADO']) ? 1 : 0;
+        const db = esVerdadero(b['DEPOSITADO']) ? 1 : 0;
+        if (da !== db) return da - db;
+        const fa = new Date(a['FECHA DE PROGRAMACION']);
+        const fb = new Date(b['FECHA DE PROGRAMACION']);
+        const na = isNaN(fa.getTime()) ? Infinity : Math.abs(fa.getTime() - Date.now());
+        const nb = isNaN(fb.getTime()) ? Infinity : Math.abs(fb.getTime() - Date.now());
+        return na - nb;
+      });
+
       const tbody = raiz.querySelector('#tablaDepositos tbody');
       tbody.innerHTML = '';
 
