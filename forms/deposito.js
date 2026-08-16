@@ -147,9 +147,14 @@ const FormDeposito = {
         if (da !== db) return da - db;
         const fa = new Date(a['FECHA DE PROGRAMACION']);
         const fb = new Date(b['FECHA DE PROGRAMACION']);
-        const na = isNaN(fa.getTime()) ? Infinity : Math.abs(fa.getTime() - Date.now());
-        const nb = isNaN(fb.getTime()) ? Infinity : Math.abs(fb.getTime() - Date.now());
-        return na - nb;
+        const ta = isNaN(fa.getTime()) ? null : fa.getTime();
+        const tb = isNaN(fb.getTime()) ? null : fb.getTime();
+        if (ta === null && tb === null) return 0;
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        // No depositados: fecha mas cercana/reciente primero (hoy, luego mañana, etc.)
+        // Depositados: de la fecha mas reciente a la mas antigua
+        return da === 0 ? (ta - tb) : (tb - ta);
       });
 
       const tbody = raiz.querySelector('#tablaDepositos tbody');
