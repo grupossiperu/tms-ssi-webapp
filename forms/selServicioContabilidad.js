@@ -34,6 +34,11 @@ const FormSelServicioContabilidad = {
             <option value="">Todos</option>
           </select>
         </div>
+        <div class="campo"><label>Cliente</label>
+          <select id="filtroCliente">
+            <option value="">Todos</option>
+          </select>
+        </div>
         <div class="campo"><label>Desde</label><input type="text" id="filtroDesde" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Hasta</label><input type="text" id="filtroHasta" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Datos</label>
@@ -174,6 +179,19 @@ const FormSelServicioContabilidad = {
       if (conductores.includes(valorActual)) select.value = valorActual;
     }
 
+    function actualizarOpcionesCliente(filas) {
+      const select = raiz.querySelector('#filtroCliente');
+      const valorActual = select.value;
+      const clientes = Array.from(new Set(
+        filas.map(f => String(f['CLIENTE PARA FACTURACIÓN'] || '').trim()).filter(v => v !== '')
+      )).sort((a, b) => a.localeCompare(b, 'es'));
+
+      select.innerHTML = '<option value="">Todos</option>' +
+        clientes.map(c => `<option value="${c}">${c}</option>`).join('');
+
+      if (clientes.includes(valorActual)) select.value = valorActual;
+    }
+
     async function cargar() {
       const filtros = {
         estado: raiz.querySelector('#filtroEstado').value.trim(),
@@ -183,9 +201,13 @@ const FormSelServicioContabilidad = {
       let filas = await llamarBackend('listarServiciosPendientes', filtros);
 
       actualizarOpcionesConductor(filas);
+      actualizarOpcionesCliente(filas);
 
       const conductor = raiz.querySelector('#filtroConductor').value;
       if (conductor) filas = filas.filter(f => String(f['CONDUCTOR'] || '').trim() === conductor);
+
+      const cliente = raiz.querySelector('#filtroCliente').value;
+      if (cliente) filas = filas.filter(f => String(f['CLIENTE PARA FACTURACIÓN'] || '').trim() === cliente);
 
       const datos = raiz.querySelector('#filtroDatos').value;
       if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
@@ -265,13 +287,14 @@ const FormSelServicioContabilidad = {
       });
     }
 
-    ['filtroEstado', 'filtroConductor', 'filtroDesde', 'filtroHasta', 'filtroDatos'].forEach(function (id) {
+    ['filtroEstado', 'filtroConductor', 'filtroCliente', 'filtroDesde', 'filtroHasta', 'filtroDatos'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', cargar);
     });
 
     raiz.querySelector('#btnBorrarFiltro').addEventListener('click', function () {
       raiz.querySelector('#filtroEstado').value = '';
       raiz.querySelector('#filtroConductor').value = '';
+      raiz.querySelector('#filtroCliente').value = '';
       raiz.querySelector('#filtroDesde').value = '';
       raiz.querySelector('#filtroHasta').value = '';
       raiz.querySelector('#filtroDatos').value = '';
