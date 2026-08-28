@@ -1,117 +1,100 @@
 /**
  * forms/registroSobrecosto.js
  * -------------------------------------------------------------------------
- * Equivalente HTML de frmRegistroSobrecosto.frm (VBA). Etiquetas dinámicas
- * según el tipo (Horas/Precio x hora para Sobreestadía, Días/Precio x día
- * para Pernocte), cálculo IGV al 18% en ambos sentidos (desde
- * cantidad×precio, o editando subtotal/total directamente), y las mismas
- * validaciones obligatorias de btnGuardar_Click.
+ * Ventana que se abre al hacer clic en un servicio dentro de Sobrecostos.
+ * Pide: Motivo (desplegable: Sobreestadía, Pernocte, Falsa Nombrada, Falso
+ * Flete, Punto Adicional, Horas Adicionales), Observaciones y el Precio
+ * del sobrecosto con su moneda (S/ o $).
+ *
+ * Internamente sigue usando la acción de backend "grabarSobrecosto"
+ * (columnas SUBTOTAL/IGV/TOTAL de la hoja SOBRECOSTOS), enviando
+ * cantidad = 1 y el precio ingresado como precio unitario, para no tener
+ * que tocar esa hoja ni el cálculo de IGV que ya usa Facturación.
  * -------------------------------------------------------------------------
  */
 const FormRegistroSobrecosto = {
 
-  abrir: function (tipoSobrecosto, servicio) {
-    const etiquetas = tipoSobrecosto === 'PERNOCTE'
-      ? { cantidad: 'DÍAS:', precio: 'PRECIO X DÍA:' }
-      : { cantidad: 'HORAS:', precio: 'PRECIO X HORA:' };
+  _motivos: ['SOBREESTADIA', 'PERNOCTE', 'FALSA NOMBRADA', 'FALSO FLETE', 'PUNTO ADICIONAL', 'HORAS ADICIONALES'],
 
-    const fecha = servicio['FECHA DEL SERVICIO'] ? new Date(servicio['FECHA DEL SERVICIO']) : null;
-    const fechaTxt = fecha && !isNaN(fecha.getTime())
-      ? (String(fecha.getDate()).padStart(2,'0')+'/'+String(fecha.getMonth()+1).padStart(2,'0')+'/'+fecha.getFullYear()) : '-';
-
-    const html = `
-      <input type="hidden" id="txtTipoSobrecosto" value="${tipoSobrecosto}">
-      <div class="fila-campos">
-        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicio" value="${servicio['CODIGO DEL SERVICIO']||''}" disabled></div>
-        <div class="campo"><label>Cliente</label><input id="txtCliente" value="${servicio['CLIENTE PARA FACTURACIÓN']||''}" disabled></div>
-        <div class="campo"><label>Booking</label><input id="txtBooking" value="${servicio['BOOKING']||''}" disabled></div>
-        <div class="campo"><label>Contenedor</label><input id="txtContenedor" value="${servicio['Nº CONTENEDOR']||''}" disabled></div>
-        <div class="campo"><label>Conductor</label><input id="txtConductor" value="${servicio['CONDUCTOR']||''}" disabled></div>
-        <div class="campo"><label>Placa tracto</label><input id="txtPlacaTracto" value="${servicio['PLACA TRACTO']||''}" disabled></div>
-        <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicio" value="${fechaTxt}" disabled></div>
-        <div class="campo"><label>Moneda</label>
-          <select id="cboMoneda"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select>
-        </div>
-        <div class="campo"><label id="lblCantidad">${etiquetas.cantidad}</label><input id="txtCantidad"></div>
-        <div class="campo"><label id="lblPrecio">${etiquetas.precio}</label><input id="txtPrecioUnitario"></div>
-        <div class="campo"><label>Subtotal</label><input id="txtSubtotal"></div>
-        <div class="campo"><label>IGV (18%)</label><input id="txtIGV" disabled></div>
-        <div class="campo"><label>Total</label><input id="txtTotal"></div>
-        <div class="campo"><label>Observación</label><input id="txtObservacion"></div>
-      </div>
-      <div class="panel-footer" style="padding-top:10px;">
-        <button class="boton-secundario" id="btnCancelar">Cancelar</button>
-        <button class="boton-primario" id="btnGuardar">Guardar</button>
-      </div>`;
-
-    abrirPanel('Registro de Sobrecosto - ' + tipoSobrecosto, html, (raiz) => this._wire(raiz, servicio));
+  _etiquetas: {
+    'SOBREESTADIA': 'Sobreestadía',
+    'PERNOCTE': 'Pernocte',
+    'FALSA NOMBRADA': 'Falsa Nombrada',
+    'FALSO FLETE': 'Falso Flete',
+    'PUNTO ADICIONAL': 'Punto Adicional',
+    'HORAS ADICIONALES': 'Horas Adicionales'
   },
 
-  _n: function (t) {
-    if (t === null || t === undefined) return 0;
-    const n = parseFloat(String(t).replace(',', '.'));
-    return isNaN(n) ? 0 : n;
+  _fechaTxt: function (servicio) {
+    const fecha = servicio['FECHA DE PROGRAMACION'] ? new Date(servicio['FECHA DE PROGRAMACION']) : null;
+    return fecha && !isNaN(fecha.getTime())
+      ? (String(fecha.getDate()).padStart(2, '0') + '/' + String(fecha.getMonth() + 1).padStart(2, '0') + '/' + fecha.getFullYear())
+      : '-';
+  },
+
+  abrir: function (servicio) {
+    const self = this;
+    const fechaTxt = self._fechaTxt(servicio);
+
+    const html = `
+      <div class="fila-campos">
+        <div class="campo"><label>Cliente</label><input value="${servicio['CLIENTE PARA FACTURACIÓN'] || ''}" disabled></div>
+        <div class="campo"><label>Conductor</label><input value="${servicio['CONDUCTOR'] || ''}" disabled></div>
+        <div class="campo"><label>Placa tracto</label><input value="${servicio['PLACA TRACTO'] || ''}" disabled></div>
+        <div class="campo"><label>Booking</label><input value="${servicio['BOOKING'] || ''}" disabled></div>
+        <div class="campo"><label>Fecha de servicio</label><input value="${fechaTxt}" disabled></div>
+        <div class="campo"><label>Motivo</label>
+          <select id="cboMotivoSobrecosto">
+            <option value="">Seleccione...</option>
+            ${self._motivos.map(function (m) { return `<option value="${m}">${self._etiquetas[m]}</option>`; }).join('')}
+          </select>
+        </div>
+        <div class="campo" style="grid-column: 1 / -1;"><label>Observaciones</label><textarea id="txtObservacionSobrecosto" rows="3" placeholder="Detalle del sobrecosto (opcional)"></textarea></div>
+        <div class="campo"><label>Precio</label><input type="number" id="txtPrecioSobrecosto" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="campo"><label>Moneda</label>
+          <select id="cboMonedaSobrecosto">
+            <option value="S/">Soles (S/)</option>
+            <option value="$">Dólares ($)</option>
+          </select>
+        </div>
+      </div>
+      <div class="panel-footer" style="padding-top:10px;">
+        <button class="boton-secundario" id="btnCancelarSobrecosto">Cancelar</button>
+        <button class="boton-primario" id="btnGuardarSobrecosto">Guardar</button>
+      </div>`;
+
+    abrirPanel('Registrar Sobrecosto', html, function (raiz) { self._wire(raiz, servicio); });
   },
 
   _wire: function (raiz, servicio) {
     const self = this;
-    let actualizando = false;
 
-    function calcularDesdeCantidadPrecio() {
-      if (actualizando) return;
-      const cantidad = self._n(raiz.querySelector('#txtCantidad').value);
-      const precio = self._n(raiz.querySelector('#txtPrecioUnitario').value);
-      if (raiz.querySelector('#txtCantidad').value.trim() === '' || raiz.querySelector('#txtPrecioUnitario').value.trim() === '') return;
+    raiz.querySelector('#btnCancelarSobrecosto').addEventListener('click', cerrarPanel);
 
-      actualizando = true;
-      const total = cantidad * precio; // el precio ingresado incluye IGV
-      const subtotal = total / 1.18;
-      const igv = total - subtotal;
-      raiz.querySelector('#txtSubtotal').value = subtotal.toFixed(2);
-      raiz.querySelector('#txtIGV').value = igv.toFixed(2);
-      raiz.querySelector('#txtTotal').value = total.toFixed(2);
-      actualizando = false;
-    }
+    raiz.querySelector('#btnGuardarSobrecosto').addEventListener('click', async function () {
+      const motivo = raiz.querySelector('#cboMotivoSobrecosto').value;
+      const observacion = raiz.querySelector('#txtObservacionSobrecosto').value.trim();
+      const precioTxt = raiz.querySelector('#txtPrecioSobrecosto').value;
+      const moneda = raiz.querySelector('#cboMonedaSobrecosto').value;
 
-    raiz.querySelector('#txtCantidad').addEventListener('input', calcularDesdeCantidadPrecio);
-    raiz.querySelector('#txtPrecioUnitario').addEventListener('input', calcularDesdeCantidadPrecio);
-
-    raiz.querySelector('#txtSubtotal').addEventListener('input', function () {
-      if (actualizando || this.value.trim() === '') return;
-      actualizando = true;
-      const subtotal = self._n(this.value);
-      raiz.querySelector('#txtIGV').value = (subtotal * 0.18).toFixed(2);
-      raiz.querySelector('#txtTotal').value = (subtotal * 1.18).toFixed(2);
-      actualizando = false;
-    });
-
-    raiz.querySelector('#txtTotal').addEventListener('input', function () {
-      if (actualizando || this.value.trim() === '') return;
-      actualizando = true;
-      const total = self._n(this.value);
-      const subtotal = total / 1.18;
-      raiz.querySelector('#txtSubtotal').value = subtotal.toFixed(2);
-      raiz.querySelector('#txtIGV').value = (total - subtotal).toFixed(2);
-      actualizando = false;
-    });
-
-    raiz.querySelector('#btnCancelar').addEventListener('click', cerrarPanel);
-
-    raiz.querySelector('#btnGuardar').addEventListener('click', async function () {
-      const v = (id) => raiz.querySelector('#' + id).value;
-
-      if (v('txtTipoSobrecosto').trim() === '') { mostrarMensaje('Seleccione el tipo de sobrecosto.', 'error'); return; }
-      if (v('txtCodigoServicio').trim() === '') { mostrarMensaje('Ingrese el código de servicio.', 'error'); return; }
-      if (v('cboMoneda').trim() === '') { mostrarMensaje('Seleccione la moneda.', 'error'); return; }
-      if (v('txtCantidad').trim() === '') { mostrarMensaje('Ingrese la cantidad.', 'error'); return; }
-      if (v('txtPrecioUnitario').trim() === '') { mostrarMensaje('Ingrese el precio unitario.', 'error'); return; }
+      if (!motivo) { mostrarMensaje('Seleccione el motivo del sobrecosto.', 'error'); return; }
+      const precio = parseFloat(String(precioTxt).replace(',', '.'));
+      if (!precioTxt || isNaN(precio) || precio <= 0) { mostrarMensaje('Ingrese un precio válido mayor a 0.', 'error'); return; }
+      if (!moneda) { mostrarMensaje('Seleccione la moneda.', 'error'); return; }
 
       const resp = await llamarBackend('grabarSobrecosto', {
-        tipoSobrecosto: v('txtTipoSobrecosto'), codigoServicio: v('txtCodigoServicio'),
-        cliente: v('txtCliente'), booking: v('txtBooking'), contenedor: v('txtContenedor'),
-        conductor: v('txtConductor'), placaTracto: v('txtPlacaTracto'), fechaServicio: v('txtFechaServicio'),
-        moneda: v('cboMoneda'), cantidad: v('txtCantidad'), precioUnitario: v('txtPrecioUnitario'),
-        observacion: v('txtObservacion')
+        tipoSobrecosto: motivo,
+        codigoServicio: 'F' + servicio._fila,
+        cliente: servicio['CLIENTE PARA FACTURACIÓN'] || '',
+        booking: servicio['BOOKING'] || '',
+        contenedor: servicio['N° CONTENEDOR'] || '',
+        conductor: servicio['CONDUCTOR'] || '',
+        placaTracto: servicio['PLACA TRACTO'] || '',
+        fechaServicio: self._fechaTxt(servicio),
+        moneda: moneda,
+        cantidad: 1,
+        precioUnitario: precio,
+        observacion: observacion
       });
 
       if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
