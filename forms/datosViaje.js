@@ -6,11 +6,11 @@
  * Depósito de retiro, Fecha de retiro, Destino, Fecha de posicionamiento,
  * Fecha de devolución y un estado "Seguimiento" (Completo / Incompleto).
  *
- * Al hacer doble clic sobre el estado de seguimiento se abre un
- * sub-formulario (dentro del mismo panel, sin cerrar la lista) con 10
- * campos de fecha/hora del recorrido del viaje. Se puede grabar aunque no
- * estén todos completos; el estado de "Seguimiento" solo pasa a Completo
- * cuando los 10 campos están llenos (validado en el backend).
+ * Un clic sobre el estado de seguimiento abre un sub-formulario (dentro
+ * del mismo panel, sin cerrar la lista) con 10 campos de fecha/hora del
+ * recorrido del viaje. Se puede grabar aunque no estén todos completos;
+ * el estado de "Seguimiento" solo pasa a Completo cuando los 10 campos
+ * están llenos (validado en el backend).
  * -------------------------------------------------------------------------
  */
 const FormDatosViaje = {
@@ -121,11 +121,12 @@ const FormDatosViaje = {
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
           <td style="text-align:center;">
             ${completo
-              ? '<span class="badge-datos completo" title="Doble clic para revisar el seguimiento">Completo</span>'
-              : '<span class="badge-datos incompleto" title="Doble clic para completar el seguimiento">Incompleto</span>'}
+              ? '<span class="badge-datos completo" title="Clic para revisar el seguimiento">Completo</span>'
+              : '<span class="badge-datos incompleto" title="Clic para completar el seguimiento">Incompleto</span>'}
           </td>`;
 
-        tr.addEventListener('dblclick', function () {
+        tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
+          ev.stopPropagation();
           self._abrirSeguimiento(f._fila);
         });
 
