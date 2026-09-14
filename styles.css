@@ -255,3 +255,34 @@ body{
   .fila-doble{ flex-direction:column; }
   .boton-circular{ width:100%; aspect-ratio:auto; height:96px; flex-direction:row; border-radius: var(--radio); }
 }
+
+/* ---------- Modulo Documentos (vencimientos) ---------- */
+.tabs-documentos{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.tab-documentos{
+  padding:8px 16px; border-radius:8px; border:1.5px solid #c7ced8; background:#fff;
+  font-weight:700; font-size:.85rem; cursor:pointer; color: var(--gris-texto);
+}
+.tab-documentos:hover{ border-color: var(--azul-marino); }
+.tab-documentos.activo{ background: var(--azul-marino); border-color: var(--azul-marino); color:#fff; }
+
+.badge-doc{ display:inline-block; padding:3px 9px; border-radius:20px; font-size:.78rem; font-weight:700; }
+.badge-doc.ok{ background:#dff5e6; color: var(--verde-oscuro); }
+.badge-doc.por-vencer{ background:#fff2d6; color:#a0670a; }
+.badge-doc.vencido{ background:#fde3e3; color: var(--rojo-oscuro); }
+.badge-doc.pendiente{ background:#fff6e0; color:#8a6d1d; }
+
+.franja-avisos-vencimiento{
+  background: linear-gradient(135deg, #ad2b2b, #d33a3a);
+  color:#fff; padding:10px 18px; font-size:.85rem; font-weight:600;
+  display:none; position:relative; z-index: 500;
+}
+.franja-avisos-vencimiento.visible{ display:block; }
+.franja-avisos-vencimiento .contenido-avisos{
+  max-width:1000px; margin:0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.franja-avisos-vencimiento strong{ font-weight:800; }
+.franja-avisos-vencimiento button{
+  margin-left:auto; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.5);
+  color:#fff; padding:5px 12px; border-radius:8px; cursor:pointer; font-weight:700; font-size:.8rem;
+}
+.franja-avisos-vencimiento button:hover{ background:rgba(255,255,255,.3); }
