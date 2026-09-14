@@ -2,8 +2,9 @@
  * forms/registroSobrecosto.js
  * -------------------------------------------------------------------------
  * Ventana que se abre al hacer clic en un servicio dentro de Sobrecostos.
- * Pide: Motivo (desplegable: Sobreestadía, Pernocte, Falsa Nombrada, Falso
- * Flete, Punto Adicional, Horas Adicionales), Observaciones y el Precio
+ * Pide: Motivo (desplegable: Sobreestadía, Pernocte, Falta Nombrada, Falso
+ * Flete, Punto Adicional, Horas Adicionales, Reprogramación, Tiempo en
+ * Tiempo, Tiempo en Packing), Observaciones y el Precio
  * del sobrecosto con su moneda (S/ o $).
  *
  * Internamente sigue usando la acción de backend "grabarSobrecosto"
@@ -14,15 +15,18 @@
  */
 const FormRegistroSobrecosto = {
 
-  _motivos: ['SOBREESTADIA', 'PERNOCTE', 'FALSA NOMBRADA', 'FALSO FLETE', 'PUNTO ADICIONAL', 'HORAS ADICIONALES'],
+  _motivos: ['SOBREESTADIA', 'PERNOCTE', 'FALTA NOMBRADA', 'FALSO FLETE', 'PUNTO ADICIONAL', 'HORAS ADICIONALES', 'REPROGRAMACION', 'TIEMPO EN TIEMPO', 'TIEMPO EN PACKING'],
 
   _etiquetas: {
     'SOBREESTADIA': 'Sobreestadía',
     'PERNOCTE': 'Pernocte',
-    'FALSA NOMBRADA': 'Falsa Nombrada',
+    'FALTA NOMBRADA': 'Falta Nombrada',
     'FALSO FLETE': 'Falso Flete',
     'PUNTO ADICIONAL': 'Punto Adicional',
-    'HORAS ADICIONALES': 'Horas Adicionales'
+    'HORAS ADICIONALES': 'Horas Adicionales',
+    'REPROGRAMACION': 'Reprogramación',
+    'TIEMPO EN TIEMPO': 'Tiempo en Tiempo',
+    'TIEMPO EN PACKING': 'Tiempo en Packing'
   },
 
   _fechaTxt: function (servicio) {
