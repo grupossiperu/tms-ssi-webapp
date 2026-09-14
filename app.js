@@ -148,7 +148,56 @@ function confirmar(texto) {
 
 /* ============================ Router HOME ============================ */
 
+
+/* ============================ Avisos de vencimiento ============================ */
+
+/**
+ * Consulta al backend los documentos (Conductores/Tractos/Semirremolques)
+ * que estan vencidos o a 10 dias o menos de vencer, y muestra la franja
+ * roja fija en la parte superior. Se ejecuta cada vez que se abre el TMS.
+ */
+async function verificarAvisosVencimiento() {
+  try {
+    const resp = await llamarBackend('listarAvisosVencimiento', {});
+    if (!resp.ok) return;
+    const avisos = resp.avisos || [];
+    const franja = document.getElementById('franjaAvisosVencimiento');
+    const texto = document.getElementById('textoAvisosVencimiento');
+    if (!franja || !texto) return;
+    if (!avisos.length) {
+      franja.classList.remove('visible');
+      return;
+    }
+    const vencidos = avisos.filter(function (a) { return a.vencido; }).length;
+    const porVencer = avisos.length - vencidos;
+    const partes = [];
+    if (vencidos) partes.push(vencidos + ' vencido(s)');
+    if (porVencer) partes.push(porVencer + ' por vencer en 10 días o menos');
+    let resumen = '<strong>Documentos por actualizar:</strong> ' + partes.join(' y ') + '. ';
+    resumen += avisos.slice(0, 5).map(function (a) {
+      return a.nombre + ' - ' + a.documento + (a.vencido ? ' (vencido)' : ' (' + a.dias + ' d.)');
+    }).join(' · ');
+    if (avisos.length > 5) resumen += ' · y ' + (avisos.length - 5) + ' más...';
+    texto.innerHTML = resumen;
+    franja.classList.add('visible');
+  } catch (e) {
+    // Si falla la verificacion, no bloquea el uso normal del TMS.
+  }
+}
 document.addEventListener('DOMContentLoaded', function () {
+  verificarAvisosVencimiento();
+
+  const franjaAvisos = document.getElementById('franjaAvisosVencimiento');
+  if (franjaAvisos) {
+    franjaAvisos.addEventListener('click', function (ev) {
+      if (ev.target && ev.target.id === 'btnCerrarAvisosVencimiento') {
+        franjaAvisos.classList.remove('visible');
+        return;
+      }
+      FormDocumentos.abrir();
+    });
+  }
+
 
   document.getElementById('btn-registrar-servicio').addEventListener('click', function () {
     FormServicio.abrir();
@@ -188,6 +237,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('btn-lista-conductores').addEventListener('click', function () {
     FormConductores.abrir();
+  });
+
+  document.getElementById('btn-documentos').addEventListener('click', function () {
+    FormDocumentos.abrir();
   });
 
   document.getElementById('btn-tarifas').addEventListener('click', function () {
