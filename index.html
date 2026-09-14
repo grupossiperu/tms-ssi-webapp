@@ -8,6 +8,8 @@
 </head>
 <body>
 
+<div id="franjaAvisosVencimiento" class="franja-avisos-vencimiento"><div class="contenido-avisos"><span id="textoAvisosVencimiento"></span><button type="button" id="btnCerrarAvisosVencimiento">Cerrar</button></div></div>
+
 <div class="contenedor-home">
 
   <header class="app-header">
@@ -158,6 +160,20 @@
     LISTA DE CONDUCTORES
   </button>
 
+<!-- Documentos (vencimientos) -->
+<button class="boton-modulo" id="btn-documentos">
+<span class="icono">
+<svg viewBox="0 0 24 24" fill="none" stroke="#1c3a5e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+<polyline points="14 2 14 8 20 8"></polyline>
+<line x1="16" y1="13" x2="8" y2="13"></line>
+<line x1="16" y1="17" x2="8" y2="17"></line>
+<line x1="10" y1="9" x2="8" y2="9"></line>
+</svg>
+</span>
+DOCUMENTOS
+</button>
+
   <!-- Ver / Ocultar -->
   <div class="fila-ver-ocultar">
     <button class="boton-ver-ocultar boton-ver" id="btn-ver" title="Ver hojas de servicios">
@@ -203,6 +219,7 @@
 <script src="forms/conductores.js"></script>
 <script src="forms/tarifas.js"></script>
 <script src="forms/deposito.js"></script>
+<script src="forms/documentos.js"></script>
 
 </body>
 </html>
