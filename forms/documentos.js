@@ -181,7 +181,7 @@ const FormDocumentos = {
         '<td>' + self._badgeEstado(d.estado, self._resumenEntidad([d]).texto) + '</td>' +
         '<td>' + d.etiqueta + '</td>' +
         '<td><input type="date" class="input-fecha-doc" value="' + fechaISO + '"></td>' +
-        '<td>' + adj + '<br><input type="file" class="input-archivo-doc" accept=".pdf,.jpg,.jpeg,.png"></td>' +
+        '<td>' + adj + '<br><input type="file" class="input-archivo-doc" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp"></td>' +
       '</tr>';
     }).join('');
     return '' +
@@ -215,8 +215,8 @@ const FormDocumentos = {
       inputArchivo.addEventListener('change', async function () {
         const file = inputArchivo.files[0];
         if (!file) return;
-        if (file.size > 8 * 1024 * 1024) {
-          mostrarMensaje('El archivo supera los 8 MB. Reduce el tamaño e intenta de nuevo.', 'error');
+        if (file.size > 15 * 1024 * 1024) {
+          mostrarMensaje('El archivo supera los 15 MB. Reduce el tamaño e intenta de nuevo.', 'error');
           inputArchivo.value = '';
           return;
         }
