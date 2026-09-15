@@ -207,6 +207,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormSelServicioContabilidad.abrir();
   });
 
+  document.getElementById('btn-consolidado-servicios-completar').addEventListener('click', function () {
+    FormConsolidadoServicios.abrir();
+  });
+
   document.getElementById('btn-servicios-culminados').addEventListener('click', function () {
     FormServiciosCulminados.abrir();
   });
