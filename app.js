@@ -215,6 +215,10 @@ document.addEventListener('DOMContentLoaded', function () {
     FormServiciosCulminados.abrir();
   });
 
+  document.getElementById('btn-control-combustible').addEventListener('click', function () {
+    FormControlCombustible.abrir();
+  });
+
   document.getElementById('btn-datos-viaje').addEventListener('click', function () {
     FormDatosViaje.abrir();
   });
