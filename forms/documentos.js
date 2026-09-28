@@ -51,7 +51,10 @@ const FormDocumentos = {
         '<button type="button" class="boton-primario" id="btnAgregarEntidad">+ Agregar</button>' +
       '</div>' +
       '<div id="formAgregarEntidad"></div>' +
-      '<div id="listaEntidadesDocs">Cargando...</div>';
+      '<div id="listaEntidadesDocs">Cargando...</div>' +
+      '<div class="panel-footer" style="margin-top:16px; justify-content:flex-end;">' +
+        '<button type="button" class="boton-secundario" id="btnVolverMenuDocs">Volver al menú</button>' +
+      '</div>';
   },
 
   _wireLista: function (raiz) {
@@ -69,6 +72,7 @@ const FormDocumentos = {
       self._renderFormAgregar(raiz);
     });
     raiz.querySelector('#buscarEntidad').addEventListener('input', function () { self._renderLista(raiz); });
+    raiz.querySelector('#btnVolverMenuDocs').addEventListener('click', function () { cerrarPanel(); });
     this._renderFormAgregar(raiz);
     this._cargar(raiz);
   },
@@ -153,7 +157,7 @@ const FormDocumentos = {
       return '<tr data-fila="' + f._fila + '">' +
         '<td>' + nombreMostrar + (subMostrar ? ' <span style="color:#66707d;font-size:.8rem;">(' + subMostrar + ')</span>' : '') + '</td>' +
         '<td>' + self._badgeEstado(r.estado, r.texto) + '</td>' +
-      '</tr>';
+        '</tr>';
     }).join('');
     cont.innerHTML = '<table class="tabla-lista"><thead><tr><th>' + tituloCol + '</th><th>Estado documentos</th></tr></thead><tbody>' + filasHtml + '</tbody></table>';
     Array.prototype.forEach.call(cont.querySelectorAll('tr[data-fila]'), function (tr) {
@@ -182,7 +186,7 @@ const FormDocumentos = {
         '<td>' + d.etiqueta + '</td>' +
         '<td><input type="date" class="input-fecha-doc" value="' + fechaISO + '"></td>' +
         '<td>' + adj + '<br><input type="file" class="input-archivo-doc" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp"></td>' +
-      '</tr>';
+        '</tr>';
     }).join('');
     return '' +
       '<table class="tabla-lista"><thead><tr><th>Estado</th><th>Descripción</th><th>Fecha de vencimiento</th><th>Adjuntos</th></tr></thead><tbody>' + filas + '</tbody></table>' +
