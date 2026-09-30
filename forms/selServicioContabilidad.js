@@ -59,6 +59,8 @@ const FormSelServicioContabilidad = {
         <button class="boton-secundario" id="btnBorrarFiltro">Borrar filtro</button>
       </div>
       <style>
+        .barra-filtros select, .barra-filtros input { max-width: 210px; }
+        .barra-filtros #filtroDesde, .barra-filtros #filtroHasta, .barra-filtros #filtroEstado, .barra-filtros #filtroDatos { max-width: 130px; }
         .acarreo-tabla-wrap { max-height: calc(74vh - 230px); min-height: 220px; overflow-y: auto; overflow-x: hidden; }
         #tablaServicios { width: 100%; table-layout: fixed; font-size: .74rem; }
         #tablaServicios th, #tablaServicios td { padding: 5px 5px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
