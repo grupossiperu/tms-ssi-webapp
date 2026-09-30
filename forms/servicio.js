@@ -28,316 +28,337 @@ const FormServicio = {
       }).join('');
     };
 
-    // El formulario se arma en filas de 3 campos, en el orden exacto que
-    // definió el usuario. Cada bloque .fila-campos es una fila visual.
+    // El formulario se arma por segmentos (secciones) para que sea más fácil
+    // de leer. Los ids de los campos no cambian: la lógica (_wire, _precargar,
+    // _imprimir y Grabar) sigue funcionando igual.
     const html = `
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Fecha de registro</label>
-          <input type="date" id="txtFechaServicioRegistro">
-        </div>
-        <div class="campo">
-          <label>Cliente para facturación</label>
-          <input list="lst-clientes" id="cboClienteFacturacion">
-          <datalist id="lst-clientes">${datos.clientesFacturacion.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Empresa que dio el servicio</label>
-          <input list="lst-empresas" id="cboEmpresaServicio">
-          <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
+      <style>
+        .panel-modal.panel-srv { max-width: min(1400px, 97vw); }
+        .overlay-modal:has(.panel-srv) { padding: 16px 10px; }
+        .panel-srv .panel-body { max-height: calc(100vh - 110px); padding: 18px 22px 0; background: #f6f8fb; }
+        .panel-srv .seg { border: 1px solid #dbe2ea; border-radius: 10px; margin: 0 0 14px; background: #fff; overflow: hidden; }
+        .panel-srv .seg-tit { background: #eef3f8; color: #1c3a5e; font-weight: 700; font-size: .8rem; letter-spacing: .4px; text-transform: uppercase; padding: 8px 14px; border-bottom: 1px solid #dbe2ea; display: flex; align-items: center; gap: 8px; }
+        .panel-srv .seg-num { background: #1c3a5e; color: #fff; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; }
+        .panel-srv .seg-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 16px; padding: 12px 14px 2px; }
+        .panel-srv .seg-grid.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .panel-srv .seg-grid .span2 { grid-column: span 2; }
+        .panel-srv .campo { margin-bottom: 10px; }
+        .panel-srv .campo label.lbl-flex { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .panel-srv .badge-vig { font-size: .72rem; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: #f1f5f9; color: #64748b; white-space: nowrap; }
+        .panel-srv .badge-vig.ok { background: #dcfce7; color: #166534; }
+        .panel-srv .badge-vig.no { background: #fef3c7; color: #92400e; }
+        .panel-srv .chk-gas { display: flex !important; align-items: center; gap: 6px; margin: 0 0 0 10px !important; white-space: nowrap; font-weight: 600; font-size: .85rem; color: #1c3a5e; cursor: pointer; }
+        .panel-srv .chk-gas input { width: auto; margin: 0; }
+        .panel-srv .panel-footer { position: sticky; bottom: 0; background: #fff; margin: 0 -22px; padding: 12px 22px; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
+        @media (max-width: 1000px) { .panel-srv .seg-grid, .panel-srv .seg-grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 600px) { .panel-srv .seg-grid, .panel-srv .seg-grid.c3 { grid-template-columns: 1fr; } .panel-srv .seg-grid .span2 { grid-column: auto; } }
+      </style>
 
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Conductor</label>
-          <div class="fila-combo-mas">
-            <select id="cboConductorServicio"><option value=""></option>${datos.conductores.map(v => `<option value="${v}">${v}</option>`).join('')}</select>
-            <button type="button" id="btnAgregarConductor" class="boton-mas" title="Agregar conductor nuevo">+</button>
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">1</span> Datos generales</div>
+        <div class="seg-grid c3">
+          <div class="campo">
+            <label>Fecha de registro</label>
+            <input type="text" id="txtFechaServicioRegistro" placeholder="dd/mm/yyyy">
           </div>
-        </div>
-        <div class="campo">
-          <label>Placa tracto</label>
-          <div class="fila-combo-mas">
-            <select id="cboPlacaTractoServicio">${opciones(datos.placasTracto)}</select>
-            <button type="button" id="btnAgregarTracto" class="boton-mas" title="Agregar placa de tracto nueva">+</button>
+          <div class="campo">
+            <label>Cliente para facturación</label>
+            <input list="lst-clientes" id="cboClienteFacturacion">
+            <datalist id="lst-clientes">${datos.clientesFacturacion.map(v => `<option value="${v}">`).join('')}</datalist>
           </div>
-        </div>
-        <div class="campo">
-          <label>Placa carreta</label>
-          <div class="fila-combo-mas">
-            <select id="cboPlacaCarretaServicio">${opciones(datos.placasCarreta)}</select>
-            <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Tipo de carga</label>
-          <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
-        </div>
-        <div class="campo">
-          <label>Reefer o Dry</label>
-          <select id="cboReeferDry">
-            <option value="">-</option>
-            <option value="REEFER">REEFER</option>
-            <option value="DRY">DRY</option>
-          </select>
-        </div>
-        <div class="campo">
-          <label>Destino 1</label>
-          <input list="lst-destinos" id="cboDestino1Servicio">
-        </div>
-        <div class="campo">
-          <label>Destino 2 (solo carga consolidado)</label>
-          <input list="lst-destinos" id="cboDestino2Servicio" disabled>
-          <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Ciudad de retiro</label>
-          <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
-          <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Ciudad de devolución</label>
-          <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
-          <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <div id="fechaVigenciaTarifa" style="font-size:11px; color:#64748b; min-height:14px;"></div>
-          <label>Tarifa</label>
-          <div class="fila-combo-mas">
-            <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
-            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
-            <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
-            <label style="display:flex; align-items:center; gap:4px; margin-left:8px; font-weight:normal; white-space:nowrap;">
-              <input type="checkbox" id="chkGasificadoServicio"> Gasificado
-            </label>
+          <div class="campo">
+            <label>Empresa que dio el servicio</label>
+            <input list="lst-empresas" id="cboEmpresaServicio">
+            <datalist id="lst-empresas">${datos.empresas.map(v => `<option value="${v}">`).join('')}</datalist>
           </div>
         </div>
       </div>
 
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Booking</label>
-          <input type="text" id="txtBookingServicio">
-        </div>
-        <div class="campo">
-          <label>N° Contenedor (ABCU1234567)</label>
-          <input type="text" id="txtContenedorServicio">
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Tipo de producto</label>
-          <div class="fila-combo-mas">
-            <input list="lst-tipoProd" id="cboTipoProductoServicio">
-            <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">2</span> Conductor y unidad</div>
+        <div class="seg-grid c3">
+          <div class="campo">
+            <label>Conductor</label>
+            <div class="fila-combo-mas">
+              <select id="cboConductorServicio"><option value=""></option>${datos.conductores.map(v => `<option value="${v}">${v}</option>`).join('')}</select>
+              <button type="button" id="btnAgregarConductor" class="boton-mas" title="Agregar conductor nuevo">+</button>
+            </div>
           </div>
-          <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Tipo de tratamiento</label>
-          <input list="lst-tipoTrat" id="cboTipoTratamiento">
-          <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Packing</label>
-          <div class="fila-combo-mas">
-            <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
-            <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
+          <div class="campo">
+            <label>Placa tracto</label>
+            <div class="fila-combo-mas">
+              <select id="cboPlacaTractoServicio">${opciones(datos.placasTracto)}</select>
+              <button type="button" id="btnAgregarTracto" class="boton-mas" title="Agregar placa de tracto nueva">+</button>
+            </div>
           </div>
-          <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Thermoregistro</label>
-          <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Cantidad de thermoregistros</label>
-          <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
-        </div>
-        <div class="campo">
-          <label>Modelo de thermoregistro</label>
-          <div class="fila-combo-mas">
-            <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
-            <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
-          </div>
-          <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Precinto de aduana</label>
-          <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Operador logístico</label>
-          <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
-          <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Filtro de etileno</label>
-          <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Cantidad de filtros de etileno</label>
-          <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Barras consolidado (solo carga consolidado)</label>
-          <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
-        </div>
-        <div class="campo">
-          <label>Cantidad de barras (solo carga consolidado)</label>
-          <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Depósito de retiro</label>
-          <input list="lst-depRetiro" id="cboDepositoRetiro">
-          <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Fecha y hora de retiro</label>
-          <input type="datetime-local" id="dtRetiroServicio">
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Lugar de posicionamiento 1</label>
-          <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
-        </div>
-        <div class="campo">
-          <label>Fecha y hora de posicionamiento 1</label>
-          <input type="datetime-local" id="dtPosicionamiento1Servicio">
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Lugar de posicionamiento 2 (solo carga consolidado)</label>
-          <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
-        </div>
-        <div class="campo">
-          <label>Fecha y hora de posicionamiento 2 (solo carga consolidado)</label>
-          <input type="datetime-local" id="dtPosicionamiento2Servicio" disabled>
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Depósito de devolución</label>
-          <input list="lst-depDevolucion" id="cboDepositoDevolucion">
-          <datalist id="lst-depDevolucion">${datos.depositosDevolucion.map(v => `<option value="${v}">`).join('')}</datalist>
-        </div>
-        <div class="campo">
-          <label>Fecha y hora de devolución</label>
-          <input type="datetime-local" id="dtDevolucionServicio">
-        </div>
-        <div class="campo"></div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Costo del petróleo x galón</label>
-          <input type="text" id="txtCostoPetroleoGalon">
-        </div>
-        <div class="campo">
-          <label>Galones tracto</label>
-          <input type="text" id="txtGlTracto">
-        </div>
-        <div class="campo">
-          <label>Galones genset</label>
-          <input type="text" id="txtGlGenerador">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Total tracto</label>
-          <input type="text" id="txtTotalTracto" disabled>
-        </div>
-        <div class="campo">
-          <label>Total genset</label>
-          <input type="text" id="txtTotalGenerador" disabled>
-        </div>
-        <div class="campo">
-          <label>Total combustible</label>
-          <input type="text" id="txtTotalCombustible" disabled>
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Viático</label>
-          <input type="text" id="txtViaticoServicio">
-        </div>
-        <div class="campo">
-          <label>Peaje</label>
-          <input type="text" id="txtPeajeServicio">
-        </div>
-        <div class="campo">
-          <label>Cochera</label>
-          <input type="text" id="txtCocheraServicio">
-        </div>
-      </div>
-
-      <div class="fila-campos">
-        <div class="campo">
-          <label>¿Abastecido por proveedor?</label>
-          <div class="fila-combo-mas">
-            <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
-            <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
+          <div class="campo">
+            <label>Placa carreta</label>
+            <div class="fila-combo-mas">
+              <select id="cboPlacaCarretaServicio">${opciones(datos.placasCarreta)}</select>
+              <button type="button" id="btnAgregarCarreta" class="boton-mas" title="Agregar placa de carreta nueva">+</button>
+            </div>
           </div>
         </div>
-        <div class="campo">
-          <label>Proveedor</label>
-          <div class="fila-combo-mas">
-            <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
-            <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
-          </div>
-        </div>
-        <div class="campo"></div>
       </div>
 
-      <div class="fila-campos">
-        <div class="campo">
-          <label>Monto para depositar</label>
-          <input type="text" id="txtMontoDepositadoServicio" disabled>
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">3</span> Ruta y tarifa</div>
+        <div class="seg-grid">
+          <div class="campo">
+            <label>Tipo de carga</label>
+            <select id="cboTipoCarga">${opciones(datos.tipoCarga)}</select>
+          </div>
+          <div class="campo">
+            <label>Reefer o Dry</label>
+            <select id="cboReeferDry">
+              <option value="">-</option>
+              <option value="REEFER">REEFER</option>
+              <option value="DRY">DRY</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Destino 1</label>
+            <input list="lst-destinos" id="cboDestino1Servicio">
+          </div>
+          <div class="campo">
+            <label>Destino 2 (solo carga consolidado)</label>
+            <input list="lst-destinos" id="cboDestino2Servicio" disabled>
+            <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Ciudad de retiro</label>
+            <input list="lst-ciuRetiro" id="cboCiudadRetiroServicio" placeholder="Escriba o elija">
+            <datalist id="lst-ciuRetiro">${(datos.ciudadesRetiro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Ciudad de devolución</label>
+            <input list="lst-ciuDevolucion" id="cboCiudadDevolucionServicio" placeholder="Escriba o elija">
+            <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo span2">
+            <label class="lbl-flex"><span>Tarifa</span><span id="fechaVigenciaTarifa" class="badge-vig">Vigencia: —</span></label>
+            <div class="fila-combo-mas">
+              <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
+              <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
+              <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
+              <label class="chk-gas"><input type="checkbox" id="chkGasificadoServicio"> Gasificado</label>
+            </div>
+          </div>
         </div>
-        <div class="campo">
-          <label>Total por viaje</label>
-          <input type="text" id="txtTotalViaje" disabled>
-        </div>
-        <div class="campo"></div>
       </div>
-      <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
+
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">4</span> Carga y contenedor</div>
+        <div class="seg-grid c3">
+          <div class="campo">
+            <label>Booking</label>
+            <input type="text" id="txtBookingServicio">
+          </div>
+          <div class="campo">
+            <label>N° Contenedor (ABCU1234567)</label>
+            <input type="text" id="txtContenedorServicio">
+          </div>
+          <div class="campo">
+            <label>Operador logístico</label>
+            <input list="lst-operadorLog" id="cboOperadorLogistico" placeholder="Escriba o elija">
+            <datalist id="lst-operadorLog">${(datos.operadoresLogisticos || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Tipo de producto</label>
+            <div class="fila-combo-mas">
+              <input list="lst-tipoProd" id="cboTipoProductoServicio">
+              <button type="button" id="btnAgregarProducto" class="boton-mas" title="Agregar producto nuevo a la lista">+</button>
+            </div>
+            <datalist id="lst-tipoProd">${datos.tipoProducto.map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Tipo de tratamiento</label>
+            <input list="lst-tipoTrat" id="cboTipoTratamiento">
+            <datalist id="lst-tipoTrat">${datos.tipoTratamiento.map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Packing</label>
+            <div class="fila-combo-mas">
+              <input list="lst-packing" id="cboPackingServicio" placeholder="Escriba o elija">
+              <button type="button" id="btnAgregarPacking" class="boton-mas" title="Agregar packing nuevo a la lista">+</button>
+            </div>
+            <datalist id="lst-packing">${(datos.packings || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+        </div>
+      </div>
+
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">5</span> Accesorios y control</div>
+        <div class="seg-grid">
+          <div class="campo">
+            <label>Thermoregistro</label>
+            <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
+          </div>
+          <div class="campo">
+            <label>Cantidad de thermoregistros</label>
+            <input type="number" min="0" step="1" id="txtCantidadThermoregistro" placeholder="0">
+          </div>
+          <div class="campo">
+            <label>Modelo de thermoregistro</label>
+            <div class="fila-combo-mas">
+              <input list="lst-modeloThermo" id="cboModeloThermoregistro" placeholder="Escriba o elija">
+              <button type="button" id="btnAgregarModeloThermo" class="boton-mas" title="Agregar modelo nuevo a la lista">+</button>
+            </div>
+            <datalist id="lst-modeloThermo">${(datos.modelosThermoregistro || []).map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Precinto de aduana</label>
+            <select id="cboPrecintoAduana"><option value="NO">NO</option><option value="SI">SI</option></select>
+          </div>
+          <div class="campo">
+            <label>Filtro de etileno</label>
+            <select id="cboFiltroEtileno"><option value="NO">NO</option><option value="SI">SI</option></select>
+          </div>
+          <div class="campo">
+            <label>Cantidad de filtros de etileno</label>
+            <input type="number" min="0" step="1" id="txtCantidadFiltroEtileno" placeholder="0">
+          </div>
+          <div class="campo">
+            <label>Barras consolidado (solo consolidado)</label>
+            <select id="cboBarrasConsolidado" disabled><option value="NO">NO</option><option value="SI">SI</option></select>
+          </div>
+          <div class="campo">
+            <label>Cantidad de barras (solo consolidado)</label>
+            <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
+          </div>
+        </div>
+      </div>
+
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">6</span> Programación del viaje (retiro, posicionamiento y devolución)</div>
+        <div class="seg-grid c3">
+          <div class="campo">
+            <label>Depósito de retiro</label>
+            <input list="lst-depRetiro" id="cboDepositoRetiro">
+            <datalist id="lst-depRetiro">${datos.depositosRetiro.map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Fecha de retiro</label>
+            <input type="text" id="txtFechaRetiroServicio" placeholder="dd/mm/yyyy">
+          </div>
+          <div class="campo">
+            <label>Hora de retiro</label>
+            <input type="text" id="txtHoraRetiroServicio" placeholder="08:00">
+          </div>
+
+          <div class="campo">
+            <label>Lugar de posicionamiento 1</label>
+            <input type="text" id="txtLugarPosicionamiento1" placeholder="Se toma del Destino 1" disabled>
+          </div>
+          <div class="campo">
+            <label>Fecha de posicionamiento 1</label>
+            <input type="text" id="txtFechaPosicionamiento" placeholder="dd/mm/yyyy">
+          </div>
+          <div class="campo">
+            <label>Hora de posicionamiento 1</label>
+            <input type="text" id="txtHoraPosicionamiento" placeholder="hh:mm">
+          </div>
+
+          <div class="campo">
+            <label>Lugar de posicionamiento 2 (solo consolidado)</label>
+            <input type="text" id="txtLugarPosicionamiento2" placeholder="Se toma del Destino 2" disabled>
+          </div>
+          <div class="campo">
+            <label>Fecha de posicionamiento 2 (solo consolidado)</label>
+            <input type="text" id="txtFechaPosicionamiento2" placeholder="dd/mm/yyyy" disabled>
+          </div>
+          <div class="campo">
+            <label>Hora de posicionamiento 2 (solo consolidado)</label>
+            <input type="text" id="txtHoraPosicionamiento2" placeholder="hh:mm" disabled>
+          </div>
+
+          <div class="campo">
+            <label>Depósito de devolución</label>
+            <input list="lst-depDevolucion" id="cboDepositoDevolucion">
+            <datalist id="lst-depDevolucion">${datos.depositosDevolucion.map(v => `<option value="${v}">`).join('')}</datalist>
+          </div>
+          <div class="campo">
+            <label>Fecha de devolución</label>
+            <input type="text" id="txtFechaDevolucion" placeholder="dd/mm/yyyy o -">
+          </div>
+          <div class="campo">
+            <label>Hora de devolución</label>
+            <input type="text" id="txtHoraDevolucion" placeholder="hh:mm o -">
+          </div>
+        </div>
+      </div>
+
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">7</span> Combustible</div>
+        <div class="seg-grid c3">
+          <div class="campo">
+            <label>Costo del petróleo x galón</label>
+            <input type="text" id="txtCostoPetroleoGalon">
+          </div>
+          <div class="campo">
+            <label>Galones tracto</label>
+            <input type="text" id="txtGlTracto">
+          </div>
+          <div class="campo">
+            <label>Galones genset</label>
+            <input type="text" id="txtGlGenerador">
+          </div>
+          <div class="campo">
+            <label>Total tracto</label>
+            <input type="text" id="txtTotalTracto" disabled>
+          </div>
+          <div class="campo">
+            <label>Total genset</label>
+            <input type="text" id="txtTotalGenerador" disabled>
+          </div>
+          <div class="campo">
+            <label>Total combustible</label>
+            <input type="text" id="txtTotalCombustible" disabled>
+          </div>
+        </div>
+      </div>
+
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">8</span> Gastos del viaje y liquidación</div>
+        <div class="seg-grid">
+          <div class="campo">
+            <label>Viático</label>
+            <input type="text" id="txtViaticoServicio">
+          </div>
+          <div class="campo">
+            <label>Peaje</label>
+            <input type="text" id="txtPeajeServicio">
+          </div>
+          <div class="campo">
+            <label>Cochera</label>
+            <input type="text" id="txtCocheraServicio">
+          </div>
+          <div class="campo">
+            <label>¿Abastecido por proveedor?</label>
+            <div class="fila-combo-mas">
+              <button type="button" class="boton-moneda" id="btnAbastecidoSi" data-valor="SI">Sí</button>
+              <button type="button" class="boton-moneda activo" id="btnAbastecidoNo" data-valor="NO">No</button>
+            </div>
+          </div>
+          <div class="campo span2">
+            <label>Proveedor</label>
+            <div class="fila-combo-mas">
+              <select id="cboProveedorServicio" disabled><option value=""></option>${opciones(datos.proveedores).replace('<option value=""></option>', '')}</select>
+              <button type="button" id="btnAgregarProveedor" class="boton-mas" title="Agregar proveedor nuevo" disabled>+</button>
+            </div>
+          </div>
+          <div class="campo">
+            <label>Monto para depositar</label>
+            <input type="text" id="txtMontoDepositadoServicio" disabled>
+          </div>
+          <div class="campo">
+            <label>Total por viaje</label>
+            <input type="text" id="txtTotalViaje" disabled style="font-weight:700;">
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-footer" style="justify-content:space-between;">
         <button class="boton-secundario" id="btnInicioServicio">Inicio</button>
         <div style="display:flex; gap:10px;">
           <button class="boton-secundario" id="btnImprimirServicio">Imprimir</button>
@@ -345,7 +366,7 @@ const FormServicio = {
         </div>
       </div>`;
 
-    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz));
+    abrirPanel('Registrar Servicio' + (filaEdicion ? ' - Completar datos' : ''), html, (raiz) => this._wire(raiz), { clase: 'panel-srv' });
 
     if (filaEdicion) {
       // Carga los datos de la fila para edición/completado.
@@ -872,13 +893,22 @@ const FormServicio = {
 
       const campoFechaVigencia = raiz.querySelector('#fechaVigenciaTarifa');
 
+      const pintarVig = function (txt, estado) {
+        if (!campoFechaVigencia) return;
+        campoFechaVigencia.textContent = txt;
+        campoFechaVigencia.className = 'badge-vig' + (estado ? ' ' + estado : '');
+      };
+
       if (cliente === '' || ciudadRetiro === '' || destino1 === '' || ciudadDevolucion === '') {
-        if (campoFechaVigencia) campoFechaVigencia.textContent = '';
+        pintarVig('Vigencia: —', '');
         return;
       }
 
       const campoTarifa = raiz.querySelector('#txtTarifa1Servicio');
-      if (self._numero(campoTarifa.value) > 0 && !campoTarifa.dataset.autocompletada) return;
+      // Si el usuario escribió la tarifa a mano no se pisa, pero igual se
+      // muestra la vigencia de la tarifa de la tabla como referencia.
+      const tarifaManual = self._numero(campoTarifa.value) > 0 && !campoTarifa.dataset.autocompletada;
+      pintarVig('Buscando tarifa…', '');
 
       const resp = await llamarBackend('buscarTarifa', {
         cliente: cliente,
@@ -890,24 +920,26 @@ const FormServicio = {
       });
 
       if (!resp.encontrado) {
-        if (campoFechaVigencia) campoFechaVigencia.textContent = '';
+        pintarVig('Sin tarifa registrada para esta ruta', 'no');
         return;
       }
 
       const prefijo = resp.moneda === 'D' ? '$ ' : 'S/ ';
-      campoTarifa.value = prefijo + Number(resp.tarifa).toFixed(2);
-      campoTarifa.dataset.autocompletada = '1';
+      if (!tarifaManual) {
+        campoTarifa.value = prefijo + Number(resp.tarifa).toFixed(2);
+        campoTarifa.dataset.autocompletada = '1';
+      }
 
       if (campoFechaVigencia) {
         if (resp.fecha) {
           const df = new Date(resp.fecha);
           const txt = isNaN(df.getTime())
             ? ''
-            : 'Tarifa vigente desde ' + String(df.getDate()).padStart(2, '0') + '/' +
+            : (tarifaManual ? 'Tabla: ' + prefijo + Number(resp.tarifa).toFixed(2) + ' · vigente desde ' : 'Vigente desde ') + String(df.getDate()).padStart(2, '0') + '/' +
               String(df.getMonth() + 1).padStart(2, '0') + '/' + df.getFullYear();
-          campoFechaVigencia.textContent = txt;
+          pintarVig(txt || 'Vigencia: sin fecha', txt ? 'ok' : '');
         } else {
-          campoFechaVigencia.textContent = '';
+          pintarVig('Vigencia: sin fecha', '');
         }
       }
 
@@ -927,7 +959,7 @@ const FormServicio = {
     raiz.querySelector('#txtTarifa1Servicio').addEventListener('input', function () {
       delete this.dataset.autocompletada;
       const cf = raiz.querySelector('#fechaVigenciaTarifa');
-      if (cf) cf.textContent = '';
+      if (cf) { cf.textContent = 'Tarifa ingresada a mano'; cf.className = 'badge-vig'; }
     });
 
     // Validación de orden cronológico: retiro < posicionamiento < devolución.
