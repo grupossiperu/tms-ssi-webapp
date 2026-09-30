@@ -114,6 +114,9 @@ const FormServicio = {
             <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
             <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
             <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
+            <label style="display:flex; align-items:center; gap:4px; margin-left:8px; font-weight:normal; white-space:nowrap;">
+              <input type="checkbox" id="chkGasificadoServicio"> Gasificado
+            </label>
           </div>
         </div>
       </div>
@@ -467,6 +470,8 @@ const FormServicio = {
     set('txtTotalViaje', (Number(f['TOTAL POR VIAJE']) || 0).toFixed(2));
     set('cboReeferDry', f['REEFER O DRY']);
     self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || 'CONTADO';
+    const chkGasificado = raiz.querySelector('#chkGasificadoServicio');
+    if (chkGasificado) chkGasificado.checked = String(f['GASIFICADO'] || '').trim().toUpperCase() === 'SI';
 
     const esProveedorPrecargado = self._tipoAbastecimiento === 'PROVEEDOR';
     raiz.querySelector('#btnAbastecidoSi').classList.toggle('activo', esProveedorPrecargado);
@@ -1119,6 +1124,7 @@ const FormServicio = {
         montoDepositado: v('txtMontoDepositadoServicio'),
         totalViaje: v('txtTotalViaje'),
         tarifa1: v('txtTarifa1Servicio'),
+        gasificado: raiz.querySelector('#chkGasificadoServicio').checked ? 'SI' : 'NO',
         tipoAbastecimiento: self._tipoAbastecimiento,
         reeferDry: v('cboReeferDry'),
         proveedor: v('cboProveedorServicio'),
