@@ -108,6 +108,7 @@ const FormServicio = {
           <datalist id="lst-ciuDevolucion">${(datos.ciudadesDevolucion || []).map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
         <div class="campo">
+          <div id="fechaVigenciaTarifa" style="font-size:11px; color:#64748b; min-height:14px;"></div>
           <label>Tarifa</label>
           <div class="fila-combo-mas">
             <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
@@ -864,7 +865,12 @@ const FormServicio = {
       const destino2 = v('cboDestino2Servicio');
       const ciudadDevolucion = v('cboCiudadDevolucionServicio');
 
-      if (cliente === '' || ciudadRetiro === '' || destino1 === '' || ciudadDevolucion === '') return;
+      const campoFechaVigencia = raiz.querySelector('#fechaVigenciaTarifa');
+
+      if (cliente === '' || ciudadRetiro === '' || destino1 === '' || ciudadDevolucion === '') {
+        if (campoFechaVigencia) campoFechaVigencia.textContent = '';
+        return;
+      }
 
       const campoTarifa = raiz.querySelector('#txtTarifa1Servicio');
       if (self._numero(campoTarifa.value) > 0 && !campoTarifa.dataset.autocompletada) return;
@@ -878,11 +884,27 @@ const FormServicio = {
         reeferDry: v('cboReeferDry')
       });
 
-      if (!resp.encontrado) return;
+      if (!resp.encontrado) {
+        if (campoFechaVigencia) campoFechaVigencia.textContent = '';
+        return;
+      }
 
       const prefijo = resp.moneda === 'D' ? '$ ' : 'S/ ';
       campoTarifa.value = prefijo + Number(resp.tarifa).toFixed(2);
       campoTarifa.dataset.autocompletada = '1';
+
+      if (campoFechaVigencia) {
+        if (resp.fecha) {
+          const df = new Date(resp.fecha);
+          const txt = isNaN(df.getTime())
+            ? ''
+            : 'Tarifa vigente desde ' + String(df.getDate()).padStart(2, '0') + '/' +
+              String(df.getMonth() + 1).padStart(2, '0') + '/' + df.getFullYear();
+          campoFechaVigencia.textContent = txt;
+        } else {
+          campoFechaVigencia.textContent = '';
+        }
+      }
 
       raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa1Servicio"]').forEach(function (b) {
         b.classList.toggle('activo', b.dataset.moneda === (resp.moneda === 'D' ? 'D' : 'S'));
@@ -899,6 +921,8 @@ const FormServicio = {
     // Si el usuario edita la tarifa a mano, deja de considerarse autocompletada.
     raiz.querySelector('#txtTarifa1Servicio').addEventListener('input', function () {
       delete this.dataset.autocompletada;
+      const cf = raiz.querySelector('#fechaVigenciaTarifa');
+      if (cf) cf.textContent = '';
     });
 
     // Validación de orden cronológico: retiro < posicionamiento < devolución.
