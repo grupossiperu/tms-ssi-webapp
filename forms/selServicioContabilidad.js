@@ -39,6 +39,11 @@ const FormSelServicioContabilidad = {
             <option value="">Todos</option>
           </select>
         </div>
+        <div class="campo"><label>Planta (packing)</label>
+          <select id="filtroPacking">
+            <option value="">Todas</option>
+          </select>
+        </div>
         <div class="campo"><label>Booking</label>
           <input type="text" id="filtroBooking" placeholder="Escriba el booking" autocomplete="off">
         </div>
@@ -228,6 +233,19 @@ const FormSelServicioContabilidad = {
       if (clientes.includes(valorActual)) select.value = valorActual;
     }
 
+    function actualizarOpcionesPacking(filas) {
+      const select = raiz.querySelector('#filtroPacking');
+      const valorActual = select.value;
+      const plantas = Array.from(new Set(
+        filas.map(f => String(f['PACKING'] || '').trim().toUpperCase()).filter(v => v !== '' && v !== '-')
+      )).sort((a, b) => a.localeCompare(b, 'es'));
+
+      select.innerHTML = '<option value="">Todas</option>' +
+        plantas.map(p => `<option value="${p}">${p}</option>`).join('');
+
+      if (plantas.includes(valorActual)) select.value = valorActual;
+    }
+
     // soloFiltrar === true: vuelve a filtrar lo ya traído, sin ir al backend
     // (se usa al escribir el booking, para que responda al instante).
     async function cargar(soloFiltrar) {
@@ -246,12 +264,16 @@ const FormSelServicioContabilidad = {
 
       actualizarOpcionesConductor(filas);
       actualizarOpcionesCliente(filas);
+      actualizarOpcionesPacking(filas);
 
       const conductor = raiz.querySelector('#filtroConductor').value;
       if (conductor) filas = filas.filter(f => String(f['CONDUCTOR'] || '').trim() === conductor);
 
       const cliente = raiz.querySelector('#filtroCliente').value;
       if (cliente) filas = filas.filter(f => String(f['CLIENTE PARA FACTURACIÓN'] || '').trim() === cliente);
+
+      const planta = raiz.querySelector('#filtroPacking').value;
+      if (planta) filas = filas.filter(f => String(f['PACKING'] || '').trim().toUpperCase() === planta);
 
       const booking = raiz.querySelector('#filtroBooking').value.trim().toUpperCase();
       if (booking) filas = filas.filter(f => String(f['BOOKING'] || '').toUpperCase().indexOf(booking) !== -1);
@@ -348,6 +370,7 @@ const FormSelServicioContabilidad = {
     ['filtroEstado', 'filtroConductor', 'filtroCliente', 'filtroDesde', 'filtroHasta', 'filtroDatos'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', cargar);
     });
+    raiz.querySelector('#filtroPacking').addEventListener('change', function () { cargar(true); });
 
     let esperaBooking = null;
     raiz.querySelector('#filtroBooking').addEventListener('input', function () {
@@ -363,6 +386,7 @@ const FormSelServicioContabilidad = {
       raiz.querySelector('#filtroHasta').value = '';
       raiz.querySelector('#filtroDatos').value = '';
       raiz.querySelector('#filtroBooking').value = '';
+      raiz.querySelector('#filtroPacking').value = '';
       cargar();
     });
 
