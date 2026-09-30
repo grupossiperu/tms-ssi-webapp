@@ -24,7 +24,7 @@ const FormSelServicioContabilidad = {
         <div class="campo"><label>Estado</label>
           <select id="filtroEstado">
             <option value="">Todos</option>
-            <option>PROGRAMADO</option><option>EN RUTA</option>
+            <option>PROGRAMADO</option><option>RETIRANDO</option><option>EN RUTA CLIENTE</option><option>EN CLIENTE</option><option>EN RUTA RETORNO</option><option>COLA PUERTO</option>
             <option>CULMINADO</option><option>FALSO FLETE</option>
             <option>CANCELADO</option>
           </select>
@@ -50,25 +50,57 @@ const FormSelServicioContabilidad = {
         </div>
         <button class="boton-secundario" id="btnBorrarFiltro">Borrar filtro</button>
       </div>
-      <div style="max-height:460px; overflow:auto;">
+      <style>
+        .acarreo-tabla-wrap { max-height: calc(100vh - 300px); min-height: 260px; overflow-y: auto; overflow-x: hidden; }
+        #tablaServicios { width: 100%; table-layout: fixed; font-size: .74rem; }
+        #tablaServicios th, #tablaServicios td { padding: 5px 5px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
+        #tablaServicios th { font-size: .7rem; position: sticky; top: 0; z-index: 1; }
+        #tablaServicios td .sub { color: #64748b; font-size: .68rem; margin-top: 2px; }
+        .badge-obs { display: inline-block; background: #e0f2fe; color: #075985; border-radius: 8px; padding: 1px 6px; font-size: .66rem; font-weight: 700; }
+        .badge-estado { display: inline-block; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; background: #f1f5f9; color: #334155; }
+        .est-programado { background: #e2e8f0; color: #334155; }
+        .est-retirando { background: #fef3c7; color: #92400e; }
+        .est-en-ruta-cliente, .est-en-ruta { background: #dbeafe; color: #1e40af; }
+        .est-en-cliente { background: #ede9fe; color: #5b21b6; }
+        .est-en-ruta-retorno { background: #cffafe; color: #155e75; }
+        .est-cola-puerto { background: #ffedd5; color: #9a3412; }
+        .est-culminado { background: #dcfce7; color: #166534; }
+        .est-falso-flete { background: #fce7f3; color: #9d174d; }
+        .est-cancelado { background: #fee2e2; color: #991b1b; }
+        .acarreo-estados { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .acarreo-estados .boton-secundario, .acarreo-estados .boton-peligro { padding: 7px 10px; font-size: .8rem; }
+        .acarreo-estados .flecha { color: #94a3b8; font-weight: 700; }
+        .acarreo-estados .sep { width: 14px; }
+        .acarreo-lbl { font-size: .78rem; font-weight: 700; color: #1c3a5e; margin-right: 4px; }
+      </style>
+      <div class="acarreo-tabla-wrap">
         <table class="tabla-lista" id="tablaServicios">
+          <colgroup>
+            <col style="width:6.5%"><col style="width:6%"><col style="width:10%"><col style="width:6.5%"><col style="width:7%">
+            <col style="width:9.5%"><col style="width:9%"><col style="width:8.5%"><col style="width:6%"><col style="width:8.5%">
+            <col style="width:7%"><col style="width:5.5%"><col style="width:3%"><col style="width:7%">
+          </colgroup>
           <thead><tr>
-            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Placa</th><th>Booking</th>
-            <th>Reefer o Seco</th><th>Ciudad de retiro</th><th>Depósito de retiro</th><th>Retiro</th>
-            <th>Destino 1</th><th>Packing</th><th>Posicionamiento</th><th>Destino 2</th><th>Posicionamiento 2</th>
-            <th>Depósito de devolución</th><th>Fecha y hora de devolución</th>
-            <th>Datos</th><th>Imprimir</th><th>Estado</th>
+            <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Booking</th>
+            <th>Retiro</th><th>Destino 1 / posic.</th><th>Packing</th><th>Destino 2 / posic.</th><th>Devolución</th>
+            <th>Observación</th><th>Datos</th><th>Imp.</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
-        <div style="display:flex; gap:8px;">
-          <button class="boton-secundario" id="btnProgramado">Programado</button>
-          <button class="boton-secundario" id="btnEnRuta">En Ruta</button>
-          <button class="boton-secundario" id="btnCulminado">Culminado</button>
-          <button class="boton-secundario" id="btnFalsoFlete">Falso Flete</button>
-          <button class="boton-peligro" id="btnViajeCancelado">Cancelar viaje</button>
+      <div class="panel-footer" style="padding-top:10px; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <div class="acarreo-estados">
+          <span class="acarreo-lbl">Cambiar estado:</span>
+          <button class="boton-secundario btn-estado" data-estado="PROGRAMADO">Programado</button><span class="flecha">🡢</span>
+          <button class="boton-secundario btn-estado" data-estado="RETIRANDO">Retirando</button><span class="flecha">🡢</span>
+          <button class="boton-secundario btn-estado" data-estado="EN RUTA CLIENTE">En Ruta Cliente</button><span class="flecha">🡢</span>
+          <button class="boton-secundario btn-estado" data-estado="EN CLIENTE">En Cliente</button><span class="flecha">🡢</span>
+          <button class="boton-secundario btn-estado" data-estado="EN RUTA RETORNO">En Ruta Retorno</button><span class="flecha">🡢</span>
+          <button class="boton-secundario btn-estado" data-estado="COLA PUERTO">Cola Puerto</button><span class="flecha">🡢</span>
+          <button class="boton-secundario btn-estado" data-estado="CULMINADO">Culminado</button>
+          <span class="sep"></span>
+          <button class="boton-secundario btn-estado" data-estado="FALSO FLETE">Falso Flete</button>
+          <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
         </div>
         <div style="display:flex; gap:8px;">
           <button class="boton-secundario" id="btnCancelarSelServicio">Cerrar</button>
@@ -216,7 +248,7 @@ const FormSelServicioContabilidad = {
       function prioridadEstado(estado) {
         const e = String(estado || '').trim().toUpperCase();
         if (e === '' || e === 'PROGRAMADO') return 0;
-        if (e === 'EN RUTA') return 1;
+        if (['RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'EN RUTA'].indexOf(e) !== -1) return 1;
         if (e === 'FALSO FLETE' || e === 'CANCELADO') return 2;
         return 3;
             }
@@ -242,30 +274,35 @@ const FormSelServicioContabilidad = {
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
         const reeferSeco = String(f['REEFER O DRY'] || '').trim().toUpperCase() === 'DRY' ? 'SECO' : (f['REEFER O DRY'] || '');
+        // Dos datos por celda (valor + fecha/hora debajo) para que la tabla
+        // entre completa en pantalla sin barra horizontal.
+        const linea = function (a, b) {
+          a = String(a || '').trim(); b = String(b || '').trim();
+          if (a && b) return a + '<div class="sub">' + b + '</div>';
+          return a || (b ? '<div class="sub">' + b + '</div>' : '');
+        };
+        const d2 = (f['DESTINO 2'] && String(f['DESTINO 2']).trim() !== '-') ? f['DESTINO 2'] : '';
+        const estadoTxt = String(f['ESTADO'] || '').trim().toUpperCase();
+        const obs = String(f['OBSERVACION'] || '').trim();
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
           <td>${f['CONDUCTOR'] || ''}</td>
-          <td>${f['PLACA TRACTO'] || ''}</td>
+          <td>${linea(f['PLACA TRACTO'], reeferSeco)}</td>
           <td>${f['BOOKING'] || ''}</td>
-          <td>${reeferSeco}</td>
-          <td>${f['CIUDAD DE RETIRO'] || ''}</td>
-          <td>${f['DEPOSITO DE RETIRO'] || ''}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
-          <td>${f['DESTINO 1'] || ''}</td>
+          <td>${linea([f['CIUDAD DE RETIRO'], f['DEPOSITO DE RETIRO']].filter(Boolean).join(' · '), formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO']))}</td>
+          <td>${linea(f['DESTINO 1'], formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1']))}</td>
           <td>${f['PACKING'] || ''}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
-          <td>${f['DESTINO 2'] || ''}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2'])}</td>
-          <td>${f['DEPOSITO DE DEVOLUCION'] || ''}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
+          <td>${d2 ? linea(d2, formatoFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2'])) : '-'}</td>
+          <td>${linea(f['DEPOSITO DE DEVOLUCION'], formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION']))}</td>
+          <td>${obs ? '<span class="badge-obs">' + obs + '</span>' : ''}</td>
           <td style="text-align:center;">
             ${completo
               ? '<span class="badge-datos completo" title="Clic para revisar o modificar">Completo</span>'
               : '<span class="badge-datos incompleto" title="Clic para completar los datos">Datos incompletos</span>'}
           </td>
-          <td style="text-align:center;"><button type="button" class="btn-imprimir-fila" title="Imprimir este servicio" style="cursor:pointer; font-size:16px; border:none; background:transparent;">🖨️</button></td>
-          <td>${f['ESTADO'] || ''}</td>`;
+          <td style="text-align:center;"><button type="button" class="btn-imprimir-fila" title="Imprimir este servicio" style="cursor:pointer; font-size:15px; border:none; background:transparent; padding:0;">🖨️</button></td>
+          <td><span class="badge-estado est-${estadoTxt.replace(/\s+/g, '-').toLowerCase()}">${f['ESTADO'] || ''}</span></td>`;
 
         tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
           ev.stopPropagation();
@@ -313,11 +350,9 @@ const FormSelServicioContabilidad = {
       await llamarBackend('cambiarEstadoServicio', { fila: self._filaSeleccionada, nuevoEstado: nuevoEstado });
       cargar();
     }
-    raiz.querySelector('#btnProgramado').addEventListener('click', function () { cambiarEstado('PROGRAMADO'); });
-    raiz.querySelector('#btnEnRuta').addEventListener('click', function () { cambiarEstado('EN RUTA'); });
-    raiz.querySelector('#btnCulminado').addEventListener('click', function () { cambiarEstado('CULMINADO'); });
-    raiz.querySelector('#btnFalsoFlete').addEventListener('click', function () { cambiarEstado('FALSO FLETE'); });
-    raiz.querySelector('#btnViajeCancelado').addEventListener('click', function () { cambiarEstado('CANCELADO'); });
+    raiz.querySelectorAll('.btn-estado').forEach(function (b) {
+      b.addEventListener('click', function () { cambiarEstado(b.dataset.estado); });
+    });
 
     raiz.querySelector('#btnCancelarSelServicio').addEventListener('click', cerrarPanel);
 
