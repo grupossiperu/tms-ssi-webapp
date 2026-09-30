@@ -48,6 +48,9 @@ const FormServicio = {
         .panel-srv .badge-vig { font-size: .72rem; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: #f1f5f9; color: #64748b; white-space: nowrap; }
         .panel-srv .badge-vig.ok { background: #dcfce7; color: #166534; }
         .panel-srv .badge-vig.no { background: #fef3c7; color: #92400e; }
+        .panel-srv .ref-comb { grid-column: 1 / -1; font-size: .8rem; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 7px 11px; margin-bottom: 10px; }
+        .panel-srv .ref-comb.ok { background: #dcfce7; color: #166534; }
+        .panel-srv .ref-comb.no { background: #fef3c7; color: #92400e; }
         .panel-srv .chk-gas { display: flex !important; align-items: center; gap: 6px; margin: 0 0 0 10px !important; white-space: nowrap; font-weight: 600; font-size: .85rem; color: #1c3a5e; cursor: pointer; }
         .panel-srv .chk-gas input { width: auto; margin: 0; }
         .panel-srv .panel-footer { position: sticky; bottom: 0; background: #fff; margin: 0 -22px; padding: 12px 22px; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
@@ -287,6 +290,7 @@ const FormServicio = {
       <div class="seg">
         <div class="seg-tit"><span class="seg-num">7</span> Combustible</div>
         <div class="seg-grid c3">
+          <div id="refCombustible" class="ref-comb">Galones de referencia: complete ciudad de retiro, ciudad de devolución, destino y planta.</div>
           <div class="campo">
           <label>Costo del petróleo x galón</label>
           <input type="text" id="txtCostoPetroleoGalon">
@@ -368,6 +372,7 @@ const FormServicio = {
       // Carga los datos de la fila para edición/completado.
       const registro = await llamarBackend('cargarDatosServicioParaConsolidado', { fila: filaEdicion });
       if (registro) this._precargar(document.getElementById('cuerpo-panel'), registro);
+      if (registro && this._proponerGalones) this._proponerGalones();
     } else {
       document.getElementById('txtFechaServicioRegistro').value = this._fechaHoyISO();
     }
@@ -1276,6 +1281,65 @@ const FormServicio = {
         calcularCombustible();
       }
     });
+
+    // Galones de referencia: si ya hubo un viaje con la misma ciudad de
+    // retiro, ciudad de devolución, destino 1, destino 2 y planta, se
+    // proponen los galones de tracto y genset del viaje más reciente de la
+    // hoja SERVICIOS. Siempre se pueden modificar a mano.
+    const avisoComb = raiz.querySelector('#refCombustible');
+    const campoGlTracto = raiz.querySelector('#txtGlTracto');
+    const campoGlGenset = raiz.querySelector('#txtGlGenerador');
+    [campoGlTracto, campoGlGenset].forEach(function (c) {
+      c.addEventListener('input', function () { delete this.dataset.autocompletada; });
+    });
+    const proponerGalones = function () {
+      if (!avisoComb) return;
+      const val = function (id) { return String(raiz.querySelector('#' + id).value || '').trim().toUpperCase(); };
+      const d2 = val('cboDestino2Servicio') === '-' ? '' : val('cboDestino2Servicio');
+      const partes = [val('cboCiudadRetiroServicio'), val('cboCiudadDevolucionServicio'), val('cboDestino1Servicio'), d2, val('cboPackingServicio')];
+      const limpiarPropuestos = function () {
+        let cambio = false;
+        [campoGlTracto, campoGlGenset].forEach(function (c) {
+          if (c.dataset.autocompletada) { c.value = ''; delete c.dataset.autocompletada; cambio = true; }
+        });
+        if (cambio) calcularCombustible();
+      };
+      if (!partes[0] || !partes[1] || !partes[2] || !partes[4]) {
+        avisoComb.textContent = 'Galones de referencia: complete ciudad de retiro, ciudad de devolución, destino y planta.';
+        avisoComb.className = 'ref-comb';
+        limpiarPropuestos();
+        return;
+      }
+      const mapa = (self._datos && self._datos.combustiblePorRuta) || {};
+      const ref = mapa[partes.join('|')];
+      if (!ref) {
+        avisoComb.textContent = 'Sin viajes anteriores con esta ruta y planta: ingrese los galones.';
+        avisoComb.className = 'ref-comb no';
+        limpiarPropuestos();
+        return;
+      }
+      let cambio = false;
+      if (campoGlTracto.value.trim() === '' || campoGlTracto.dataset.autocompletada) {
+        campoGlTracto.value = ref.glTracto || '';
+        campoGlTracto.dataset.autocompletada = '1';
+        cambio = true;
+      }
+      if (!campoGlGenset.disabled && (campoGlGenset.value.trim() === '' || campoGlGenset.dataset.autocompletada)) {
+        campoGlGenset.value = ref.glGenset || '';
+        campoGlGenset.dataset.autocompletada = '1';
+        cambio = true;
+      }
+      avisoComb.textContent = 'Referencia del último viaje con esta ruta y planta (' + (ref.fecha || 'sin fecha') +
+        (ref.booking ? ', booking ' + ref.booking : '') + '): ' + (ref.glTracto || 0) + ' gl tracto / ' +
+        (ref.glGenset || 0) + ' gl genset. Puede modificarlos.';
+      avisoComb.className = 'ref-comb ok';
+      if (cambio) calcularCombustible();
+    };
+    self._proponerGalones = proponerGalones;
+    ['cboCiudadRetiroServicio', 'cboCiudadDevolucionServicio', 'cboDestino1Servicio', 'cboDestino2Servicio', 'cboPackingServicio'].forEach(function (id) {
+      raiz.querySelector('#' + id).addEventListener('change', proponerGalones);
+    });
+    raiz.querySelector('#cboPackingServicio').addEventListener('input', proponerGalones);
 
     raiz.querySelector('#btnInicioServicio').addEventListener('click', cerrarPanel);
 
