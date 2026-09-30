@@ -274,6 +274,13 @@ const FormServicio = {
           <label>Fecha y hora de posicionamiento 2 (solo carga consolidado)</label>
           <input type="datetime-local" id="dtPosicionamiento2Servicio" disabled>
         </div>
+          <div class="campo" style="grid-column: 1 / -1;">
+            <label>Ubicación del packing (link de Google Maps, coordenadas o dirección)</label>
+            <div class="fila-combo-mas">
+              <input type="text" id="txtUbicacionPacking" placeholder="Ej: https://maps.app.goo.gl/...  o  -13.4101, -76.1325" autocomplete="off">
+              <button type="button" id="btnVerUbicacionPacking" class="boton-secundario" title="Abrir en Google Maps" style="white-space:nowrap;">Ver mapa</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -481,6 +488,7 @@ const FormServicio = {
     set('cboReeferDry', f['REEFER O DRY']);
     self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || 'CONTADO';
     set('cboObservacionServicio', String(f['OBSERVACION'] || '').trim().toUpperCase());
+    set('txtUbicacionPacking', f['UBICACION PACKING']);
 
     const esProveedorPrecargado = self._tipoAbastecimiento === 'PROVEEDOR';
     raiz.querySelector('#btnAbastecidoSi').classList.toggle('activo', esProveedorPrecargado);
@@ -522,143 +530,267 @@ const FormServicio = {
   },
 
   /**
-   * Genera una vista imprimible en A4 con todos los datos del formulario,
-   * EXCEPTO la Tarifa (ese dato es confidencial y no debe salir impreso).
-   * Abre una ventana nueva con el documento listo y dispara el diálogo de
-   * impresión del navegador (desde ahí el usuario puede "Guardar como PDF").
+   * Vista imprimible (A4) del servicio. Nunca incluye la Tarifa (dato
+   * confidencial). Si el combustible lo abastece un proveedor tampoco salen
+   * el costo del petróleo, los totales de combustible ni el total por viaje.
+   * Lleva un QR con la ubicación del packing en Google Maps.
    */
   _imprimir: function (raiz) {
     const v = function (id) {
       const el = raiz.querySelector('#' + id);
       return el ? (el.value || '').trim() : '';
     };
-    const vF = (idDT) => this._fechaDeDatetimeLocal(v(idDT));
-    const vH = (idDT) => this._horaDeDatetimeLocal(v(idDT));
-    const moneda = function (id) {
-      const t = v(id);
-      if (t === '') return '';
-      if (/^[S$]/.test(t)) return t;
-      const n = Number(t);
-      return isNaN(n) ? t : 'S/ ' + n.toFixed(2);
+    const vF = (id) => this._fechaDeDatetimeLocal(v(id));
+    const vH = (id) => this._horaDeDatetimeLocal(v(id));
+    const btnSi = raiz.querySelector('#btnAbastecidoSi');
+    const d = {
+      fechaRegistro: this._fechaISOaDDMM(v('txtFechaServicioRegistro')),
+      cliente: v('cboClienteFacturacion'), empresa: v('cboEmpresaServicio'),
+      conductor: v('cboConductorServicio'), tracto: v('cboPlacaTractoServicio'), carreta: v('cboPlacaCarretaServicio'),
+      tipoCarga: v('cboTipoCarga'), reeferDry: v('cboReeferDry'),
+      destino1: v('cboDestino1Servicio'), destino2: v('cboDestino2Servicio'),
+      ciudadRetiro: v('cboCiudadRetiroServicio'), ciudadDevolucion: v('cboCiudadDevolucionServicio'),
+      booking: v('txtBookingServicio'), contenedor: v('txtContenedorServicio'),
+      tipoProducto: v('cboTipoProductoServicio'), tipoTratamiento: v('cboTipoTratamiento'),
+      packing: v('cboPackingServicio'), ubicacionPacking: v('txtUbicacionPacking'),
+      thermo: v('cboThermoregistro'), cantThermo: v('txtCantidadThermoregistro'), modeloThermo: v('cboModeloThermoregistro'),
+      precinto: v('cboPrecintoAduana'), operador: v('cboOperadorLogistico'),
+      filtroEtileno: v('cboFiltroEtileno'), cantFiltro: v('txtCantidadFiltroEtileno'),
+      barras: v('cboBarrasConsolidado'), cantBarras: v('txtCantidadBarras'),
+      observacion: v('cboObservacionServicio'),
+      depRetiro: v('cboDepositoRetiro'), fRetiro: vF('dtRetiroServicio'), hRetiro: vH('dtRetiroServicio'),
+      lugar1: v('txtLugarPosicionamiento1'), fPos1: vF('dtPosicionamiento1Servicio'), hPos1: vH('dtPosicionamiento1Servicio'),
+      lugar2: v('txtLugarPosicionamiento2'), fPos2: vF('dtPosicionamiento2Servicio'), hPos2: vH('dtPosicionamiento2Servicio'),
+      depDevol: v('cboDepositoDevolucion'), fDevol: vF('dtDevolucionServicio'), hDevol: vH('dtDevolucionServicio'),
+      costoPetroleo: v('txtCostoPetroleoGalon'), glTracto: v('txtGlTracto'), glGenset: v('txtGlGenerador'),
+      totalTracto: v('txtTotalTracto'), totalGenset: v('txtTotalGenerador'), totalCombustible: v('txtTotalCombustible'),
+      viatico: v('txtViaticoServicio'), peaje: v('txtPeajeServicio'), cochera: v('txtCocheraServicio'),
+      montoDepositar: v('txtMontoDepositadoServicio'), totalViaje: v('txtTotalViaje'),
+      proveedor: !!(btnSi && btnSi.classList.contains('activo')),
+      nombreProveedor: v('cboProveedorServicio')
     };
+    this._imprimirDatos(d);
+  },
+
+  /**
+   * Imprime un servicio ya grabado (botón de impresora del módulo Acarreo),
+   * leyendo la fila directamente de la hoja SERVICIOS.
+   */
+  imprimirDesdeFila: async function (fila) {
+    const ventana = window.open('', '_blank');
+    if (!ventana) {
+      mostrarMensaje('El navegador bloqueó la ventana de impresión. Habilite las ventanas emergentes para este sitio.', 'error');
+      return;
+    }
+    ventana.document.write('<p style="font-family:Arial,sans-serif; padding:24px; color:#1c3a5e;">Cargando servicio...</p>');
+    let f = null;
+    try { f = await llamarBackend('cargarDatosServicioParaConsolidado', { fila: fila }); } catch (e) { f = null; }
+    if (!f) {
+      ventana.document.body.textContent = 'No se pudo cargar el servicio para imprimir.';
+      return;
+    }
+    const txt = function (c) {
+      const x = f[c];
+      return (x === null || x === undefined || String(x).trim() === '-') ? '' : String(x).trim();
+    };
+    const num = function (c) {
+      if (txt(c) === '') return '';
+      const n = Number(f[c]);
+      return isNaN(n) ? txt(c) : n.toFixed(2);
+    };
+    const fch = (c) => (txt(c) ? this._formatoFechaCampo(f[c]) : '');
+    const hr = (c) => (txt(c) ? this._formatoHoraCampo(f[c]) : '');
+    const d = {
+      fechaRegistro: fch('FECHA DE PROGRAMACION'),
+      cliente: txt('CLIENTE PARA FACTURACIÓN'), empresa: txt('EMPRESA QUE DIO EL SERVICIO'),
+      conductor: txt('CONDUCTOR'), tracto: txt('PLACA TRACTO'), carreta: txt('PLACA CARRETA'),
+      tipoCarga: txt('TIPO DE CARGA'), reeferDry: txt('REEFER O DRY'),
+      destino1: txt('DESTINO 1'), destino2: txt('DESTINO 2'),
+      ciudadRetiro: txt('CIUDAD DE RETIRO'), ciudadDevolucion: txt('CIUDAD DE DEVOLUCION'),
+      booking: txt('BOOKING'), contenedor: txt('N° CONTENEDOR'),
+      tipoProducto: txt('TIPO DE PRODUCTO'), tipoTratamiento: txt('TIPO DE TRATAMIENTO'),
+      packing: txt('PACKING'), ubicacionPacking: txt('UBICACION PACKING'),
+      thermo: txt('THERMOREGISTRO'), cantThermo: txt('CANTIDAD THERMOREGISTRO'), modeloThermo: txt('MODELO THERMOREGISTRO'),
+      precinto: txt('PRECINTO DE ADUANA'), operador: txt('OPERADOR LOGISTICO'),
+      filtroEtileno: txt('FILTRO DE ETILENO'), cantFiltro: txt('CANTIDAD FILTRO DE ETILENO'),
+      barras: txt('BARRAS CONSOLIDADO'), cantBarras: txt('CANTIDAD BARRAS CONSOLIDADO'),
+      observacion: txt('OBSERVACION'),
+      depRetiro: txt('DEPOSITO DE RETIRO'), fRetiro: fch('FECHA DE RETIRO'), hRetiro: hr('HORA DE RETIRO'),
+      lugar1: txt('LUGAR DE POSICIONAMIENTO 1') || txt('DESTINO 1'), fPos1: fch('FECHA DE POSICIONAMIENTO 1'), hPos1: hr('HORA DE POSICIONAMIENTO 1'),
+      lugar2: txt('LUGAR DE POSICIONAMIENTO 2') || txt('DESTINO 2'), fPos2: fch('FECHA DE POSICIONAMIENTO 2'), hPos2: hr('HORA DE POSICIONAMIENTO 2'),
+      depDevol: txt('DEPOSITO DE DEVOLUCION'), fDevol: fch('FECHA DE DEVOLUCION'), hDevol: hr('HORA DE DEVOLUCION'),
+      costoPetroleo: num('COSTO DEL PETRÓLEO X GALÓN'), glTracto: txt('GL TRACTO'), glGenset: txt('GL GENERADOR'),
+      totalTracto: num('TOTAL TRACTO'), totalGenset: num('TOTAL GENERADOR'),
+      totalCombustible: ((Number(f['TOTAL TRACTO']) || 0) + (Number(f['TOTAL GENERADOR']) || 0)).toFixed(2),
+      viatico: num('VIATICO'), peaje: num('PEAJE'), cochera: num('COCHERA'),
+      montoDepositar: num('MONTO DEPOSITADO'), totalViaje: num('TOTAL POR VIAJE'),
+      proveedor: txt('TIPO DE ABASTECIMIENTO').toUpperCase() === 'PROVEEDOR',
+      nombreProveedor: txt('PROVEEDOR')
+    };
+    this._imprimirDatos(d, ventana);
+  },
+
+  /** Convierte lo escrito en "Ubicación del packing" en un link de Google Maps. */
+  _urlMapa: function (ubicacion) {
+    const u = String(ubicacion || '').trim();
+    if (u === '') return '';
+    if (/^https?:\/\//i.test(u)) return u;
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(u);
+  },
+
+  _imprimirDatos: function (d, ventanaAbierta) {
     const esc = function (t) {
-      return String(t || '').replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+      return String(t === null || t === undefined ? '' : t).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
     };
-    const campo = function (etiqueta, valor) {
-      return '<div class="campo-imp"><div class="lbl-imp">' + esc(etiqueta) + '</div><div class="val-imp">' + esc(valor) + '&nbsp;</div></div>';
+    const dinero = function (t) {
+      const s = String(t || '').trim();
+      if (s === '') return '';
+      if (/^[S$]/.test(s)) return s;
+      const n = Number(s.replace(',', '.'));
+      return isNaN(n) ? s : 'S/ ' + n.toFixed(2);
     };
-    const seccion = function (titulo, campos) {
-      return '<div class="seccion-imp"><div class="tit-imp">' + esc(titulo) + '</div><div class="fila-imp">' + campos.join('') + '</div></div>';
+    const campo = function (etiqueta, valor, clase) {
+      return '<div class="c' + (clase ? ' ' + clase : '') + '"><div class="l">' + esc(etiqueta) + '</div><div class="v">' + (esc(valor) || '&nbsp;') + '</div></div>';
+    };
+    const bloque = function (titulo, contenido, clase) {
+      return '<section class="b' + (clase ? ' ' + clase : '') + '"><h3>' + esc(titulo) + '</h3>' + contenido + '</section>';
     };
 
-    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de Servicio</title><style>' +
-      '@page{ size:A4; margin:11mm; }' +
-      '*{ box-sizing:border-box; }' +
-      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; font-size:10.5px; }' +
-      '.encabezado{ display:flex; align-items:flex-end; justify-content:space-between; border-bottom:2.5px solid #1c3a5e; padding-bottom:7px; margin-bottom:9px; }' +
-      '.encabezado h1{ font-size:14px; margin:0; color:#1c3a5e; }' +
-      '.encabezado p{ margin:2px 0 0; font-size:10px; color:#444; }' +
-      '.encabezado .fecha-imp{ font-size:9px; color:#444; text-align:right; }' +
-      '.seccion-imp{ margin-bottom:6px; page-break-inside:avoid; }' +
-      '.tit-imp{ background:#1c3a5e; color:#fff; font-size:9px; font-weight:700; padding:2.5px 7px; letter-spacing:.3px; }' +
-      '.fila-imp{ display:flex; flex-wrap:wrap; border:1px solid #c7ced8; border-top:none; }' +
-      '.campo-imp{ flex:1 1 0; min-width:118px; border-right:1px solid #dde3ea; border-bottom:1px solid #dde3ea; padding:3px 7px; }' +
-      '.campo-imp:last-child{ border-right:none; }' +
-      '.lbl-imp{ font-size:7.5px; font-weight:700; color:#556; text-transform:uppercase; letter-spacing:.2px; }' +
-      '.val-imp{ font-size:10.5px; min-height:13px; margin-top:1px; }' +
-      '.no-print{ text-align:center; margin:14px 0; }' +
-      '.no-print button{ padding:9px 22px; font-size:13px; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
-      '@media print{ .no-print{ display:none; } }' +
-      '</style></head><body>' +
-      '<div class="encabezado"><div><h1>TRANSPORTES SSI S.A.C.</h1><p>Registro de Servicio</p></div>' +
-      '<div class="fecha-imp">Impreso: ' + esc(new Date().toLocaleString('es-PE')) + '</div></div>' +
-      seccion('Datos generales', [
-        campo('Fecha de registro', this._formatoFechaCampo(v('txtFechaServicioRegistro'))),
-        campo('Cliente para facturación', v('cboClienteFacturacion')),
-        campo('Empresa que dio el servicio', v('cboEmpresaServicio'))
-      ]) +
-      seccion('Conductor y unidad', [
-        campo('Conductor', v('cboConductorServicio')),
-        campo('Placa tracto', v('cboPlacaTractoServicio')),
-        campo('Placa carreta', v('cboPlacaCarretaServicio'))
-      ]) +
-      seccion('Carga y ruta', [
-        campo('Tipo de carga', v('cboTipoCarga')),
-        campo('Destino 1', v('cboDestino1Servicio')),
-        campo('Destino 2', v('cboDestino2Servicio')),
-        campo('Ciudad de retiro', v('cboCiudadRetiroServicio')),
-        campo('Ciudad de devolución', v('cboCiudadDevolucionServicio'))
-      ]) +
-      seccion('Documentación', [
-        campo('Booking', v('txtBookingServicio')),
-        campo('N° Contenedor', v('txtContenedorServicio'))
-      ]) +
-      seccion('Producto', [
-        campo('Tipo de producto', v('cboTipoProductoServicio')),
-        campo('Tipo de tratamiento', v('cboTipoTratamiento')),
-        campo('Packing', v('cboPackingServicio'))
-      ]) +
-      seccion('Thermoregistro', [
-        campo('Thermoregistro', v('cboThermoregistro')),
-        campo('Cantidad', v('txtCantidadThermoregistro')),
-        campo('Modelo', v('cboModeloThermoregistro'))
-      ]) +
-      seccion('Aduana', [
-        campo('Precinto de aduana', v('cboPrecintoAduana')),
-        campo('Operador logístico', v('cboOperadorLogistico'))
-      ]) +
-      seccion('Filtro de etileno', [
-        campo('Filtro de etileno', v('cboFiltroEtileno')),
-        campo('Cantidad', v('txtCantidadFiltroEtileno'))
-      ]) +
-      seccion('Barras consolidado', [
-        campo('Barras consolidado', v('cboBarrasConsolidado')),
-        campo('Cantidad', v('txtCantidadBarras'))
-      ]) +
-      seccion('Observación', [
-        campo('Observación', v('cboObservacionServicio'))
-      ]) +
-      seccion('Retiro', [
-        campo('Depósito de retiro', v('cboDepositoRetiro')),
-        campo('Fecha de retiro', vF('dtRetiroServicio')),
-        campo('Hora de retiro', vH('dtRetiroServicio'))
-      ]) +
-      seccion('Posicionamiento 1', [
-        campo('Lugar', v('txtLugarPosicionamiento1')),
-        campo('Fecha', vF('dtPosicionamiento1Servicio')),
-        campo('Hora', vH('dtPosicionamiento1Servicio'))
-      ]) +
-      seccion('Posicionamiento 2 (carga consolidada)', [
-        campo('Lugar', v('txtLugarPosicionamiento2')),
-        campo('Fecha', vF('dtPosicionamiento2Servicio')),
-        campo('Hora', vH('dtPosicionamiento2Servicio'))
-      ]) +
-      seccion('Devolución', [
-        campo('Depósito de devolución', v('cboDepositoDevolucion')),
-        campo('Fecha de devolución', vF('dtDevolucionServicio')),
-        campo('Hora de devolución', vH('dtDevolucionServicio'))
-      ]) +
-      seccion('Combustible', [
-        campo('Costo petróleo x galón', moneda('txtCostoPetroleoGalon')),
-        campo('Galones tracto', v('txtGlTracto')),
-        campo('Galones genset', v('txtGlGenerador')),
-        campo('Total tracto', moneda('txtTotalTracto')),
-        campo('Total genset', moneda('txtTotalGenerador')),
-        campo('Total combustible', moneda('txtTotalCombustible'))
-      ]) +
-      seccion('Gastos', [
-        campo('Viático', moneda('txtViaticoServicio')),
-        campo('Peaje', moneda('txtPeajeServicio')),
-        campo('Cochera', moneda('txtCocheraServicio'))
-      ]) +
-      seccion('Totales', [
-        campo('Monto para depositar', moneda('txtMontoDepositadoServicio')),
-        campo('Total por viaje', moneda('txtTotalViaje'))
-      ]) +
+    const esConsolidado = String(d.tipoCarga || '').toUpperCase() === 'CARGA CONSOLIDADO' || !!d.destino2;
+    const urlMapa = this._urlMapa(d.ubicacionPacking);
+    const destinoTxt = [d.destino1, d.destino2].filter(Boolean).join(' / ');
+
+    const etapas = [
+      ['Retiro', d.depRetiro, d.fRetiro, d.hRetiro],
+      ['Posicionamiento 1', d.lugar1, d.fPos1, d.hPos1]
+    ];
+    if (esConsolidado) etapas.push(['Posicionamiento 2', d.lugar2, d.fPos2, d.hPos2]);
+    etapas.push(['Devolución', d.depDevol, d.fDevol, d.hDevol]);
+    const tablaViaje = '<table class="t"><thead><tr><th>Etapa</th><th>Lugar / depósito</th><th>Fecha</th><th>Hora</th></tr></thead><tbody>' +
+      etapas.map(function (r) {
+        return '<tr><td class="et">' + esc(r[0]) + '</td><td>' + (esc(r[1]) || '&nbsp;') + '</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+
+    // Si abastece un proveedor no se imprimen costos ni totales de combustible.
+    const combustible = d.proveedor
+      ? [campo('Abastecimiento', 'PROVEEDOR'), campo('Proveedor', d.nombreProveedor),
+         campo('Galones tracto', d.glTracto), campo('Galones genset', d.glGenset)]
+      : [campo('Abastecimiento', 'CONTADO'), campo('Costo petróleo x galón', dinero(d.costoPetroleo)),
+         campo('Galones tracto', d.glTracto), campo('Galones genset', d.glGenset),
+         campo('Total tracto', dinero(d.totalTracto)), campo('Total genset', dinero(d.totalGenset)),
+         campo('Total combustible', dinero(d.totalCombustible), 'fuerte span2')];
+    const gastos = [campo('Viático', dinero(d.viatico)), campo('Peaje', dinero(d.peaje)),
+      campo('Cochera', dinero(d.cochera)), campo('Monto para depositar', dinero(d.montoDepositar), 'fuerte')];
+    if (!d.proveedor) gastos.push(campo('Total por viaje', dinero(d.totalViaje), 'fuerte span2'));
+
+    const accesorios = [
+      campo('Thermoregistro', d.thermo), campo('Cant. thermoregistros', d.cantThermo),
+      campo('Modelo thermoregistro', d.modeloThermo), campo('Precinto de aduana', d.precinto),
+      campo('Filtro de etileno', d.filtroEtileno), campo('Cant. filtros etileno', d.cantFiltro)
+    ];
+    if (esConsolidado) {
+      accesorios.push(campo('Barras consolidado', d.barras));
+      accesorios.push(campo('Cant. barras', d.cantBarras));
+    } else {
+      accesorios.push(campo('Observación', d.observacion, 'span2'));
+    }
+
+    const qrHtml = urlMapa
+      ? '<div id="qr"></div><div class="qr-pie">Escanee para abrir la ubicación del packing en Google Maps</div>' +
+        '<div class="qr-pk">' + esc(d.packing) + '</div><div class="qr-url">' + esc(d.ubicacionPacking) + '</div>'
+      : '<div class="qr-vacio">Sin ubicación del packing registrada.<br>Complete el campo "Ubicación del packing" en Programación del viaje.</div>';
+
+    const css =
+      '@page{ size:A4; margin:9mm; }' +
+      '*{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+      'body{ font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; margin:0; font-size:11px; background:#e9edf2; }' +
+      '.hoja{ background:#fff; width:192mm; margin:14px auto; padding:9mm; box-shadow:0 2px 14px rgba(0,0,0,.18); }' +
+      'header{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #1c3a5e; padding-bottom:7px; margin-bottom:8px; }' +
+      'header h1{ margin:0; font-size:19px; color:#1c3a5e; letter-spacing:.5px; }' +
+      'header p{ margin:2px 0 0; font-size:10px; color:#555; text-transform:uppercase; letter-spacing:1.5px; }' +
+      '.hdr-der{ text-align:right; }' +
+      '.bk{ font-size:10px; color:#555; text-transform:uppercase; } .bk b{ font-size:18px; color:#1c3a5e; margin-left:4px; }' +
+      '.fi{ font-size:8.5px; color:#666; margin-top:3px; }' +
+      '.obs{ background:#fff4e5; border:2px solid #e8590c; color:#b3470a; font-weight:800; font-size:15px; padding:6px 10px; border-radius:6px; margin-bottom:8px; text-align:center; letter-spacing:1px; }' +
+      '.destacado{ display:grid; grid-template-columns:1.25fr 1.35fr 1fr 1fr; gap:6px; margin-bottom:8px; }' +
+      '.destacado .d{ border:2px solid #1c3a5e; border-radius:8px; padding:7px 9px; background:#f2f6fb; }' +
+      '.destacado .l{ font-size:8.5px; font-weight:700; color:#1c3a5e; text-transform:uppercase; letter-spacing:.5px; }' +
+      '.destacado .v{ font-size:16px; font-weight:800; margin-top:3px; line-height:1.15; word-break:break-word; }' +
+      '.medio{ display:grid; grid-template-columns:1fr 64mm; gap:8px; }' +
+      '.der{ display:flex; flex-direction:column; }' +
+      '.b{ border:1px solid #c7ced8; border-radius:6px; margin-bottom:8px; overflow:hidden; page-break-inside:avoid; }' +
+      '.b h3{ margin:0; background:#1c3a5e; color:#fff; font-size:9.5px; padding:4px 8px; text-transform:uppercase; letter-spacing:.6px; }' +
+      '.g{ display:grid; } .g2{ grid-template-columns:repeat(2,1fr); } .g3{ grid-template-columns:repeat(3,1fr); } .g4{ grid-template-columns:repeat(4,1fr); }' +
+      '.c{ padding:4px 8px; border-right:1px solid #e3e8ee; border-bottom:1px solid #e3e8ee; min-height:35px; }' +
+      '.c.span2{ grid-column:span 2; }' +
+      '.c .l{ font-size:7.5px; font-weight:700; color:#5a6472; text-transform:uppercase; letter-spacing:.3px; }' +
+      '.c .v{ font-size:11.5px; margin-top:2px; font-weight:600; word-break:break-word; }' +
+      '.c.fuerte .v{ font-size:13px; font-weight:800; color:#1c3a5e; }' +
+      '.qrb{ flex:1; display:flex; flex-direction:column; }' +
+      '.qrb #qr{ display:flex; justify-content:center; padding:12px 8px 6px; }' +
+      '.qrb #qr img, .qrb #qr canvas{ width:200px !important; height:200px !important; }' +
+      '.qr-pie{ text-align:center; font-size:9px; color:#333; padding:0 8px; font-weight:700; }' +
+      '.qr-pk{ text-align:center; font-size:12px; color:#1c3a5e; font-weight:800; padding:4px 8px 0; }' +
+      '.qr-url{ text-align:center; font-size:7.5px; color:#777; padding:3px 8px 8px; word-break:break-all; }' +
+      '.qr-vacio{ padding:40px 12px; text-align:center; color:#888; font-size:11px; line-height:1.5; }' +
+      '.t{ width:100%; border-collapse:collapse; }' +
+      '.t th{ background:#eef3f8; color:#1c3a5e; font-size:8.5px; text-transform:uppercase; text-align:left; padding:4px 8px; border-bottom:1px solid #c7ced8; }' +
+      '.t td{ padding:6px 8px; border-bottom:1px solid #e3e8ee; font-size:12px; font-weight:600; }' +
+      '.t td.et{ color:#1c3a5e; font-weight:800; width:24%; }' +
+      '.dos{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }' +
+      '.firmas{ display:grid; grid-template-columns:1fr 1fr; gap:50px; margin-top:38px; padding:0 24px; }' +
+      '.firmas div{ border-top:1px solid #333; text-align:center; padding-top:4px; font-size:10px; color:#333; }' +
+      '.no-print{ text-align:center; margin:4px 0 24px; }' +
+      '.no-print button{ padding:10px 26px; font-size:14px; border-radius:8px; border:none; background:#1c3a5e; color:#fff; cursor:pointer; font-weight:700; }' +
+      '@media print{ body{ background:#fff; } .hoja{ width:auto; margin:0; padding:0; box-shadow:none; } .no-print{ display:none; } }';
+
+    const urlSegura = JSON.stringify(urlMapa).replace(/</g, '\\u003c');
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Orden de Servicio' + (d.booking ? ' - ' + esc(d.booking) : '') + '</title>' +
+      '<style>' + css + '</style>' +
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script></head><body>' +
+      '<div class="hoja">' +
+      '<header><div><h1>TRANSPORTES SSI S.A.C.</h1><p>Orden de servicio de transporte</p></div>' +
+      '<div class="hdr-der"><div class="bk">Booking <b>' + (esc(d.booking) || '—') + '</b></div>' +
+      '<div class="fi">Registro: ' + esc(d.fechaRegistro) + ' &nbsp;·&nbsp; Impreso: ' + esc(new Date().toLocaleString('es-PE')) + '</div></div></header>' +
+      (d.observacion ? '<div class="obs">⚠ OBSERVACIÓN: ' + esc(d.observacion) + '</div>' : '') +
+      '<div class="destacado">' +
+        '<div class="d"><div class="l">Destino</div><div class="v">' + (esc(destinoTxt) || '&nbsp;') + '</div></div>' +
+        '<div class="d"><div class="l">Packing</div><div class="v">' + (esc(d.packing) || '&nbsp;') + '</div></div>' +
+        '<div class="d"><div class="l">Tipo de producto</div><div class="v">' + (esc(d.tipoProducto) || '&nbsp;') + '</div></div>' +
+        '<div class="d"><div class="l">Tipo de tratamiento</div><div class="v">' + (esc(d.tipoTratamiento) || '&nbsp;') + '</div></div>' +
+      '</div>' +
+      '<div class="medio"><div class="izq">' +
+        bloque('Datos generales', '<div class="g g3">' +
+          campo('Cliente', d.cliente) + campo('Empresa', d.empresa) + campo('Tipo de carga', d.tipoCarga) + '</div>') +
+        bloque('Conductor y unidad', '<div class="g g4">' +
+          campo('Conductor', d.conductor, 'span2') + campo('Placa tracto', d.tracto) + campo('Placa carreta', d.carreta) + '</div>') +
+        bloque('Contenedor y ruta', '<div class="g g4">' +
+          campo('N° contenedor', d.contenedor) + campo('Reefer / Dry', d.reeferDry) +
+          campo('Ciudad de retiro', d.ciudadRetiro) + campo('Ciudad de devolución', d.ciudadDevolucion) +
+          campo('Operador logístico', d.operador, 'span2') + campo('Observación', d.observacion, 'span2') + '</div>') +
+      '</div><div class="der">' + bloque('Ubicación del packing', qrHtml, 'qrb') + '</div></div>' +
+      bloque('Programación del viaje', tablaViaje) +
+      bloque('Accesorios y control', '<div class="g g4">' + accesorios.join('') + '</div>') +
+      '<div class="dos">' +
+        bloque('Combustible', '<div class="g g2">' + combustible.join('') + '</div>') +
+        bloque('Gastos del viaje', '<div class="g g2">' + gastos.join('') + '</div>') +
+      '</div>' +
+      '<div class="firmas"><div>Firma del conductor</div><div>V°B° Operaciones</div></div>' +
+      '</div>' +
       '<div class="no-print"><button onclick="window.print()">Imprimir / Guardar como PDF</button></div>' +
+      '<script>(function () {' +
+        'var u = ' + urlSegura + '; var el = document.getElementById("qr"); if (!u || !el) return;' +
+        'function pintar() {' +
+          'if (typeof QRCode === "undefined") { el.textContent = "No se pudo generar el QR. Enlace: " + u; return; }' +
+          'new QRCode(el, { text: u, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });' +
+        '}' +
+        'if (document.readyState === "complete") pintar(); else window.addEventListener("load", pintar);' +
+      '})();<\/script>' +
       '</body></html>';
 
-    const ventana = window.open('', '_blank');
+    const ventana = ventanaAbierta || window.open('', '_blank');
     if (!ventana) {
       mostrarMensaje('El navegador bloqueó la ventana de impresión. Habilite las ventanas emergentes para este sitio.', 'error');
       return;
@@ -699,6 +831,25 @@ const FormServicio = {
       };
       asignar('cboPlacaTractoServicio', u.tracto);
       asignar('cboPlacaCarretaServicio', u.carreta);
+    });
+
+    // Ubicación del packing: se propone la última usada para ese packing
+    // (se puede cambiar a mano) y se puede abrir en Google Maps.
+    const campoUbicacion = raiz.querySelector('#txtUbicacionPacking');
+    campoUbicacion.addEventListener('input', function () { delete this.dataset.autocompletada; });
+    raiz.querySelector('#cboPackingServicio').addEventListener('change', function () {
+      const mapa = (self._datos && self._datos.ubicacionPorPacking) || {};
+      const u = mapa[String(this.value || '').trim().toUpperCase()];
+      if (!u) return;
+      if (campoUbicacion.value.trim() === '' || campoUbicacion.dataset.autocompletada) {
+        campoUbicacion.value = u;
+        campoUbicacion.dataset.autocompletada = '1';
+      }
+    });
+    raiz.querySelector('#btnVerUbicacionPacking').addEventListener('click', function () {
+      const url = self._urlMapa(campoUbicacion.value);
+      if (!url) { mostrarMensaje('Ingrese primero la ubicación del packing.', 'error'); return; }
+      window.open(url, '_blank');
     });
     document.getElementById('txtFechaServicioRegistro').value = this._fechaHoyISO();
 
@@ -1170,6 +1321,7 @@ const FormServicio = {
         totalViaje: v('txtTotalViaje'),
         tarifa1: v('txtTarifa1Servicio'),
         observacion: v('cboObservacionServicio'),
+        ubicacionPacking: v('txtUbicacionPacking'),
         tipoAbastecimiento: self._tipoAbastecimiento,
         reeferDry: v('cboReeferDry'),
         proveedor: v('cboProveedorServicio'),
