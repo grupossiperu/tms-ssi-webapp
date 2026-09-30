@@ -18,6 +18,7 @@ const FormServicio = {
 
   abrir: async function (filaEdicion) {
     const datos = await llamarBackend('datosIniciales_Servicio', {});
+    this._datos = datos;
     this._modoEdicion = !!filaEdicion;
     this._filaEdicion = filaEdicion || null;
     this._tipoAbastecimiento = '';
@@ -141,7 +142,6 @@ const FormServicio = {
               <input type="text" id="txtTarifa1Servicio" placeholder="0.00">
               <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
               <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
-              <label class="chk-gas"><input type="checkbox" id="chkGasificadoServicio"> Gasificado</label>
             </div>
           </div>
         </div>
@@ -189,7 +189,7 @@ const FormServicio = {
 
       <div class="seg">
         <div class="seg-tit"><span class="seg-num">5</span> Accesorios y control</div>
-        <div class="seg-grid">
+        <div class="seg-grid c3">
           <div class="campo">
           <label>Thermoregistro</label>
           <select id="cboThermoregistro"><option value="NO">NO</option><option value="SI">SI</option></select>
@@ -226,6 +226,14 @@ const FormServicio = {
           <label>Cantidad de barras (solo carga consolidado)</label>
           <input type="number" min="0" step="1" id="txtCantidadBarras" placeholder="0" disabled>
         </div>
+          <div class="campo">
+            <label>Observación</label>
+            <select id="cboObservacionServicio">
+              <option value=""></option>
+              <option value="GASIFICADO">GASIFICADO</option>
+              <option value="PREENFRIADO">PREENFRIADO</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -472,8 +480,7 @@ const FormServicio = {
     set('txtTotalViaje', (Number(f['TOTAL POR VIAJE']) || 0).toFixed(2));
     set('cboReeferDry', f['REEFER O DRY']);
     self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || 'CONTADO';
-    const chkGasificado = raiz.querySelector('#chkGasificadoServicio');
-    if (chkGasificado) chkGasificado.checked = String(f['GASIFICADO'] || '').trim().toUpperCase() === 'SI';
+    set('cboObservacionServicio', String(f['OBSERVACION'] || '').trim().toUpperCase());
 
     const esProveedorPrecargado = self._tipoAbastecimiento === 'PROVEEDOR';
     raiz.querySelector('#btnAbastecidoSi').classList.toggle('activo', esProveedorPrecargado);
@@ -608,6 +615,9 @@ const FormServicio = {
         campo('Barras consolidado', v('cboBarrasConsolidado')),
         campo('Cantidad', v('txtCantidadBarras'))
       ]) +
+      seccion('Observación', [
+        campo('Observación', v('cboObservacionServicio'))
+      ]) +
       seccion('Retiro', [
         campo('Depósito de retiro', v('cboDepositoRetiro')),
         campo('Fecha de retiro', vF('dtRetiroServicio')),
@@ -668,6 +678,28 @@ const FormServicio = {
 
   _wire: function (raiz) {
     const self = this;
+
+    // Al elegir un conductor se proponen el tracto y la carreta de su último
+    // servicio registrado. Ambos combos siguen editables a mano.
+    raiz.querySelector('#cboConductorServicio').addEventListener('change', function () {
+      const mapa = (self._datos && self._datos.ultimaUnidadPorConductor) || {};
+      const u = mapa[String(this.value || '').trim().toUpperCase()];
+      if (!u) return;
+      const asignar = function (id, placa) {
+        const sel = raiz.querySelector('#' + id);
+        const p = String(placa || '').trim().toUpperCase();
+        if (!sel || p === '' || p === '-') return;
+        if (!Array.from(sel.options).some(function (o) { return o.value === p; })) {
+          const op = document.createElement('option');
+          op.value = p; op.textContent = p;
+          sel.appendChild(op);
+        }
+        sel.value = p;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      asignar('cboPlacaTractoServicio', u.tracto);
+      asignar('cboPlacaCarretaServicio', u.carreta);
+    });
     document.getElementById('txtFechaServicioRegistro').value = this._fechaHoyISO();
 
     // Botones "+" para dar de alta conductor / placa tracto / placa carreta
@@ -1137,7 +1169,7 @@ const FormServicio = {
         montoDepositado: v('txtMontoDepositadoServicio'),
         totalViaje: v('txtTotalViaje'),
         tarifa1: v('txtTarifa1Servicio'),
-        gasificado: raiz.querySelector('#chkGasificadoServicio').checked ? 'SI' : 'NO',
+        observacion: v('cboObservacionServicio'),
         tipoAbastecimiento: self._tipoAbastecimiento,
         reeferDry: v('cboReeferDry'),
         proveedor: v('cboProveedorServicio'),
