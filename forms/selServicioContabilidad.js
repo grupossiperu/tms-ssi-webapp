@@ -39,6 +39,9 @@ const FormSelServicioContabilidad = {
             <option value="">Todos</option>
           </select>
         </div>
+        <div class="campo"><label>Booking</label>
+          <input type="text" id="filtroBooking" placeholder="Escriba el booking" autocomplete="off">
+        </div>
         <div class="campo"><label>Desde</label><input type="text" id="filtroDesde" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Hasta</label><input type="text" id="filtroHasta" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Datos</label>
@@ -225,13 +228,21 @@ const FormSelServicioContabilidad = {
       if (clientes.includes(valorActual)) select.value = valorActual;
     }
 
-    async function cargar() {
+    // soloFiltrar === true: vuelve a filtrar lo ya traído, sin ir al backend
+    // (se usa al escribir el booking, para que responda al instante).
+    async function cargar(soloFiltrar) {
       const filtros = {
         estado: raiz.querySelector('#filtroEstado').value.trim(),
         fechaDesde: raiz.querySelector('#filtroDesde').value.trim(),
         fechaHasta: raiz.querySelector('#filtroHasta').value.trim()
       };
-      let filas = await llamarBackend('listarServiciosPendientes', filtros);
+      let filas;
+      if (soloFiltrar === true && self._filasCache) {
+        filas = self._filasCache.slice();
+      } else {
+        filas = await llamarBackend('listarServiciosPendientes', filtros);
+        self._filasCache = filas.slice();
+      }
 
       actualizarOpcionesConductor(filas);
       actualizarOpcionesCliente(filas);
@@ -241,6 +252,9 @@ const FormSelServicioContabilidad = {
 
       const cliente = raiz.querySelector('#filtroCliente').value;
       if (cliente) filas = filas.filter(f => String(f['CLIENTE PARA FACTURACIÓN'] || '').trim() === cliente);
+
+      const booking = raiz.querySelector('#filtroBooking').value.trim().toUpperCase();
+      if (booking) filas = filas.filter(f => String(f['BOOKING'] || '').toUpperCase().indexOf(booking) !== -1);
 
       const datos = raiz.querySelector('#filtroDatos').value;
       if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
@@ -323,10 +337,22 @@ const FormSelServicioContabilidad = {
         });
         tbody.appendChild(tr);
       });
+
+      // Si el booking escrito ubica un solo servicio, queda seleccionado.
+      if (booking && filas.length === 1) tbody.querySelector('tr').click();
+      if (booking && filas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; color:#64748b; padding:14px;">No se encontró ningún servicio con ese booking.</td></tr>';
+      }
     }
 
     ['filtroEstado', 'filtroConductor', 'filtroCliente', 'filtroDesde', 'filtroHasta', 'filtroDatos'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', cargar);
+    });
+
+    let esperaBooking = null;
+    raiz.querySelector('#filtroBooking').addEventListener('input', function () {
+      clearTimeout(esperaBooking);
+      esperaBooking = setTimeout(function () { cargar(true); }, 250);
     });
 
     raiz.querySelector('#btnBorrarFiltro').addEventListener('click', function () {
@@ -336,6 +362,7 @@ const FormSelServicioContabilidad = {
       raiz.querySelector('#filtroDesde').value = '';
       raiz.querySelector('#filtroHasta').value = '';
       raiz.querySelector('#filtroDatos').value = '';
+      raiz.querySelector('#filtroBooking').value = '';
       cargar();
     });
 
