@@ -195,7 +195,11 @@ const FormTarifas = {
       const vistas = {};
 
       datosTarifas.forEach(function (t) {
-        const clave = [t['CLIENTE'], t['CIUDAD DE RETIRO'], t['DESTINO 1'], t['DESTINO 2'], t['CIUDAD DE DEVOLUCION'], t['TIPO']]
+        const norm2 = function (v) {
+          const s = String(v || '').trim().toUpperCase();
+          return (s === '' || s === '-') ? '' : s;
+        };
+        const clave = [t['CLIENTE'], t['CIUDAD DE RETIRO'], t['DESTINO 1'], norm2(t['DESTINO 2']), t['CIUDAD DE DEVOLUCION'], t['TIPO']]
           .map(function (v) { return String(v || '').trim().toUpperCase(); }).join('|');
         const vigente = !vistas[clave];
         vistas[clave] = true;
