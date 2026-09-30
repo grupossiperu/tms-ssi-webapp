@@ -489,6 +489,14 @@ const FormServicio = {
     self._tipoAbastecimiento = f['TIPO DE ABASTECIMIENTO'] || 'CONTADO';
     set('cboObservacionServicio', String(f['OBSERVACION'] || '').trim().toUpperCase());
     set('txtUbicacionPacking', f['UBICACION PACKING']);
+    if (!String(f['UBICACION PACKING'] || '').trim()) {
+      const mapaUbic = (self._datos && self._datos.ubicacionPorPacking) || {};
+      const ubic = mapaUbic[String(f['PACKING'] || '').trim().toUpperCase()];
+      if (ubic) {
+        set('txtUbicacionPacking', ubic);
+        raiz.querySelector('#txtUbicacionPacking').dataset.autocompletada = '1';
+      }
+    }
 
     const esProveedorPrecargado = self._tipoAbastecimiento === 'PROVEEDOR';
     raiz.querySelector('#btnAbastecidoSi').classList.toggle('activo', esProveedorPrecargado);
@@ -718,6 +726,9 @@ const FormServicio = {
       '.destacado .d{ border:2px solid #1c3a5e; border-radius:8px; padding:7px 9px; background:#f2f6fb; }' +
       '.destacado .l{ font-size:8.5px; font-weight:700; color:#1c3a5e; text-transform:uppercase; letter-spacing:.5px; }' +
       '.destacado .v{ font-size:16px; font-weight:800; margin-top:3px; line-height:1.15; word-break:break-word; }' +
+      '.destacado.con-obs{ grid-template-columns:1.15fr 1.25fr 0.9fr 1fr 1fr; }' +
+      '.destacado .d-obs{ border-color:#e8590c; background:#fff4e5; }' +
+      '.destacado .d-obs .l, .destacado .d-obs .v{ color:#b3470a; }' +
       '.medio{ display:grid; grid-template-columns:1fr 64mm; gap:8px; }' +
       '.der{ display:flex; flex-direction:column; }' +
       '.b{ border:1px solid #c7ced8; border-radius:6px; margin-bottom:8px; overflow:hidden; page-break-inside:avoid; }' +
@@ -754,12 +765,12 @@ const FormServicio = {
       '<header><div><h1>TRANSPORTES SSI S.A.C.</h1><p>Orden de servicio de transporte</p></div>' +
       '<div class="hdr-der"><div class="bk">Booking <b>' + (esc(d.booking) || '—') + '</b></div>' +
       '<div class="fi">Registro: ' + esc(d.fechaRegistro) + ' &nbsp;·&nbsp; Impreso: ' + esc(new Date().toLocaleString('es-PE')) + '</div></div></header>' +
-      (d.observacion ? '<div class="obs">⚠ OBSERVACIÓN: ' + esc(d.observacion) + '</div>' : '') +
-      '<div class="destacado">' +
+      '<div class="destacado' + (d.observacion ? ' con-obs' : '') + '">' +
         '<div class="d"><div class="l">Destino</div><div class="v">' + (esc(destinoTxt) || '&nbsp;') + '</div></div>' +
         '<div class="d"><div class="l">Packing</div><div class="v">' + (esc(d.packing) || '&nbsp;') + '</div></div>' +
         '<div class="d"><div class="l">Tipo de producto</div><div class="v">' + (esc(d.tipoProducto) || '&nbsp;') + '</div></div>' +
         '<div class="d"><div class="l">Tipo de tratamiento</div><div class="v">' + (esc(d.tipoTratamiento) || '&nbsp;') + '</div></div>' +
+        (d.observacion ? '<div class="d d-obs"><div class="l">Observación</div><div class="v">' + esc(d.observacion) + '</div></div>' : '') +
       '</div>' +
       '<div class="medio"><div class="izq">' +
         bloque('Datos generales', '<div class="g g3">' +
@@ -837,15 +848,21 @@ const FormServicio = {
     // (se puede cambiar a mano) y se puede abrir en Google Maps.
     const campoUbicacion = raiz.querySelector('#txtUbicacionPacking');
     campoUbicacion.addEventListener('input', function () { delete this.dataset.autocompletada; });
-    raiz.querySelector('#cboPackingServicio').addEventListener('change', function () {
+    const proponerUbicacion = function () {
       const mapa = (self._datos && self._datos.ubicacionPorPacking) || {};
-      const u = mapa[String(this.value || '').trim().toUpperCase()];
-      if (!u) return;
-      if (campoUbicacion.value.trim() === '' || campoUbicacion.dataset.autocompletada) {
+      const u = mapa[String(raiz.querySelector('#cboPackingServicio').value || '').trim().toUpperCase()];
+      const puedeCambiar = campoUbicacion.value.trim() === '' || !!campoUbicacion.dataset.autocompletada;
+      if (!puedeCambiar) return;
+      if (u) {
         campoUbicacion.value = u;
         campoUbicacion.dataset.autocompletada = '1';
+      } else if (campoUbicacion.dataset.autocompletada) {
+        campoUbicacion.value = '';
+        delete campoUbicacion.dataset.autocompletada;
       }
-    });
+    };
+    raiz.querySelector('#cboPackingServicio').addEventListener('change', proponerUbicacion);
+    raiz.querySelector('#cboPackingServicio').addEventListener('input', proponerUbicacion);
     raiz.querySelector('#btnVerUbicacionPacking').addEventListener('click', function () {
       const url = self._urlMapa(campoUbicacion.value);
       if (!url) { mostrarMensaje('Ingrese primero la ubicación del packing.', 'error'); return; }
