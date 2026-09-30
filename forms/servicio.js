@@ -725,8 +725,9 @@ const FormServicio = {
       '.destacado{ display:grid; grid-template-columns:1.25fr 1.35fr 1fr 1fr; gap:6px; margin-bottom:8px; }' +
       '.destacado .d{ border:2px solid #1c3a5e; border-radius:8px; padding:7px 9px; background:#f2f6fb; }' +
       '.destacado .l{ font-size:8.5px; font-weight:700; color:#1c3a5e; text-transform:uppercase; letter-spacing:.5px; }' +
-      '.destacado .v{ font-size:16px; font-weight:800; margin-top:3px; line-height:1.15; word-break:break-word; }' +
-      '.destacado.con-obs{ grid-template-columns:1.15fr 1.25fr 0.9fr 1fr 1fr; }' +
+      '.destacado .v{ font-size:16px; font-weight:800; margin-top:3px; line-height:1.15; word-break:normal; overflow-wrap:break-word; }' +
+      '.destacado.con-obs{ grid-template-columns:0.9fr 1.45fr 0.85fr 1.1fr 1fr; gap:5px; }' +
+      '.destacado.con-obs .v{ font-size:14px; }' +
       '.destacado .d-obs{ border-color:#e8590c; background:#fff4e5; }' +
       '.destacado .d-obs .l, .destacado .d-obs .v{ color:#b3470a; }' +
       '.medio{ display:grid; grid-template-columns:1fr 64mm; gap:8px; }' +
