@@ -21,7 +21,7 @@ const FormSobrecostos = {
         <div class="campo"><label>Estado</label>
           <select id="filtroEstadoSobrecosto">
             <option value="">Todos</option>
-            <option>PROGRAMADO</option><option>EN RUTA</option>
+            <option>PROGRAMADO</option><option>RETIRANDO</option><option>EN RUTA CLIENTE</option><option>EN CLIENTE</option><option>EN RUTA RETORNO</option><option>COLA PUERTO</option>
             <option>CULMINADO</option><option>FALSO FLETE</option>
             <option>CANCELADO</option>
           </select>
