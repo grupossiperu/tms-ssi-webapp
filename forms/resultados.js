@@ -29,7 +29,119 @@ const FormResultados = {
 
   ETAPAS: ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO'],
 
-  abrir: async function () {
+  _token: null,
+
+  /**
+   * Pantalla de acceso: usuario y contraseña (validados en el backend) y
+   * luego el código de 6 dígitos que llega por correo. Se pide cada vez que
+   * se abre el módulo.
+   */
+  abrir: function () {
+    const self = this;
+    self._token = null;
+    if (self._intervalo) { clearInterval(self._intervalo); self._intervalo = null; }
+    Object.keys(self._graficos).forEach(function (k) { try { self._graficos[k].destroy(); } catch (e) { /* no-op */ } });
+    self._graficos = {};
+
+    const html = `
+      <div class="res-login">
+        <div class="res-login-caja">
+          <div class="res-login-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="11" width="16" height="10" rx="2"></rect>
+              <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
+            </svg>
+          </div>
+          <h3>Acceso a Resultados</h3>
+          <p class="res-login-ayuda" id="resLoginAyuda">Ingrese su usuario y contraseña.</p>
+
+          <div id="resPaso1">
+            <div class="campo"><label>Usuario</label><input type="text" id="resUsuario" autocomplete="off" autocapitalize="characters"></div>
+            <div class="campo"><label>Contraseña</label><input type="password" id="resClave" autocomplete="off"></div>
+            <button class="boton-primario res-login-btn" id="resBtnIngresar" type="button">Continuar</button>
+          </div>
+
+          <div id="resPaso2" style="display:none;">
+            <div class="campo"><label>Código de verificación</label>
+              <input type="text" id="resCodigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" class="res-codigo" placeholder="••••••">
+            </div>
+            <button class="boton-primario res-login-btn" id="resBtnVerificar" type="button">Verificar e ingresar</button>
+            <button class="boton-secundario res-login-btn" id="resBtnReenviar" type="button">Volver a enviar código</button>
+          </div>
+
+          <div class="res-login-error" id="resLoginError"></div>
+        </div>
+      </div>`;
+
+    abrirPanel('Resultados', html, (raiz) => self._wireLogin(raiz), { clase: 'panel-res' });
+  },
+
+  _wireLogin: function (raiz) {
+    const self = this;
+    let desafio = null;
+    const error = function (txt) { raiz.querySelector('#resLoginError').textContent = txt || ''; };
+    const ayuda = function (txt) { raiz.querySelector('#resLoginAyuda').textContent = txt; };
+    const btnIngresar = raiz.querySelector('#resBtnIngresar');
+    const btnVerificar = raiz.querySelector('#resBtnVerificar');
+
+    const pedirCodigo = async function () {
+      const usuario = raiz.querySelector('#resUsuario').value.trim();
+      const clave = raiz.querySelector('#resClave').value;
+      if (!usuario || !clave) { error('Ingrese usuario y contraseña.'); return; }
+      error('');
+      btnIngresar.disabled = true; btnIngresar.textContent = 'Validando…';
+      try {
+        const r = await llamarBackend('resultadosLogin', { usuario: usuario, clave: clave });
+        if (!r || !r.ok) { error((r && r.mensaje) || 'No se pudo validar el acceso.'); return; }
+        desafio = r.desafio;
+        raiz.querySelector('#resPaso1').style.display = 'none';
+        raiz.querySelector('#resPaso2').style.display = '';
+        ayuda(r.mensaje + ' El código vence en 10 minutos.');
+        raiz.querySelector('#resCodigo').value = '';
+        raiz.querySelector('#resCodigo').focus();
+      } catch (e) {
+        error('Error de conexión: ' + e.message);
+      } finally {
+        btnIngresar.disabled = false; btnIngresar.textContent = 'Continuar';
+      }
+    };
+
+    const verificar = async function () {
+      const codigo = raiz.querySelector('#resCodigo').value.replace(/\D/g, '');
+      if (codigo.length !== 6) { error('El código tiene 6 dígitos.'); return; }
+      error('');
+      btnVerificar.disabled = true; btnVerificar.textContent = 'Verificando…';
+      try {
+        const r = await llamarBackend('resultadosVerificar', { desafio: desafio, codigo: codigo });
+        if (!r || !r.ok) {
+          error((r && r.mensaje) || 'Código no válido.');
+          if (r && r.vencido) {
+            raiz.querySelector('#resPaso2').style.display = 'none';
+            raiz.querySelector('#resPaso1').style.display = '';
+            raiz.querySelector('#resClave').value = '';
+            ayuda('Ingrese su usuario y contraseña.');
+          }
+          return;
+        }
+        self._token = r.token;
+        self._mostrarDashboard();
+      } catch (e) {
+        error('Error de conexión: ' + e.message);
+      } finally {
+        btnVerificar.disabled = false; btnVerificar.textContent = 'Verificar e ingresar';
+      }
+    };
+
+    btnIngresar.addEventListener('click', pedirCodigo);
+    btnVerificar.addEventListener('click', verificar);
+    raiz.querySelector('#resBtnReenviar').addEventListener('click', pedirCodigo);
+    raiz.querySelector('#resClave').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') pedirCodigo(); });
+    raiz.querySelector('#resUsuario').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') raiz.querySelector('#resClave').focus(); });
+    raiz.querySelector('#resCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') verificar(); });
+    setTimeout(function () { const u = raiz.querySelector('#resUsuario'); if (u) u.focus(); }, 50);
+  },
+
+  _mostrarDashboard: function () {
     const html = `
       <div class="res-barra">
         <div class="campo"><label>Período</label>
@@ -73,7 +185,7 @@ const FormResultados = {
         <div class="res-card ancho3"><h3>Detalle de viajes en curso</h3><div id="resTablaCurso"></div></div>
       </div>`;
 
-    abrirPanel('Resultados', html, (raiz) => this._wire(raiz), { clase: 'panel-res' });
+    actualizarPanel('Resultados', html, (raiz) => this._wire(raiz));
   },
 
   _cargarChartJs: function () {
@@ -107,6 +219,7 @@ const FormResultados = {
     // Actualización automática cada 60 s mientras el módulo esté abierto.
     self._intervalo = setInterval(function () {
       if (!document.body.contains(raiz) || !raiz.querySelector('#resKpis')) {
+        self._token = null;
         clearInterval(self._intervalo);
         self._intervalo = null;
         Object.keys(self._graficos).forEach(function (k) { try { self._graficos[k].destroy(); } catch (e) { /* no-op */ } });
@@ -122,10 +235,16 @@ const FormResultados = {
     const etiqueta = raiz.querySelector('#resHoraAct');
     if (!silencioso && etiqueta) etiqueta.textContent = 'Actualizando…';
     try {
-      const promesas = [llamarBackend('listarServiciosPendientes', {}), self._cargarChartJs()];
+      const promesas = [llamarBackend('resultadosDatos', { token: self._token }), self._cargarChartJs()];
       if (!self._tc) promesas.push(llamarBackend('validarTipoCambioRegistrado', {}).catch(function () { return null; }));
       const res = await Promise.all(promesas);
-      self._filas = Array.isArray(res[0]) ? res[0] : [];
+      if (!res[0] || !res[0].ok) {
+        if (self._intervalo) { clearInterval(self._intervalo); self._intervalo = null; }
+        mostrarMensaje((res[0] && res[0].mensaje) || 'La sesión de Resultados venció. Vuelva a ingresar.', 'error');
+        if (document.body.contains(raiz)) self.abrir();
+        return;
+      }
+      self._filas = Array.isArray(res[0].filas) ? res[0].filas : [];
       if (res[2] && res[2].tipoCambio) {
         self._tc = Number(res[2].tipoCambio) || 0;
         self._fechaTc = res[2].fecha ? self._ddmm(new Date(res[2].fecha)) : '';
