@@ -224,3 +224,21 @@
 @media (max-width: 760px){
   .res-kpis, .res-graficos, .res-pipeline{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ------------------------- Resultados: acceso ------------------------- */
+.res-login{ display: flex; justify-content: center; align-items: center; min-height: 420px; }
+.res-login-caja{
+  width: 100%; max-width: 380px; background: #fff; border: 1px solid #dde4ec; border-radius: 16px;
+  padding: 26px 26px 22px; box-shadow: 0 8px 24px rgba(20,42,68,.10); text-align: center;
+}
+.res-login-icono{
+  width: 56px; height: 56px; border-radius: 14px; margin: 0 auto 10px;
+  background: #e6f4ec; color: #157a41; display: flex; align-items: center; justify-content: center;
+}
+.res-login-icono svg{ width: 30px; height: 30px; }
+.res-login-caja h3{ margin: 0 0 4px; color: var(--azul-marino-oscuro); font-size: 1.15rem; }
+.res-login-ayuda{ margin: 0 0 16px; font-size: .82rem; color: #64748b; }
+.res-login-caja .campo{ text-align: left; }
+.res-login-btn{ width: 100%; margin-top: 6px; }
+.res-codigo{ text-align: center; font-size: 1.5rem !important; letter-spacing: 10px; font-weight: 800; }
+.res-login-error{ min-height: 18px; margin-top: 10px; color: var(--rojo-oscuro); font-size: .82rem; font-weight: 600; }
