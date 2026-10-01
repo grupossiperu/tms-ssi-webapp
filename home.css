@@ -6,13 +6,15 @@
 /* ---------------------------- Página principal ---------------------------- */
 .home-body{
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(1200px 500px at 10% -10%, #dfe8f4 0%, transparent 60%),
     radial-gradient(900px 400px at 110% 110%, #e3ecf6 0%, transparent 60%),
     var(--gris-fondo);
 }
 .home{
-  min-height: 100vh;
+  flex: 1;
   display: flex;
   flex-direction: column;
   padding: 18px 26px 22px;
