@@ -340,7 +340,7 @@ const FormResultados = {
     const horizontal = function (id, pares, color, formatoSoles) {
       dibujar(id, {
         type: 'bar',
-        data: { labels: pares.map(p => p[0]), datasets: [{ data: pares.map(p => Math.round(p[1] * 10) / 10), backgroundColor: color, borderRadius: 5 }] },
+        data: { labels: pares.map(p => p[0].length > 30 ? p[0].slice(0, 29) + '…' : p[0]), datasets: [{ data: pares.map(p => Math.round(p[1] * 10) / 10), backgroundColor: color, borderRadius: 5 }] },
         options: opcionesBase({
           indexAxis: 'y',
           scales: { x: { beginAtZero: true, ticks: { callback: v => formatoSoles ? 'S/ ' + Number(v).toLocaleString('es-PE') : v } }, y: { ticks: { font: { size: 10 } } } }
