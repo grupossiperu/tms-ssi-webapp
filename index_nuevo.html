@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Servicios - Transportes SSI S.A.C.</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="home.css">
+</head>
+<body class="home-body">
+
+<div id="franjaAvisosVencimiento" class="franja-avisos-vencimiento"><div class="contenido-avisos"><span id="textoAvisosVencimiento"></span><button type="button" id="btnCerrarAvisosVencimiento">Cerrar</button></div></div>
+
+<div class="home">
+
+  <!-- Barra superior -->
+  <header class="home-top">
+    <div class="home-marca">
+      <div class="home-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="1" y="7" width="14" height="10" rx="1"></rect>
+          <path d="M15 10h4l4 4v3h-8z"></path>
+          <circle cx="6" cy="18.5" r="2"></circle>
+          <circle cx="18" cy="18.5" r="2"></circle>
+        </svg>
+      </div>
+      <div>
+        <h1>TRANSPORTES SSI S.A.C.</h1>
+        <p>Sistema de Servicios de Transporte</p>
+      </div>
+    </div>
+    <div class="home-top-der">
+      <div class="home-reloj">
+        <span id="homeFecha"></span>
+        <strong id="homeHora"></strong>
+      </div>
+      <div class="home-ver-ocultar">
+        <button class="mini-boton mini-ver" id="btn-ver" title="Ver hojas de servicios">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+        <button class="mini-boton mini-ocultar" id="btn-ocultar" title="Ocultar hojas de servicios">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94"></path>
+            <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-2.16 3.19"></path>
+            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="estado-hojas" class="aviso-caja" style="display:none;"></div>
+
+  <main class="home-grid">
+
+    <!-- ===================== OPERACIONES ===================== -->
+    <section class="home-grupo">
+      <h2 class="home-grupo-tit"><span class="punto punto-azul"></span>Operaciones</h2>
+      <div class="home-tiles">
+
+        <button class="tile tile-destacado" id="btn-registrar-servicio">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="9" width="13" height="8"></rect>
+              <path d="M14 11h4l4 4v2h-8z"></path>
+              <circle cx="6" cy="19" r="2"></circle>
+              <circle cx="18" cy="19" r="2"></circle>
+              <path d="M3 6h8"></path>
+              <path d="M3 3h5"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Registrar servicio</strong><small>Programar un viaje nuevo</small></span>
+        </button>
+
+        <button class="tile" id="btn-consolidado-servicios">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 2l4 4-4 4"></path>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <path d="M7 22l-4-4 4-4"></path>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Acarreo</strong><small>Estados y seguimiento</small></span>
+        </button>
+
+        <button class="tile" id="btn-datos-viaje">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="3" width="15" height="13"></rect>
+              <path d="M16 8h4l3 3v5h-7z"></path>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Datos del viaje</strong><small>Detalle del recorrido</small></span>
+        </button>
+
+        <button class="tile" id="btn-control-combustible">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="22" x2="15" y2="22"></line>
+              <line x1="4" y1="9" x2="4" y2="22"></line>
+              <rect x="4" y="2" width="10" height="7" rx="1"></rect>
+              <path d="M4 9h10"></path>
+              <path d="M14 6h3a2 2 0 0 1 2 2v8a1.5 1.5 0 0 0 3 0V9l-2-2"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Control de combustible</strong><small>Abastecimientos reales</small></span>
+        </button>
+
+        <button class="tile" id="btn-servicios-culminados">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Servicios culminados</strong><small>Viajes cerrados</small></span>
+        </button>
+
+        <button class="tile" id="btn-documentos">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Documentos</strong><small>Vencimientos de flota</small></span>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ===================== FINANZAS ===================== -->
+    <section class="home-grupo">
+      <h2 class="home-grupo-tit"><span class="punto punto-verde"></span>Finanzas</h2>
+      <div class="home-tiles">
+
+        <button class="tile tile-resultados" id="btn-resultados">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3v18h18"></path>
+              <rect x="7" y="12" width="3" height="6"></rect>
+              <rect x="12" y="8" width="3" height="10"></rect>
+              <rect x="17" y="5" width="3" height="13"></rect>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Resultados</strong><small>Indicadores y dashboards</small></span>
+        </button>
+
+        <button class="tile" id="btn-consolidado-servicios-completar">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <path d="M8 12l2.5 2.5L16 9"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Consolidado de servicios</strong><small>Completar antes de facturar</small></span>
+        </button>
+
+        <button class="tile" id="btn-facturar">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"></path>
+              <path d="M15 2v5h5"></path>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="13" y2="17"></line>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Facturar</strong><small>Viajes, sobrecostos y balanza</small></span>
+        </button>
+
+        <button class="tile" id="btn-deposito">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="10" width="20" height="11" rx="2"></rect>
+              <path d="M12 3v10"></path>
+              <path d="M8 9l4 4 4-4"></path>
+              <path d="M2 14h20"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Depósito</strong><small>Montos a depositar</small></span>
+        </button>
+
+        <button class="tile" id="btn-sobrecostos">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Sobrecostos</strong><small>Estadías, falsos fletes y otros</small></span>
+        </button>
+
+        <button class="tile" id="btn-tipo-cambio">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1.3 1.6 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5"></path>
+              <path d="M12 6v2"></path>
+              <path d="M12 16v2"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Tipo de cambio</strong><small>Registro diario</small></span>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ===================== MAESTROS ===================== -->
+    <section class="home-grupo">
+      <h2 class="home-grupo-tit"><span class="punto punto-naranja"></span>Maestros</h2>
+      <div class="home-tiles">
+
+        <button class="tile" id="btn-tarifas">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4.8A2 2 0 0 1 4.8 2.8H12a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8z"></path>
+              <circle cx="7.5" cy="7.5" r="1.3"></circle>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Tarifas</strong><small>Precios por cliente y ruta</small></span>
+        </button>
+
+        <button class="tile" id="btn-lista-conductores">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M2 21v-1a7 7 0 0 1 7-7h0a7 7 0 0 1 7 7v1"></path>
+              <path d="M16 4.5a4 4 0 0 1 0 7.5"></path>
+              <path d="M22 21v-1a7 7 0 0 0-5-6.7"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Conductores</strong><small>Lista y datos</small></span>
+        </button>
+
+        <button class="tile" id="btn-gestionar-peajes">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12h18"></path>
+              <path d="M3 12l4-4"></path>
+              <path d="M3 12l4 4"></path>
+              <path d="M21 12l-4-4"></path>
+              <path d="M21 12l-4 4"></path>
+              <line x1="12" y1="3" x2="12" y2="21"></line>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Peajes</strong><small>Costos por destino</small></span>
+        </button>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Contenedor único de paneles/modales (SPA, sin recarga de página) -->
+<div id="contenedor-panel"></div>
+
+<!-- Núcleo -->
+<script src="app.js"></script>
+
+<!-- Un archivo por cada UserForm original, sin fusionar -->
+<script src="forms/accesoServicios.js"></script>
+<script src="forms/tipoCambio.js"></script>
+<script src="forms/servicio.js"></script>
+<script src="forms/selServicioContabilidad.js"></script>
+<script src="forms/consolidadoServicio.js"></script>
+<script src="forms/serviciosCulminados.js"></script>
+<script src="forms/consolidadoServicios.js"></script>
+<script src="forms/datosViaje.js"></script>
+<script src="forms/sobrecostos.js"></script>
+<script src="forms/seleccionSobrecosto.js"></script>
+<script src="forms/registroSobrecosto.js"></script>
+<script src="forms/selFacturaViaje.js"></script>
+<script src="forms/facturaViaje.js"></script>
+<script src="forms/facturaSobrecosto.js"></script>
+<script src="forms/facturaBalanza.js"></script>
+<script src="forms/peajes.js"></script>
+<script src="forms/conductores.js"></script>
+<script src="forms/tarifas.js"></script>
+<script src="forms/deposito.js"></script>
+<script src="forms/documentos.js"></script>
+<script src="forms/controlCombustible.js"></script>
+<script src="forms/resultados.js"></script>
+
+</body>
+</html>
