@@ -270,8 +270,9 @@ const FormConsolidadoServicio = {
 
       <div class="pie">
         <div class="tot"><span>Total por viaje</span><b id="pieTotalViaje">S/ 0.00</b></div>
-        <div class="tot" id="pieDifCaja"><span id="pieDifTitulo">Diferencia</span><b id="pieDiferencia">S/ 0.00</b></div>
+        <div class="tot" title="Monto depositado + depósitos adicionales confirmados"><span>Monto depositado</span><b id="pieDepositado">S/ 0.00</b></div>
         <div class="tot"><span>Monto sustentado</span><b id="pieSustentado">S/ 0.00</b></div>
+        <div class="tot" id="pieDifCaja"><span id="pieDifTitulo">Diferencia</span><b id="pieDiferencia">S/ 0.00</b></div>
         <span class="esp"></span>
         <span class="faltan" id="pieFaltan"></span>
         <button class="boton-secundario" id="btnInicioConsolidado">Cancelar</button>
@@ -372,6 +373,7 @@ const FormConsolidadoServicio = {
       caja.classList.toggle('pos', dif > 0.004);
       caja.classList.toggle('neg', dif < -0.004);
       raiz.querySelector('#pieSustentado').textContent = q('txtSustentadoConsol').value || 'S/ 0.00';
+      raiz.querySelector('#pieDepositado').textContent = q('txtTotalDepositadoConsol').value || 'S/ 0.00';
     }
 
     function pintar(input, valor) {
