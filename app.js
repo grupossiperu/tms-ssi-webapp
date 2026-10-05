@@ -41,8 +41,22 @@ async function llamarBackend(accion, datos) {
     throw new Error('Error de red al llamar a ' + accion);
   }
 
-  return respuesta.json();
+  // Si Apps Script responde una página HTML de error (cuota, timeout), json() falla sin explicar nada.
+  const texto = await respuesta.text();
+  try {
+    return JSON.parse(texto);
+  } catch (e) {
+    throw new Error('El servidor no respondió correctamente (' + accion + '). Intente de nuevo en unos segundos.');
+  }
 }
+
+// Cualquier error de red o del servidor que un formulario no capture se avisa al usuario.
+window.addEventListener('unhandledrejection', function (ev) {
+  const msg = ev.reason && ev.reason.message ? ev.reason.message : 'Ocurrió un error inesperado.';
+  if (msg === 'API_URL no configurada') return;
+  ev.preventDefault();
+  mostrarMensaje(msg, 'error');
+});
 
 /* ============================ Panel / Modal ============================ */
 
@@ -144,6 +158,62 @@ function mostrarMensaje(texto, tipo) {
 
 function confirmar(texto) {
   return window.confirm(texto);
+}
+
+/* ============================ Utilidades compartidas ============================ */
+
+const MESES = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+
+/** Escapa texto para insertarlo en innerHTML o en atributos value="...". */
+function esc(t) {
+  return String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/** Convierte a Date un valor de la hoja: ISO, o texto dd/mm/yyyy. Devuelve null si no es fecha. */
+function _aFecha(v) {
+  if (v === null || v === undefined || v === '' || v === '-') return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v).trim());
+  const d = m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** dd/mm/yyyy. Si no es fecha reconocible devuelve valorVacio (por defecto '-'). */
+function formatoFecha(v, valorVacio) {
+  const d = _aFecha(v);
+  if (!d) return (v && v !== '-') ? String(v) : (valorVacio === undefined ? '-' : valorVacio);
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+}
+
+/** Nombre del mes (ENERO...) de un valor de fecha, o '' si no es fecha. */
+function mesDeFecha(v) {
+  const d = _aFecha(v);
+  return d ? MESES[d.getMonth() + 1] : '';
+}
+
+/**
+ * Conecta un botón que graba/envía: mientras la operación espera al servidor
+ * el botón queda deshabilitado, así un doble clic no la repite.
+ */
+function protegerClic(boton, fn) {
+  boton.addEventListener('click', async function (ev) {
+    if (boton.dataset.ocupado) return;
+    boton.dataset.ocupado = '1';
+    boton.disabled = true;
+    try {
+      await fn.call(this, ev);
+    } finally {
+      delete boton.dataset.ocupado;
+      boton.disabled = false;
+    }
+  });
+}
+
+/** Un resultado de carga es válido solo si existe y el backend no lo marcó como error. */
+function respuestaValida(r) {
+  return !!r && r.ok !== false;
 }
 
 /* ============================ Router HOME ============================ */
