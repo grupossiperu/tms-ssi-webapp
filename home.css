@@ -242,3 +242,40 @@
 .res-login-btn{ width: 100%; margin-top: 6px; }
 .res-codigo{ text-align: center; font-size: 1.5rem !important; letter-spacing: 10px; font-weight: 800; }
 .res-login-error{ min-height: 18px; margin-top: 10px; color: var(--rojo-oscuro); font-size: .82rem; font-weight: 600; }
+
+/* ---------------- Filtro de selección múltiple (forms/multiSelect.js) ---------------- */
+.ms { position: relative; min-width: 150px; }
+.ms-boton {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border: 1.5px solid #c7ced8; border-radius: 8px; background: #fff;
+  font-size: .9rem; font-family: inherit; color: var(--gris-texto); cursor: pointer; text-align: left;
+}
+.ms-boton .ms-texto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
+.ms.ms-activo .ms-boton { border-color: var(--azul-marino); background: #eef4fb; color: var(--azul-marino-oscuro); font-weight: 700; }
+.ms-flecha { color: #64748b; font-size: .8rem; }
+.ms-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 2000; min-width: 240px; max-width: 340px;
+  background: #fff; border: 1px solid #c7ced8; border-radius: 10px; box-shadow: 0 10px 28px rgba(20,42,68,.18); padding: 8px;
+}
+.ms-buscar { width: 100%; padding: 6px 8px !important; border: 1.5px solid #dde3ea; border-radius: 7px; font-size: .85rem; margin-bottom: 6px; }
+.ms-lista { max-height: 240px; overflow-y: auto; }
+.ms-op { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: .82rem; font-weight: 500 !important; color: var(--gris-texto) !important; cursor: pointer; margin: 0 !important; }
+.ms-op:hover { background: #f1f5f9; }
+.ms-op input { width: auto !important; margin: 0; }
+.ms-vacio { color: #94a3b8; font-size: .8rem; padding: 8px; text-align: center; }
+.ms-pie { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #eef2f6; }
+.ms-pie button { border: none; background: transparent; color: var(--azul-marino); font-weight: 700; font-size: .78rem; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.ms-pie button:hover { background: #eef4fb; }
+
+/* Estados del viaje (globales: Acarreo, Depósito, etc.) */
+.badge-estado { display: inline-block; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; background: #f1f5f9; color: #334155; }
+.est-programado { background: #e2e8f0; color: #334155; }
+.est-retirando { background: #fef3c7; color: #92400e; }
+.est-en-ruta-cliente, .est-en-ruta { background: #dbeafe; color: #1e40af; }
+.est-en-cliente { background: #ede9fe; color: #5b21b6; }
+.est-en-ruta-retorno { background: #cffafe; color: #155e75; }
+.est-cola-puerto { background: #ffedd5; color: #9a3412; }
+.est-culminado { background: #dcfce7; color: #166534; }
+.est-falso-flete { background: #fce7f3; color: #9d174d; }
+.est-reprogramado { background: #fef9c3; color: #854d0e; }
+.est-cancelado { background: #fee2e2; color: #991b1b; }
