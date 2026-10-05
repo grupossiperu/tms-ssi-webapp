@@ -41,10 +41,11 @@ const FormConsolidadoServicio = {
     const yaRegistrado = servicio['CONSOLIDADO REGISTRADO'] === true || String(servicio['CONSOLIDADO REGISTRADO']).toUpperCase() === 'TRUE';
     const req = ' <span class="req">*</span>';
     // Campo editable: c(etiqueta, id, valor, obligatorio, extraClase)
-    const c = function (etq, id, valor, obligatorio, clase) {
-      return '<div class="campo' + (clase ? ' ' + clase : '') + '"><label for="' + id + '">' + etq + (obligatorio ? req : '') +
-        '</label><input id="' + id + '" value="' + (valor === undefined ? '' : valor) + '" autocomplete="off"></div>';
+    const c = function (etq, id, valor, obligatorio, clase, bloqueado) {
+      return '<div class="campo' + (clase ? ' ' + clase : '') + (bloqueado ? ' calc' : '') + '"><label for="' + id + '">' + etq + (obligatorio ? req : '') +
+        '</label><input id="' + id + '" value="' + (valor === undefined ? '' : valor) + '" autocomplete="off"' + (bloqueado ? ' disabled' : '') + '></div>';
     };
+    const tieneDestino2 = cantidadViajes === 2;
     // Campo calculado (solo lectura)
     const k = function (etq, id, clase) {
       return '<div class="campo calc' + (clase ? ' ' + clase : '') + '"><label for="' + id + '">' + etq + '</label><input id="' + id + '" disabled></div>';
@@ -85,6 +86,25 @@ const FormConsolidadoServicio = {
         .panel-cons .faltan { font-size: .8rem; font-weight: 600; color: #b91c1c; }
         .panel-cons .faltan.ok { color: #166534; }
         .panel-cons .pie .esp { flex: 1; }
+        .panel-cons .campo.km-mal input { border-color: #dc2626; background: #fef2f2; }
+        .panel-cons .lbl-btn { display: flex !important; justify-content: space-between; align-items: center; gap: 6px; }
+        .panel-cons .btn-mini { border: 1px solid #1c3a5e; background: #fff; color: #1c3a5e; border-radius: 6px; font-size: .7rem; font-weight: 700; padding: 1px 8px; cursor: pointer; }
+        .panel-cons .btn-mini:hover { background: #1c3a5e; color: #fff; }
+        .panel-cons .btn-agregar { grid-column: 1 / -1; justify-self: start; border: 1.5px dashed #94a3b8; background: #f8fafc; color: #1c3a5e; border-radius: 8px; font-size: .8rem; font-weight: 700; padding: 6px 12px; cursor: pointer; margin-bottom: 10px; }
+        .panel-cons .btn-agregar:hover { border-color: #1c3a5e; background: #eef3f8; }
+        .panel-cons .tabla-mini { grid-column: 1 / -1; width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: .84rem; }
+        .panel-cons .tabla-mini th { text-align: left; font-size: .72rem; color: #1c3a5e; font-weight: 700; padding: 0 6px 4px 0; }
+        .panel-cons .tabla-mini td { padding: 0 6px 6px 0; vertical-align: middle; }
+        .panel-cons .tabla-mini input, .panel-cons .tabla-mini select { width: 100%; padding: 7px 9px; border: 1.5px solid #c7ced8; border-radius: 8px; font-size: .86rem; font-family: inherit; background: #fff; }
+        .panel-cons .tabla-mini .falta input { border-color: #dc2626; background: #fef2f2; }
+        .panel-cons .tabla-mini .tot-celda { font-weight: 700; color: #1c3a5e; white-space: nowrap; }
+        .panel-cons .btn-quitar { border: none; background: transparent; color: #b91c1c; font-size: 1.1rem; cursor: pointer; padding: 0 4px; }
+        .panel-cons .btn-quitar:disabled { visibility: hidden; }
+        .panel-cons .nota-campo { grid-column: 1 / -1; font-size: .76rem; color: #64748b; margin: -4px 0 10px; }
+        .panel-cons .nota-campo.alerta { color: #b45309; font-weight: 600; }
+        .panel-cons .lista-dep { grid-column: 1 / -1; font-size: .8rem; margin: -2px 0 10px; }
+        .panel-cons .lista-dep div { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; }
+        .panel-cons .lista-dep .pend { color: #b45309; }
         @media (max-width: 1100px) { .panel-cons .cols { grid-template-columns: 1fr; } }
         @media (max-width: 700px) { .panel-cons .g, .panel-cons .g.c3, .panel-cons .g.c6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .panel-cons .span2 { grid-column: auto; } }
       </style>
@@ -107,11 +127,9 @@ const FormConsolidadoServicio = {
               ${c('Fecha del servicio', 'txtFechaServicioConsol', esc(fechaServicio), true)}
               ${k('Mes', 'txtMesConsol')}
               ${k('Semana', 'txtSemanaConsol')}
-              <div class="campo calc"><label for="txtCodigoServicioConsol">Código</label><input id="txtCodigoServicioConsol" disabled placeholder="Se genera al grabar"></div>
-              ${c('Cliente para facturación', 'txtClienteFacturacionConsol', s('CLIENTE PARA FACTURACIÓN'), true)}
-              ${c('Cliente (consolidado)', 'cboClienteConsol', s('CLIENTE PARA FACTURACIÓN'), true)}
-              ${c('Empresa', 'txtEmpresaServicioConsol', s('EMPRESA QUE DIO EL SERVICIO'), true)}
-              ${c('Flota', 'txtFlotaConsol', 'PROPIO', true)}
+              <div class="campo"><label for="txtCodigoServicioConsol" class="lbl-btn"><span>Código${req}</span><button type="button" class="btn-mini" id="btnGenerarCodigoConsol" title="Día + mes + año + cliente + últimos 3 del booking">Generar</button></label><input id="txtCodigoServicioConsol" autocomplete="off" style="text-transform:uppercase"></div>
+              ${c('Cliente para facturación', 'txtClienteFacturacionConsol', s('CLIENTE PARA FACTURACIÓN'), true, 'span2')}
+              ${c('Empresa', 'txtEmpresaServicioConsol', s('EMPRESA QUE DIO EL SERVICIO'), true, 'span2')}
               ${c('Conductor', 'txtConductorConsol', s('CONDUCTOR'), true, 'span2')}
               ${c('Placa tracto', 'txtPlacaTractoConsol', s('PLACA TRACTO'), true)}
               ${c('Placa carreta', 'txtPlacaCarretaConsol', s('PLACA CARRETA'), true)}
@@ -123,17 +141,18 @@ const FormConsolidadoServicio = {
             <div class="g">
               ${c('Booking', 'txtBookingConsol', s('BOOKING'), true)}
               ${c('Contenedor', 'txtContenedorConsol', s('N° CONTENEDOR'), true)}
-              ${c('Tara', 'txtTaraConsol', '', true)}
               ${c('Tipo de carga', 'txtTipoCargaConsol', s('TIPO DE CARGA'), true)}
+              ${c('Cantidad de viajes', 'txtCantidadViajesConsol', cantidadViajes, true)}
               ${c('Tipo de producto', 'txtTipoProductoConsol', s('TIPO DE PRODUCTO'), true)}
               ${c('Tipo de tratamiento', 'txtTipoTratamientoConsol', s('TIPO DE TRATAMIENTO'), true, 'span2')}
-              ${c('Cantidad de viajes', 'txtCantidadViajesConsol', cantidadViajes, true)}
+              <div></div>
               ${c('Almacén de salida', 'txtAlmacenSalidaConsol', s('DEPOSITO DE RETIRO'), true)}
               ${c('Destino 1', 'txtDestino1Consol', s('DESTINO 1'), true)}
               ${c('Tarifa 1', 'txtTarifa1Consol', s('TARIFA 1'), true)}
               ${c('Almacén de llegada', 'txtAlmacenLlegadaConsol', s('DEPOSITO DE DEVOLUCION'), true)}
-              ${c('Destino 2', 'txtDestino2Consol', esc(destino2))}
-              ${c('Tarifa 2', 'txtTarifa2Consol', s('TARIFA 2'))}
+              ${c('Destino 2', 'txtDestino2Consol', esc(destino2), false, '', tieneDestino2)}
+              ${c('Tarifa 2', 'txtTarifa2Consol', s('TARIFA 2'), false, '', tieneDestino2)}
+              ${tieneDestino2 ? '<div class="nota-campo span2" style="grid-column:span 2;margin:0;align-self:center">Destino 2 y tarifa 2 vienen del registro del servicio.</div>' : ''}
             </div>
           </div>
 
@@ -142,11 +161,14 @@ const FormConsolidadoServicio = {
             <div class="g">
               ${c('N° de transferencia', 'txtNumeroTransferenciaConsol', '', true)}
               ${c('N° de viático', 'txtNumeroViaticoConsol', '', true)}
-              ${c('G.R. Transporte 1', 'txtGRTransporte1Consol', '', true)}
-              ${c('G.R. Cliente 1', 'txtGRCliente1Consol', '', true)}
-              <div class="span2"></div>
-              ${c('G.R. Transporte 2', 'txtGRTransporte2Consol')}
-              ${c('G.R. Cliente 2', 'txtGRCliente2Consol')}
+              ${c('Tara (kg)', 'txtTaraConsol', '', true)}
+              ${k('Peso bruto total (kg)', 'txtPesoBrutoTotalConsol')}
+              <div class="sub">Guías de remisión <span style="text-transform:none;font-weight:500">· por cada guía del cliente va una guía de transporte</span></div>
+              <table class="tabla-mini" id="tablaGuiasConsol">
+                <thead><tr><th>G.R. Transporte (GRT)${req}</th><th>G.R. Cliente (GRE)${req}</th><th style="width:150px">Peso bruto (kg)</th><th style="width:28px"></th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <button type="button" class="btn-agregar" id="btnAgregarGuiaConsol">+ Agregar guía</button>
             </div>
           </div>
 
@@ -160,6 +182,7 @@ const FormConsolidadoServicio = {
               ${c('Horómetro inicial', 'txtHrInicialConsol', '', true)}
               ${c('Horómetro final', 'txtHrFinalConsol', '', true)}
               <div class="campo calc"><label for="txtHrRecorridoConsol">Horas genset</label><input id="txtHrRecorridoConsol" disabled></div>
+              <div class="nota-campo" id="notaKmConsol">Buscando el KM final del viaje anterior de este tracto…</div>
             </div>
           </div>
         </div>
@@ -169,9 +192,13 @@ const FormConsolidadoServicio = {
             <div class="seg-tit"><span class="seg-num">5</span> Gastos del viaje (S/) <span class="nota">Lo depositado vs. lo gastado</span></div>
             <div class="g">
               ${c('Monto depositado', 'txtMontoDepositadoConsol', s('MONTO DEPOSITADO', 0), true)}
+              ${k('Depósitos adicionales', 'txtDepAdicionalesConsol')}
+              ${k('Total depositado', 'txtTotalDepositadoConsol', 'span2')}
+              <div class="lista-dep" id="listaDepAdicConsol"><span style="color:#64748b">Buscando depósitos adicionales…</span></div>
               ${c('Viático', 'txtViaticoConsol', s('VIATICO', 0), true)}
               ${c('Peaje', 'txtPeajeConsol', s('PEAJE', 0), true)}
               ${k('Peaje base imponible', 'txtPeajeBIConsol')}
+              <div></div>
               ${c('Peaje S.D.C.F.', 'txtPeajeSDCFConsol', 0)}
               ${c('Peaje adicional', 'txtPeajeAdicionalConsol', 0)}
               ${c('Cochera', 'txtCocheraConsol', s('COCHERA', 0), true)}
@@ -189,6 +216,7 @@ const FormConsolidadoServicio = {
               ${k('Bono + Dom. + Feriado', 'txtBonoTotalConsol')}
               ${k('Total por viaje', 'txtTotalViajeConsol')}
               ${k('Diferencia (dep. − total)', 'txtDiferenciaConsol')}
+              <div class="nota-campo" id="notaBonoConsol"></div>
             </div>
           </div>
 
@@ -196,28 +224,35 @@ const FormConsolidadoServicio = {
             <div class="seg-tit"><span class="seg-num">6</span> Combustible <span class="nota">Abastecimiento: ${s('TIPO DE ABASTECIMIENTO', '-')}</span></div>
             <div class="g">
               ${c('Precio de petróleo (S/ x gl)', 'txtPrecioPetroleoConsol', s('COSTO DEL PETRÓLEO X GALÓN', 0), true, 'span2')}
-              <div class="span2"></div>
+              <div class="nota-campo span2" style="grid-column:span 2;margin:0;align-self:center">Precio del abastecimiento inicial (viene del registro del servicio).</div>
               <div class="sub">Tracto</div>
               ${k('GL estimados', 'txtGLEstimadosTractoConsol')}
-              ${c('GL reales', 'txtGLTractoRealConsol', 0, true)}
-              ${k('Diferencia', 'txtDiferenciaTractoConsol')}
-              ${k('Petróleo tracto', 'txtPetroleoTractoConsol')}
-              ${c('Precio gl adicional', 'txtPrecioGalonTractoConsol', 0)}
-              ${c('GL adicional', 'txtGLAdicionalTractoConsol', 0)}
-              ${k('Total adicional', 'txtTotalAdicionalTracto')}
-              ${k('Petróleo tracto B.I.', 'txtPetroleoTractoBIConsol')}
+              ${c('GL abastecidos al inicio', 'txtGLTractoRealConsol', s('GL TRACTO', 0), true)}
+              ${k('GL recargas en ruta', 'txtGLRecargaTractoVista')}
+              ${k('Diferencia (est. − usado)', 'txtDiferenciaTractoConsol')}
+              ${k('Petróleo inicial', 'txtPetroleoTractoConsol')}
+              ${k('Petróleo inicial B.I.', 'txtPetroleoTractoBIConsol')}
+              ${k('Recargas tracto', 'txtTotalAdicionalTracto')}
+              ${k('Recargas tracto B.I.', 'txtTotalAdicionalBITracto')}
               <div class="sub">Generador (genset)</div>
               ${k('GL estimados', 'txtGLEstimadosGeneradorConsol')}
-              ${c('GL reales', 'txtGLGeneradorRealConsol', 0)}
-              ${k('Diferencia', 'txtDiferenciaGeneradorConsol')}
-              ${k('Petróleo generador', 'txtPetroleoGeneradorConsol')}
-              ${c('Precio gl adicional', 'txtPrecioGalonGensetConsol', 0)}
-              ${c('GL adicional', 'txtGLAdicionalGensetConsol', 0)}
-              ${k('Total adicional', 'txtTotalAdicionalGenerador')}
-              ${k('Petróleo generador B.I.', 'txtPetroleoGeneradorBIConsol')}
-              <div class="sub">Adicionales sin IGV</div>
-              ${k('Adic. tracto B.I.', 'txtTotalAdicionalBITracto', 'span2')}
-              ${k('Adic. generador B.I.', 'txtTotalAdicionalBIGenerador', 'span2')}
+              ${c('GL abastecidos al inicio', 'txtGLGeneradorRealConsol', s('GL GENERADOR', 0))}
+              ${k('GL recargas en ruta', 'txtGLRecargaGensetVista')}
+              ${k('Diferencia (est. − usado)', 'txtDiferenciaGeneradorConsol')}
+              ${k('Petróleo inicial', 'txtPetroleoGeneradorConsol')}
+              ${k('Petróleo inicial B.I.', 'txtPetroleoGeneradorBIConsol')}
+              ${k('Recargas genset', 'txtTotalAdicionalGenerador')}
+              ${k('Recargas genset B.I.', 'txtTotalAdicionalBIGenerador')}
+              <div class="sub">Recargas en ruta <span style="text-transform:none;font-weight:500">· cuando el conductor carga combustible fuera del abastecimiento inicial</span></div>
+              <table class="tabla-mini" id="tablaRecargasConsol">
+                <thead><tr><th>Lugar / grifo</th><th style="width:105px">Equipo</th><th style="width:85px">Galones</th><th style="width:95px">S/ x gl</th><th style="width:95px">Total</th><th style="width:28px"></th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <button type="button" class="btn-agregar" id="btnAgregarRecargaConsol">+ Agregar recarga</button>
+              <input type="hidden" id="txtPrecioGalonTractoConsol" value="0">
+              <input type="hidden" id="txtGLAdicionalTractoConsol" value="0">
+              <input type="hidden" id="txtPrecioGalonGensetConsol" value="0">
+              <input type="hidden" id="txtGLAdicionalGensetConsol" value="0">
             </div>
           </div>
 
@@ -251,17 +286,18 @@ const FormConsolidadoServicio = {
 
   _wire: function (raiz, servicio) {
     const self = this;
-    let glManualTracto = 0, glManualGenerador = 0;
     servicio = servicio || {};
+    const q = function (id) { return raiz.querySelector('#' + id); };
+    const dinero = function (n) { return 'S/ ' + (Number(n) || 0).toFixed(2); };
+    let depAdicionales = 0;
     raiz.querySelector('#txtGLEstimadosTractoConsol').value = servicio['GL TRACTO'] || 0;
     raiz.querySelector('#txtGLEstimadosGeneradorConsol').value = servicio['GL GENERADOR'] || 0;
 
-    // Campos obligatorios para un servicio CULMINADO. El código del
-    // servicio no va aquí: lo genera el backend al grabar.
+    // Campos obligatorios para un servicio CULMINADO.
     const OBLIGATORIOS = [
-      'txtClienteFacturacionConsol','txtCantidadViajesConsol','txtFlotaConsol','txtEmpresaServicioConsol',
+      'txtCodigoServicioConsol','txtClienteFacturacionConsol','txtCantidadViajesConsol','txtEmpresaServicioConsol',
       'txtConductorConsol','txtPlacaTractoConsol','txtPlacaCarretaConsol','txtTipoCargaConsol','txtDestino1Consol',
-      'cboClienteConsol','txtTarifa1Consol','txtAlmacenSalidaConsol','txtAlmacenLlegadaConsol',
+      'txtTarifa1Consol','txtAlmacenSalidaConsol','txtAlmacenLlegadaConsol',
       'txtFechaServicioConsol','txtMesConsol','txtTipoProductoConsol','txtTipoTratamientoConsol',
       'txtBookingConsol','txtContenedorConsol','txtTaraConsol','txtSemanaConsol','txtMontoDepositadoConsol',
       'txtNumeroTransferenciaConsol','txtNumeroViaticoConsol','txtGRTransporte1Consol','txtGRCliente1Consol',
@@ -274,7 +310,8 @@ const FormConsolidadoServicio = {
 
     function faltantes() {
       if (!esCulminado) return [];
-      return OBLIGATORIOS.filter(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; });
+      return OBLIGATORIOS.filter(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; })
+        .concat(guiasIncompletas().length ? ['__guias'] : []);
     }
     function actualizarFaltantes() {
       const lista = faltantes();
@@ -285,6 +322,9 @@ const FormConsolidadoServicio = {
       OBLIGATORIOS.forEach(function (id) {
         const campo = raiz.querySelector('#' + id).closest('.campo');
         if (campo) campo.classList.toggle('falta', marcarFaltantes && lista.indexOf(id) !== -1);
+      });
+      raiz.querySelectorAll('#tablaGuiasConsol td.req-celda').forEach(function (td) {
+        td.classList.toggle('falta', marcarFaltantes && esCulminado && td.querySelector('input').value.trim() === '');
       });
       return lista;
     }
@@ -320,11 +360,17 @@ const FormConsolidadoServicio = {
       const glEstGenerador = self._n(raiz.querySelector('#txtGLEstimadosGeneradorConsol').value);
       const precioPetroleo = self._n(raiz.querySelector('#txtPrecioPetroleoConsol').value);
 
-      const glRealTracto = glManualTracto;
-      const glRealGenerador = glManualGenerador;
+      const glRealTracto = self._n(q('txtGLTractoRealConsol').value);
+      const glRealGenerador = self._n(q('txtGLGeneradorRealConsol').value);
+      const glRecTracto = self._n(q('txtGLAdicionalTractoConsol').value);
+      const glRecGenset = self._n(q('txtGLAdicionalGensetConsol').value);
+      q('txtGLRecargaTractoVista').value = glRecTracto.toFixed(2);
+      q('txtGLRecargaGensetVista').value = glRecGenset.toFixed(2);
 
-      const difTracto = glEstTracto - glRealTracto;
-      const difGenerador = glEstGenerador - glRealGenerador;
+      // Diferencia = lo estimado − lo realmente usado (inicio + recargas).
+      // Negativa (roja) = se consumió más de lo estimado.
+      const difTracto = glEstTracto - (glRealTracto + glRecTracto);
+      const difGenerador = glEstGenerador - (glRealGenerador + glRecGenset);
       raiz.querySelector('#txtDiferenciaTractoConsol').value = difTracto.toFixed(2);
       raiz.querySelector('#txtDiferenciaGeneradorConsol').value = difGenerador.toFixed(2);
       pintar(raiz.querySelector('#txtDiferenciaTractoConsol'), difTracto);
@@ -377,6 +423,8 @@ const FormConsolidadoServicio = {
     }
 
     function calcularTodo() {
+      calcularRecargas();
+      calcularCombustible();
       const bono = self._n(raiz.querySelector('#txtBonoConsol').value);
       const dominical = self._n(raiz.querySelector('#txtDominicalConsol').value);
       const feriado = self._n(raiz.querySelector('#txtFeriadoConsol').value);
@@ -399,7 +447,9 @@ const FormConsolidadoServicio = {
       raiz.querySelector('#txtPeajeBIConsol').value = 'S/ ' + (peaje / 1.18).toFixed(2);
       raiz.querySelector('#txtTotalViajeConsol').value = 'S/ ' + totalViaje.toFixed(2);
 
-      const montoDepositado = self._n(raiz.querySelector('#txtMontoDepositadoConsol').value);
+      const montoDepositado = self._n(raiz.querySelector('#txtMontoDepositadoConsol').value) + depAdicionales;
+      q('txtDepAdicionalesConsol').value = dinero(depAdicionales);
+      q('txtTotalDepositadoConsol').value = dinero(montoDepositado);
       const diferencia = montoDepositado - totalViaje;
       raiz.querySelector('#txtDiferenciaConsol').value = 'S/ ' + diferencia.toFixed(2);
       pintar(raiz.querySelector('#txtDiferenciaConsol'), diferencia);
@@ -423,14 +473,190 @@ const FormConsolidadoServicio = {
       raiz.querySelector('#' + id).addEventListener('input', calcularTodo);
     });
 
-    raiz.querySelector('#txtGLTractoRealConsol').addEventListener('change', function () {
-      glManualTracto = self._n(this.value);
+    ['txtGLTractoRealConsol','txtGLGeneradorRealConsol'].forEach(function (id) {
+      q(id).addEventListener('input', calcularTodo);
+    });
+
+    /* ---------------- Guías de remisión (varias) ---------------- */
+    const tbodyGuias = q('tablaGuiasConsol').querySelector('tbody');
+    function agregarGuia(grt, grc, peso) {
+      const primera = tbodyGuias.children.length === 0;
+      const tr = document.createElement('tr');
+      tr.className = 'guia-fila';
+      tr.innerHTML =
+        '<td class="req-celda"><input class="grt"' + (primera ? ' id="txtGRTransporte1Consol"' : '') + ' autocomplete="off" placeholder="Ej. T001-000123"></td>' +
+        '<td class="req-celda"><input class="grc"' + (primera ? ' id="txtGRCliente1Consol"' : '') + ' autocomplete="off" placeholder="Ej. EG07-000456"></td>' +
+        '<td><input class="peso" inputmode="decimal" autocomplete="off" placeholder="0"></td>' +
+        '<td><button type="button" class="btn-quitar" title="Quitar guía"' + (primera ? ' disabled' : '') + '>×</button></td>';
+      tr.querySelector('.grt').value = grt || '';
+      tr.querySelector('.grc').value = grc || '';
+      tr.querySelector('.peso').value = peso || '';
+      tr.querySelector('.btn-quitar').addEventListener('click', function () { tr.remove(); calcularPeso(); actualizarFaltantes(); });
+      tr.querySelector('.peso').addEventListener('input', calcularPeso);
+      tbodyGuias.appendChild(tr);
+      return tr;
+    }
+    function leerGuias() {
+      return Array.from(tbodyGuias.querySelectorAll('tr.guia-fila')).map(function (tr) {
+        return { grt: tr.querySelector('.grt').value.trim(), grc: tr.querySelector('.grc').value.trim(), peso: self._n(tr.querySelector('.peso').value) };
+      });
+    }
+    function guiasIncompletas() {
+      return leerGuias().filter(function (g) { return !g.grt || !g.grc; });
+    }
+    function calcularPeso() {
+      const total = leerGuias().reduce(function (acc, g) { return acc + g.peso; }, 0);
+      q('txtPesoBrutoTotalConsol').value = total ? total.toLocaleString('es-PE', { maximumFractionDigits: 2 }) + ' kg' : '0 kg';
+      return total;
+    }
+    q('btnAgregarGuiaConsol').addEventListener('click', function () {
+      const tr = agregarGuia();
+      tr.querySelector('.grt').focus();
+      actualizarFaltantes();
+    });
+    agregarGuia();
+    calcularPeso();
+
+    /* ---------------- Recargas de combustible en ruta ---------------- */
+    const tbodyRec = q('tablaRecargasConsol').querySelector('tbody');
+    function agregarRecarga() {
+      const tr = document.createElement('tr');
+      tr.className = 'rec-fila';
+      tr.innerHTML =
+        '<td><input class="lugar" autocomplete="off" placeholder="Ej. Grifo Repsol Ica"></td>' +
+        '<td><select class="equipo"><option value="TRACTO">Tracto</option><option value="GENSET">Genset</option></select></td>' +
+        '<td><input class="gal" inputmode="decimal" autocomplete="off" placeholder="0"></td>' +
+        '<td><input class="precio" inputmode="decimal" autocomplete="off"></td>' +
+        '<td class="tot-celda">S/ 0.00</td>' +
+        '<td><button type="button" class="btn-quitar" title="Quitar recarga">×</button></td>';
+      tr.querySelector('.precio').value = q('txtPrecioPetroleoConsol').value || '';
+      tr.querySelector('.btn-quitar').addEventListener('click', function () { tr.remove(); calcularTodo(); });
+      tr.querySelectorAll('input, select').forEach(function (el) { el.addEventListener('input', calcularTodo); el.addEventListener('change', calcularTodo); });
+      tbodyRec.appendChild(tr);
+      return tr;
+    }
+    function leerRecargas() {
+      return Array.from(tbodyRec.querySelectorAll('tr.rec-fila')).map(function (tr) {
+        return {
+          lugar: tr.querySelector('.lugar').value.trim(), equipo: tr.querySelector('.equipo').value,
+          gal: self._n(tr.querySelector('.gal').value), precio: self._n(tr.querySelector('.precio').value), tr: tr
+        };
+      });
+    }
+    // Pasa la suma de recargas a los campos de "adicional" que ya usa el
+    // cálculo: galones totales y precio promedio ponderado por equipo.
+    function calcularRecargas() {
+      const acc = { TRACTO: { gal: 0, soles: 0 }, GENSET: { gal: 0, soles: 0 } };
+      leerRecargas().forEach(function (r) {
+        const total = r.gal * r.precio;
+        r.tr.querySelector('.tot-celda').textContent = dinero(total);
+        acc[r.equipo].gal += r.gal;
+        acc[r.equipo].soles += total;
+      });
+      q('txtGLAdicionalTractoConsol').value = acc.TRACTO.gal;
+      q('txtPrecioGalonTractoConsol').value = acc.TRACTO.gal ? (acc.TRACTO.soles / acc.TRACTO.gal) : 0;
+      q('txtGLAdicionalGensetConsol').value = acc.GENSET.gal;
+      q('txtPrecioGalonGensetConsol').value = acc.GENSET.gal ? (acc.GENSET.soles / acc.GENSET.gal) : 0;
+    }
+    q('btnAgregarRecargaConsol').addEventListener('click', function () {
+      agregarRecarga().querySelector('.lugar').focus();
       calcularTodo();
     });
-    raiz.querySelector('#txtGLGeneradorRealConsol').addEventListener('change', function () {
-      glManualGenerador = self._n(this.value);
-      calcularTodo();
+
+    /* ---------------- Código del servicio ---------------- */
+    // Formato: DDMMAA + 3 letras del cliente + últimos 3 caracteres del
+    // booking. Ej.: 130826NEW257 (13/08/2026, cliente NEW, booking ...257).
+    let codigoEditadoAMano = false;
+    function generarCodigo() {
+      const d = _aFecha(q('txtFechaServicioConsol').value.trim());
+      const cli = (q('txtClienteFacturacionConsol').value || '').toUpperCase().normalize('NFD').replace(/[^A-Z]/g, '');
+      const bk = (q('txtBookingConsol').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!d || !cli || !bk) return '';
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const aa = String(d.getFullYear()).slice(-2);
+      return dd + mm + aa + (cli + 'XXX').slice(0, 3) + bk.slice(-3);
+    }
+    function ponerCodigo(forzar) {
+      if (codigoEditadoAMano && !forzar) return;
+      const cod = generarCodigo();
+      q('txtCodigoServicioConsol').value = cod;
+      if (forzar) codigoEditadoAMano = false;
+      actualizarFaltantes();
+    }
+    q('btnGenerarCodigoConsol').addEventListener('click', function () {
+      ponerCodigo(true);
+      if (!q('txtCodigoServicioConsol').value) mostrarMensaje('Para generar el código completa la fecha, el cliente y el booking.', 'error');
     });
+    q('txtCodigoServicioConsol').addEventListener('input', function () { codigoEditadoAMano = true; });
+    ['txtFechaServicioConsol','txtClienteFacturacionConsol','txtBookingConsol'].forEach(function (id) {
+      q(id).addEventListener('change', function () { ponerCodigo(false); });
+    });
+
+    /* ---------------- KM inicial no puede ser mayor al final ---------------- */
+    function validarKm() {
+      const kmI = self._n(q('txtKmInicialConsol').value);
+      const kmF = self._n(q('txtKmFinalConsol').value);
+      const malo = q('txtKmInicialConsol').value.trim() !== '' && q('txtKmFinalConsol').value.trim() !== '' && kmI > kmF;
+      q('txtKmInicialConsol').closest('.campo').classList.toggle('km-mal', malo);
+      q('txtKmFinalConsol').closest('.campo').classList.toggle('km-mal', malo);
+      return !malo;
+    }
+    ['txtKmInicialConsol','txtKmFinalConsol'].forEach(function (id) { q(id).addEventListener('input', validarKm); });
+
+    /* ------- Datos de apoyo: bono, KM anterior y depósitos adicionales ------- */
+    async function cargarApoyo() {
+      const cuerpo = document.getElementById('cuerpo-panel');
+      const r = await llamarBackend('datosParaConsolidado', {
+        fila: self._filaServicioOrigen,
+        placa: q('txtPlacaTractoConsol').value,
+        fecha: q('txtFechaServicioConsol').value,
+        destino1: q('txtDestino1Consol').value,
+        destino2: q('txtDestino2Consol').value
+      });
+      if (!document.body.contains(raiz)) return;   // se cerró la ventana
+      const sinCambios = cuerpo && _serializarFormulario(cuerpo) === _snapshotFormulario;
+      const notaKm = q('notaKmConsol');
+      const notaBono = q('notaBonoConsol');
+      const listaDep = q('listaDepAdicConsol');
+      if (!r || r.ok === false) {
+        notaKm.textContent = 'No se pudo consultar el viaje anterior.';
+        listaDep.innerHTML = '<span style="color:#b91c1c">No se pudieron cargar los depósitos adicionales.</span>';
+        return;
+      }
+      // KM inicial = KM final del viaje anterior del mismo tracto
+      if (r.kmAnterior !== null && r.kmAnterior !== undefined) {
+        if (q('txtKmInicialConsol').value.trim() === '') q('txtKmInicialConsol').value = r.kmAnterior;
+        notaKm.textContent = 'KM inicial tomado del KM final del viaje anterior de este tracto' + (r.fechaKmAnterior ? ' (' + r.fechaKmAnterior + ')' : '') + ': ' + Number(r.kmAnterior).toLocaleString('es-PE') + ' km. No puede ser mayor que el KM final.';
+      } else {
+        notaKm.textContent = 'No hay un viaje anterior registrado para este tracto: escribe el KM inicial. No puede ser mayor que el KM final.';
+      }
+      // Bono por destino (BD_SERVICIOS)
+      if (self._n(q('txtBonoConsol').value) === 0 && r.bono1 > 0) q('txtBonoConsol').value = r.bono1;
+      const d2 = q('txtDestino2Consol').value.trim();
+      let txtBono = r.destino1Encontrado
+        ? 'Bono de ' + esc(q('txtDestino1Consol').value) + ' según la hoja BD_SERVICIOS: ' + dinero(r.bono1) + '.'
+        : 'El destino ' + esc(q('txtDestino1Consol').value) + ' no está en BD_SERVICIOS: escribe el bono.';
+      if (d2 && d2 !== '-') txtBono += ' Hay un segundo destino (' + esc(d2) + '): agrega su bono a mano' + (r.bono2 ? ' (referencia: ' + dinero(r.bono2) + ')' : '') + '.';
+      notaBono.innerHTML = txtBono;
+      notaBono.classList.toggle('alerta', !r.destino1Encontrado || (d2 && d2 !== '-'));
+      // Depósitos adicionales: solo suman los DEPOSITADOS
+      const deps = r.depositos || [];
+      depAdicionales = deps.filter(function (x) { return x.estado === 'DEPOSITADO'; }).reduce(function (a, x) { return a + (Number(x.monto) || 0); }, 0);
+      listaDep.innerHTML = deps.length
+        ? deps.map(function (x) {
+            const pend = x.estado !== 'DEPOSITADO';
+            return '<div' + (pend ? ' class="pend"' : '') + '><b>' + esc(x.motivo) + '</b><span>' + dinero(x.monto) + '</span><span>' + esc(x.estado) +
+              (pend ? (x.estado === 'RECHAZADO' ? ' · no suma' : ' · aún no depositado, no suma') : '') + '</span>' +
+              (x.observacion ? '<span style="color:#64748b">' + esc(x.observacion) + '</span>' : '') + '</div>';
+          }).join('') + '<div style="border:none;color:#64748b">Lo gastado con estos depósitos regístralo en Llanta, Peaje adicional u Otros.</div>'
+        : '<span style="color:#64748b">Este servicio no tiene depósitos adicionales.</span>';
+      calcularRecorridos();
+      validarKm();
+      calcularTodo();
+      actualizarFaltantes();
+      if (sinCambios) _refrescarSnapshotFormulario();
+    }
 
     function calcularMesSemana() {
       const d = _aFecha(raiz.querySelector('#txtFechaServicioConsol').value.trim());
@@ -478,7 +704,9 @@ const FormConsolidadoServicio = {
         marcarFaltantes = true;
         const lista = actualizarFaltantes();
         if (lista.length) {
-          const primero = raiz.querySelector('#' + lista[0]);
+          const primero = lista[0] === '__guias'
+            ? (tbodyGuias.querySelector('td.falta input') || q('txtGRTransporte1Consol'))
+            : raiz.querySelector('#' + lista[0]);
           primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
           if (!primero.disabled) primero.focus();
           mostrarMensaje('Faltan ' + lista.length + ' campo(s) obligatorio(s). Están marcados en rojo.', 'error');
@@ -486,19 +714,42 @@ const FormConsolidadoServicio = {
         }
       }
 
+      if (!validarKm()) {
+        q('txtKmInicialConsol').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        mostrarMensaje('El KM inicial no puede ser mayor que el KM final.', 'error');
+        return;
+      }
+
       const v = function (id) { return raiz.querySelector('#' + id).value; };
+      const guias = leerGuias().filter(function (g) { return g.grt || g.grc || g.peso; });
+      const guiaCol = function (i, campo) {
+        // Columnas fijas 1, 2 y 3 de la hoja; si hay más de 3 guías, la 3 junta el resto.
+        if (i < 2) return guias[i] ? guias[i][campo] : '';
+        return guias.slice(2).map(function (g) { return g[campo]; }).filter(Boolean).join(' / ');
+      };
+      const pesoTotal = calcularPeso();
+      const recargas = leerRecargas().filter(function (r) { return r.gal > 0; });
+      const kmRec = self._n(v('txtKmFinalConsol')) - self._n(v('txtKmInicialConsol'));
       const mapaColumnas = {
         'CLIENTE PARA FACTURACIÓN': v('txtClienteFacturacionConsol'), 'CANTIDAD DE VIAJES': v('txtCantidadViajesConsol'),
-        'FLOTA': v('txtFlotaConsol'), 'EMPRESA QUE DIO EL SERVICIO': v('txtEmpresaServicioConsol'),
+        'FLOTA': 'PROPIO', 'EMPRESA QUE DIO EL SERVICIO': v('txtEmpresaServicioConsol'),
         'CONDUCTOR': v('txtConductorConsol'), 'PLACA TRACTO': v('txtPlacaTractoConsol'), 'PLACA CARRETA': v('txtPlacaCarretaConsol'),
-        'TIPO DE CARGA': v('txtTipoCargaConsol'), 'DESTINO 1': v('txtDestino1Consol'), 'CLIENTE': v('cboClienteConsol'),
+        'TIPO DE CARGA': v('txtTipoCargaConsol'), 'DESTINO 1': v('txtDestino1Consol'), 'CLIENTE': v('txtClienteFacturacionConsol'),
         'TARIFA 1': v('txtTarifa1Consol'), 'DESTINO 2': v('txtDestino2Consol'), 'TARIFA 2': v('txtTarifa2Consol'),
         'ALMACEN DE SALIDA': v('txtAlmacenSalidaConsol'), 'ALMACEN DE LLEGADA': v('txtAlmacenLlegadaConsol'),
         'BOOKING': v('txtBookingConsol'), 'Nº CONTENEDOR': v('txtContenedorConsol'), 'TARA': v('txtTaraConsol'),
         'SEMANA': v('txtSemanaConsol'), 'MONTO DEPOSITADO': v('txtMontoDepositadoConsol'),
         'N° DE TRANSFERENCIA': v('txtNumeroTransferenciaConsol'), 'N° DE VIÁTICO': v('txtNumeroViaticoConsol'),
-        'G.R. TRANSPORTE 1': v('txtGRTransporte1Consol'), 'G.R. CLIENTE 1': v('txtGRCliente1Consol'),
-        'G.R. TRANSPORTE 2': v('txtGRTransporte2Consol'), 'G.R. CLIENTE 2': v('txtGRCliente2Consol'),
+        'G.R. TRANSPORTE 1': guiaCol(0, 'grt'), 'G.R. CLIENTE 1': guiaCol(0, 'grc'),
+        'G.R. TRANSPORTE 2': guiaCol(1, 'grt'), 'G.R. CLIENTE 2': guiaCol(1, 'grc'),
+        'G.R. TRANSPORTE 3': guiaCol(2, 'grt'), 'G.R. CLIENTE 3': guiaCol(2, 'grc'),
+        'GUIAS DETALLE': guias.map(function (g, i) { return (i + 1) + ') GRT ' + (g.grt || '-') + ' · GRE ' + (g.grc || '-') + ' · ' + g.peso + ' kg'; }).join(' ; '),
+        'PESO BRUTO TOTAL': pesoTotal,
+        'DEPOSITOS ADICIONALES': depAdicionales,
+        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · ' + r.equipo + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
+        'P. PETRÓLEO ADIC. TRACTO': self._n(v('txtPrecioGalonTractoConsol')).toFixed(2),
+        'P. PETRÓLEO ADIC. GENSED': self._n(v('txtPrecioGalonGensetConsol')).toFixed(2),
+        'KM RECORRIDO': kmRec > 0 ? kmRec : '',
         'VIATICO': v('txtViaticoConsol'), 'PEAJE': v('txtPeajeConsol'), 'PEAJE S.D.C.F.': v('txtPeajeSDCFConsol'),
         'PEAJE ADICIONAL': v('txtPeajeAdicionalConsol'), 'PEAJE BASE IMPONIBLE': v('txtPeajeBIConsol'),
         'LLANTA': v('txtLlantaConsol'), 'LAVADO': v('txtLavadoConsol'), 'BALANZA': v('txtBalanzaConsol'),
@@ -524,7 +775,7 @@ const FormConsolidadoServicio = {
 
       const resp = await llamarBackend('grabarConsolidado', {
         fechaServicio: v('txtFechaServicioConsol'),
-        codigoServicio: v('txtCodigoServicioConsol') || undefined,
+        codigoServicio: v('txtCodigoServicioConsol').trim().toUpperCase() || undefined,
         filaServicioOrigen: self._filaServicioOrigen, estadoOrigen: self._estadoOrigen,
         datos: mapaColumnas
       });
@@ -535,8 +786,10 @@ const FormConsolidadoServicio = {
     });
 
     calcularMesSemana();
+    ponerCodigo(true);
     calcularRecorridos();
     calcularTodo();
     actualizarFaltantes();
+    cargarApoyo();
   }
 };
