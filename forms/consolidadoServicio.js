@@ -23,106 +23,222 @@ const FormConsolidadoServicio = {
 
   abrir: async function (filaServicio, estadoOrigen) {
     const servicio = await llamarBackend('cargarDatosServicioParaConsolidado', { fila: filaServicio });
-    if (!servicio) { mostrarMensaje('No se pudo cargar el servicio.', 'error'); return; }
+    if (!respuestaValida(servicio) || !servicio || typeof servicio !== 'object') {
+      mostrarMensaje((servicio && servicio.mensaje) || 'No se pudo cargar el servicio.', 'error');
+      return;
+    }
 
     this._filaServicioOrigen = filaServicio;
     this._estadoOrigen = estadoOrigen;
 
+    const s = function (k, porDefecto) {
+      const v = servicio[k];
+      return esc(v === null || v === undefined || v === '' ? (porDefecto === undefined ? '' : porDefecto) : v);
+    };
     const destino2 = String(servicio['DESTINO 2'] || '').trim();
     const cantidadViajes = (destino2 !== '' && destino2 !== '-') ? 2 : 1;
+    const fechaServicio = formatoFecha(servicio['FECHA DE PROGRAMACION'], '');
+    const yaRegistrado = servicio['CONSOLIDADO REGISTRADO'] === true || String(servicio['CONSOLIDADO REGISTRADO']).toUpperCase() === 'TRUE';
+    const req = ' <span class="req">*</span>';
+    // Campo editable: c(etiqueta, id, valor, obligatorio, extraClase)
+    const c = function (etq, id, valor, obligatorio, clase) {
+      return '<div class="campo' + (clase ? ' ' + clase : '') + '"><label for="' + id + '">' + etq + (obligatorio ? req : '') +
+        '</label><input id="' + id + '" value="' + (valor === undefined ? '' : valor) + '" autocomplete="off"></div>';
+    };
+    // Campo calculado (solo lectura)
+    const k = function (etq, id, clase) {
+      return '<div class="campo calc' + (clase ? ' ' + clase : '') + '"><label for="' + id + '">' + etq + '</label><input id="' + id + '" disabled></div>';
+    };
 
     const html = `
-      <div class="fila-campos">
-        <div class="campo"><label>Cliente para facturación</label><input id="txtClienteFacturacionConsol" value="${servicio['CLIENTE PARA FACTURACIÓN']||''}"></div>
-        <div class="campo"><label>Cantidad de viajes</label><input id="txtCantidadViajesConsol" value="${cantidadViajes}"></div>
-        <div class="campo"><label>Flota</label><input id="txtFlotaConsol" value="PROPIO"></div>
-        <div class="campo"><label>Empresa</label><input id="txtEmpresaServicioConsol" value="${servicio['EMPRESA QUE DIO EL SERVICIO']||''}"></div>
-        <div class="campo"><label>Conductor</label><input id="txtConductorConsol" value="${servicio['CONDUCTOR']||''}"></div>
-        <div class="campo"><label>Placa tracto</label><input id="txtPlacaTractoConsol" value="${servicio['PLACA TRACTO']||''}"></div>
-        <div class="campo"><label>Placa carreta</label><input id="txtPlacaCarretaConsol" value="${servicio['PLACA CARRETA']||''}"></div>
-        <div class="campo"><label>Tipo de carga</label><input id="txtTipoCargaConsol" value="${servicio['TIPO DE CARGA']||''}"></div>
-        <div class="campo"><label>Destino 1</label><input id="txtDestino1Consol" value="${servicio['DESTINO 1']||''}"></div>
-        <div class="campo"><label>Cliente (facturación consolidado)</label><input id="cboClienteConsol"></div>
-        <div class="campo"><label>Tarifa 1</label><input id="txtTarifa1Consol" value="${servicio['TARIFA 1']||''}"></div>
-        <div class="campo"><label>Destino 2</label><input id="txtDestino2Consol" value="${destino2}"></div>
-        <div class="campo"><label>Tarifa 2</label><input id="txtTarifa2Consol" value="${servicio['TARIFA 2']||''}"></div>
-        <div class="campo"><label>Almacén de salida</label><input id="txtAlmacenSalidaConsol" value="${servicio['DEPOSITO DE RETIRO']||''}"></div>
-        <div class="campo"><label>Almacén de llegada</label><input id="txtAlmacenLlegadaConsol" value="${servicio['DEPOSITO DE DEVOLUCION']||''}"></div>
-        <div class="campo"><label>Booking</label><input id="txtBookingConsol" value="${servicio['BOOKING']||''}"></div>
-        <div class="campo"><label>Contenedor</label><input id="txtContenedorConsol" value="${servicio['N° CONTENEDOR']||''}"></div>
-        <div class="campo"><label>Tipo de producto</label><input id="txtTipoProductoConsol" value="${servicio['TIPO DE PRODUCTO']||''}"></div>
-        <div class="campo"><label>Tipo de tratamiento</label><input id="txtTipoTratamientoConsol" value="${servicio['TIPO DE TRATAMIENTO']||''}"></div>
-        <div class="campo"><label>Fecha del servicio</label><input id="txtFechaServicioConsol" placeholder="dd/mm/yyyy"></div>
-        <div class="campo"><label>Mes</label><input id="txtMesConsol" disabled></div>
-        <div class="campo"><label>Código del servicio</label><input id="txtCodigoServicioConsol" disabled></div>
-        <div class="campo"><label>Semana</label><input id="txtSemanaConsol" disabled></div>
-        <div class="campo"><label>Tara</label><input id="txtTaraConsol"></div>
-        <div class="campo"><label>N° de transferencia</label><input id="txtNumeroTransferenciaConsol"></div>
-        <div class="campo"><label>N° de viático</label><input id="txtNumeroViaticoConsol"></div>
-        <div class="campo"><label>G.R. Transporte 1</label><input id="txtGRTransporte1Consol"></div>
-        <div class="campo"><label>G.R. Cliente 1</label><input id="txtGRCliente1Consol"></div>
-        <div class="campo"><label>G.R. Transporte 2</label><input id="txtGRTransporte2Consol"></div>
-        <div class="campo"><label>G.R. Cliente 2</label><input id="txtGRCliente2Consol"></div>
+      <style>
+        .panel-modal.panel-cons { max-width: min(1400px, 97vw); }
+        .overlay-modal:has(.panel-cons) { padding: 16px 10px; }
+        .panel-cons .panel-body { max-height: calc(100vh - 110px); padding: 16px 22px 0; background: #f6f8fb; }
+        .panel-cons .cab { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; background: #fff; border: 1px solid #dbe2ea; border-left: 4px solid #1c3a5e; border-radius: 10px; padding: 10px 16px; margin-bottom: 14px; font-size: .85rem; color: #475569; }
+        .panel-cons .cab b { color: #1c3a5e; }
+        .panel-cons .cab .ruta { font-weight: 700; color: #1c3a5e; font-size: .95rem; }
+        .panel-cons .aviso { background: #fef3c7; color: #92400e; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: .85rem; font-weight: 600; }
+        .panel-cons .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; }
+        .panel-cons .seg { border: 1px solid #dbe2ea; border-radius: 10px; margin: 0 0 14px; background: #fff; overflow: hidden; }
+        .panel-cons .seg-tit { background: #eef3f8; color: #1c3a5e; font-weight: 700; font-size: .78rem; letter-spacing: .4px; text-transform: uppercase; padding: 8px 14px; border-bottom: 1px solid #dbe2ea; display: flex; align-items: center; gap: 8px; }
+        .panel-cons .seg-num { background: #1c3a5e; color: #fff; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; }
+        .panel-cons .seg-tit .nota { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; color: #64748b; }
+        .panel-cons .g { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 12px; padding: 12px 14px 2px; }
+        .panel-cons .g.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .panel-cons .g.c6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .panel-cons .span2 { grid-column: span 2; }
+        .panel-cons .campo { margin-bottom: 10px; }
+        .panel-cons .campo label { font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .panel-cons .campo input, .panel-cons .campo select { padding: 7px 9px; font-size: .86rem; }
+        .panel-cons .campo.calc input { background: #f1f5f9; color: #1c3a5e; font-weight: 700; border-color: #e2e8f0; }
+        .panel-cons .req { color: #dc2626; }
+        .panel-cons .campo.falta input, .panel-cons .campo.falta select { border-color: #dc2626; background: #fef2f2; }
+        .panel-cons .sub { grid-column: 1 / -1; font-size: .72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin: 2px 0 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0; }
+        .panel-cons .sub:first-child { border-top: none; padding-top: 0; }
+        .panel-cons .pie { position: sticky; bottom: 0; background: #fff; margin: 0 -22px; padding: 10px 22px; box-shadow: 0 -2px 10px rgba(0,0,0,.08); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .panel-cons .tot { display: flex; flex-direction: column; background: #f1f5f9; border-radius: 8px; padding: 5px 12px; min-width: 130px; }
+        .panel-cons .tot span { font-size: .68rem; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: .3px; }
+        .panel-cons .tot b { font-size: 1rem; color: #1c3a5e; }
+        .panel-cons .tot.pos { background: #dcfce7; } .panel-cons .tot.pos b { color: #166534; }
+        .panel-cons .tot.neg { background: #fee2e2; } .panel-cons .tot.neg b { color: #991b1b; }
+        .panel-cons .faltan { font-size: .8rem; font-weight: 600; color: #b91c1c; }
+        .panel-cons .faltan.ok { color: #166534; }
+        .panel-cons .pie .esp { flex: 1; }
+        @media (max-width: 1100px) { .panel-cons .cols { grid-template-columns: 1fr; } }
+        @media (max-width: 700px) { .panel-cons .g, .panel-cons .g.c3, .panel-cons .g.c6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .panel-cons .span2 { grid-column: auto; } }
+      </style>
 
-        <div class="campo"><label>Monto depositado</label><input id="txtMontoDepositadoConsol" value="${(servicio['MONTO DEPOSITADO']||0)}"></div>
-        <div class="campo"><label>Viático</label><input id="txtViaticoConsol" value="${servicio['VIATICO']||0}"></div>
-        <div class="campo"><label>Peaje</label><input id="txtPeajeConsol" value="${servicio['PEAJE']||0}"></div>
-        <div class="campo"><label>Peaje base imponible</label><input id="txtPeajeBIConsol" disabled></div>
-        <div class="campo"><label>Peaje S.D.C.F.</label><input id="txtPeajeSDCFConsol" value="0"></div>
-        <div class="campo"><label>Peaje adicional</label><input id="txtPeajeAdicionalConsol" value="0"></div>
-        <div class="campo"><label>Cochera</label><input id="txtCocheraConsol" value="${servicio['COCHERA']||0}"></div>
-        <div class="campo"><label>Llanta</label><input id="txtLlantaConsol" value="0"></div>
-        <div class="campo"><label>Lavado</label><input id="txtLavadoConsol" value="0"></div>
-        <div class="campo"><label>Balanza</label><input id="txtBalanzaConsol" value="0"></div>
-        <div class="campo"><label>Otros</label><input id="txtOtrosConsol" value="0"></div>
-        <div class="campo"><label>¿Dominical?</label>
-          <select id="cboDominicalConsol"><option>NO</option><option>SI</option></select>
-        </div>
-        <div class="campo"><label>Dominical (S/.)</label><input id="txtDominicalConsol" value="0" disabled></div>
-        <div class="campo"><label>¿Feriado?</label>
-          <select id="cboFeriadoConsol"><option>NO</option><option>SI</option></select>
-        </div>
-        <div class="campo"><label>Feriado (S/.)</label><input id="txtFeriadoConsol" value="0" disabled></div>
-        <div class="campo"><label>Bono</label><input id="txtBonoConsol" value="0"></div>
-        <div class="campo"><label>Bono + Dom + Feriado</label><input id="txtBonoTotalConsol" disabled></div>
-        <div class="campo"><label>Total por viaje</label><input id="txtTotalViajeConsol" disabled></div>
-        <div class="campo"><label>Diferencia (depositado - total)</label><input id="txtDiferenciaConsol" disabled></div>
-
-        <div class="campo"><label>GL estimados tracto</label><input id="txtGLEstimadosTractoConsol" value="${servicio['GL TRACTO']||0}" disabled></div>
-        <div class="campo"><label>GL tracto real</label><input id="txtGLTractoRealConsol" value="0"></div>
-        <div class="campo"><label>Diferencia tracto</label><input id="txtDiferenciaTractoConsol" disabled></div>
-        <div class="campo"><label>GL estimados generador</label><input id="txtGLEstimadosGeneradorConsol" value="${servicio['GL GENERADOR']||0}" disabled></div>
-        <div class="campo"><label>GL generador real</label><input id="txtGLGeneradorRealConsol" value="0"></div>
-        <div class="campo"><label>Diferencia generador</label><input id="txtDiferenciaGeneradorConsol" disabled></div>
-        <div class="campo"><label>Precio de petróleo</label><input id="txtPrecioPetroleoConsol" value="0"></div>
-        <div class="campo"><label>Petróleo tracto</label><input id="txtPetroleoTractoConsol" disabled></div>
-        <div class="campo"><label>Petróleo tracto B.I.</label><input id="txtPetroleoTractoBIConsol" disabled></div>
-        <div class="campo"><label>Petróleo generador</label><input id="txtPetroleoGeneradorConsol" disabled></div>
-        <div class="campo"><label>Petróleo generador B.I.</label><input id="txtPetroleoGeneradorBIConsol" disabled></div>
-        <div class="campo"><label>Precio galón adicional tracto</label><input id="txtPrecioGalonTractoConsol" value="0"></div>
-        <div class="campo"><label>GL adicional tracto</label><input id="txtGLAdicionalTractoConsol" value="0"></div>
-        <div class="campo"><label>Total adicional tracto</label><input id="txtTotalAdicionalTracto" disabled></div>
-        <div class="campo"><label>Total adicional tracto B.I.</label><input id="txtTotalAdicionalBITracto" disabled></div>
-        <div class="campo"><label>Precio galón adicional genset</label><input id="txtPrecioGalonGensetConsol" value="0"></div>
-        <div class="campo"><label>GL adicional genset</label><input id="txtGLAdicionalGensetConsol" value="0"></div>
-        <div class="campo"><label>Total adicional generador</label><input id="txtTotalAdicionalGenerador" disabled></div>
-        <div class="campo"><label>Total adicional generador B.I.</label><input id="txtTotalAdicionalBIGenerador" disabled></div>
-
-        <div class="campo"><label>KM inicial</label><input id="txtKmInicialConsol"></div>
-        <div class="campo"><label>KM final</label><input id="txtKmFinalConsol"></div>
-        <div class="campo"><label>N° generador</label><input id="txtNumeroGeneradorConsol"></div>
-        <div class="campo"><label>Horómetro inicial</label><input id="txtHrInicialConsol"></div>
-        <div class="campo"><label>Horómetro final</label><input id="txtHrFinalConsol"></div>
-
-        <div class="campo"><label>Costo por viaje realizado</label><input id="txtCostoViajeRealizadoConsol" disabled></div>
-        <div class="campo"><label>Costo por viaje realizado B.I.</label><input id="txtCostoViajeRealizadoBI" disabled></div>
+      <div class="cab">
+        <span class="ruta">${s('DEPOSITO DE RETIRO', '-')} → ${s('DESTINO 1', '-')}${cantidadViajes === 2 ? ' → ' + esc(destino2) : ''} → ${s('DEPOSITO DE DEVOLUCION', '-')}</span>
+        <span>Cliente: <b>${s('CLIENTE PARA FACTURACIÓN', '-')}</b></span>
+        <span>Booking: <b>${s('BOOKING', '-')}</b></span>
+        <span>Contenedor: <b>${s('N° CONTENEDOR', '-')}</b></span>
+        <span>Conductor: <b>${s('CONDUCTOR', '-')}</b></span>
+        <span>Fecha: <b>${esc(fechaServicio || '-')}</b></span>
       </div>
-      <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
-        <button class="boton-secundario" id="btnInicioConsolidado">Inicio</button>
-        <button class="boton-primario" id="btnGrabarConsol">Grabar</button>
+      ${yaRegistrado ? '<div class="aviso">Este servicio ya tiene un consolidado registrado. Si vuelves a grabar se creará otro registro.</div>' : ''}
+
+      <div class="cols">
+        <div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">1</span> Servicio y cliente</div>
+            <div class="g">
+              ${c('Fecha del servicio', 'txtFechaServicioConsol', esc(fechaServicio), true)}
+              ${k('Mes', 'txtMesConsol')}
+              ${k('Semana', 'txtSemanaConsol')}
+              <div class="campo calc"><label for="txtCodigoServicioConsol">Código</label><input id="txtCodigoServicioConsol" disabled placeholder="Se genera al grabar"></div>
+              ${c('Cliente para facturación', 'txtClienteFacturacionConsol', s('CLIENTE PARA FACTURACIÓN'), true)}
+              ${c('Cliente (consolidado)', 'cboClienteConsol', s('CLIENTE PARA FACTURACIÓN'), true)}
+              ${c('Empresa', 'txtEmpresaServicioConsol', s('EMPRESA QUE DIO EL SERVICIO'), true)}
+              ${c('Flota', 'txtFlotaConsol', 'PROPIO', true)}
+              ${c('Conductor', 'txtConductorConsol', s('CONDUCTOR'), true, 'span2')}
+              ${c('Placa tracto', 'txtPlacaTractoConsol', s('PLACA TRACTO'), true)}
+              ${c('Placa carreta', 'txtPlacaCarretaConsol', s('PLACA CARRETA'), true)}
+            </div>
+          </div>
+
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">2</span> Carga, ruta y tarifa</div>
+            <div class="g">
+              ${c('Booking', 'txtBookingConsol', s('BOOKING'), true)}
+              ${c('Contenedor', 'txtContenedorConsol', s('N° CONTENEDOR'), true)}
+              ${c('Tara', 'txtTaraConsol', '', true)}
+              ${c('Tipo de carga', 'txtTipoCargaConsol', s('TIPO DE CARGA'), true)}
+              ${c('Tipo de producto', 'txtTipoProductoConsol', s('TIPO DE PRODUCTO'), true)}
+              ${c('Tipo de tratamiento', 'txtTipoTratamientoConsol', s('TIPO DE TRATAMIENTO'), true, 'span2')}
+              ${c('Cantidad de viajes', 'txtCantidadViajesConsol', cantidadViajes, true)}
+              ${c('Almacén de salida', 'txtAlmacenSalidaConsol', s('DEPOSITO DE RETIRO'), true)}
+              ${c('Destino 1', 'txtDestino1Consol', s('DESTINO 1'), true)}
+              ${c('Tarifa 1', 'txtTarifa1Consol', s('TARIFA 1'), true)}
+              ${c('Almacén de llegada', 'txtAlmacenLlegadaConsol', s('DEPOSITO DE DEVOLUCION'), true)}
+              ${c('Destino 2', 'txtDestino2Consol', esc(destino2))}
+              ${c('Tarifa 2', 'txtTarifa2Consol', s('TARIFA 2'))}
+            </div>
+          </div>
+
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">3</span> Documentos</div>
+            <div class="g">
+              ${c('N° de transferencia', 'txtNumeroTransferenciaConsol', '', true)}
+              ${c('N° de viático', 'txtNumeroViaticoConsol', '', true)}
+              ${c('G.R. Transporte 1', 'txtGRTransporte1Consol', '', true)}
+              ${c('G.R. Cliente 1', 'txtGRCliente1Consol', '', true)}
+              <div class="span2"></div>
+              ${c('G.R. Transporte 2', 'txtGRTransporte2Consol')}
+              ${c('G.R. Cliente 2', 'txtGRCliente2Consol')}
+            </div>
+          </div>
+
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">4</span> Kilometraje y horómetro</div>
+            <div class="g">
+              ${c('KM inicial', 'txtKmInicialConsol', '', true)}
+              ${c('KM final', 'txtKmFinalConsol', '', true)}
+              <div class="campo calc"><label for="txtKmRecorridoConsol">KM recorridos</label><input id="txtKmRecorridoConsol" disabled></div>
+              ${c('N° generador', 'txtNumeroGeneradorConsol', '', true)}
+              ${c('Horómetro inicial', 'txtHrInicialConsol', '', true)}
+              ${c('Horómetro final', 'txtHrFinalConsol', '', true)}
+              <div class="campo calc"><label for="txtHrRecorridoConsol">Horas genset</label><input id="txtHrRecorridoConsol" disabled></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">5</span> Gastos del viaje (S/) <span class="nota">Lo depositado vs. lo gastado</span></div>
+            <div class="g">
+              ${c('Monto depositado', 'txtMontoDepositadoConsol', s('MONTO DEPOSITADO', 0), true)}
+              ${c('Viático', 'txtViaticoConsol', s('VIATICO', 0), true)}
+              ${c('Peaje', 'txtPeajeConsol', s('PEAJE', 0), true)}
+              ${k('Peaje base imponible', 'txtPeajeBIConsol')}
+              ${c('Peaje S.D.C.F.', 'txtPeajeSDCFConsol', 0)}
+              ${c('Peaje adicional', 'txtPeajeAdicionalConsol', 0)}
+              ${c('Cochera', 'txtCocheraConsol', s('COCHERA', 0), true)}
+              ${c('Llanta', 'txtLlantaConsol', 0)}
+              ${c('Lavado', 'txtLavadoConsol', 0)}
+              ${c('Balanza', 'txtBalanzaConsol', 0)}
+              ${c('Otros', 'txtOtrosConsol', 0)}
+              <div></div>
+              <div class="sub">Bonos del conductor</div>
+              <div class="campo"><label for="cboDominicalConsol">¿Dominical?</label><select id="cboDominicalConsol"><option>NO</option><option>SI</option></select></div>
+              <div class="campo calc"><label for="txtDominicalConsol">Dominical</label><input id="txtDominicalConsol" value="0" disabled></div>
+              <div class="campo"><label for="cboFeriadoConsol">¿Feriado?</label><select id="cboFeriadoConsol"><option>NO</option><option>SI</option></select></div>
+              <div class="campo calc"><label for="txtFeriadoConsol">Feriado</label><input id="txtFeriadoConsol" value="0" disabled></div>
+              ${c('Bono', 'txtBonoConsol', 0)}
+              ${k('Bono + Dom. + Feriado', 'txtBonoTotalConsol')}
+              ${k('Total por viaje', 'txtTotalViajeConsol')}
+              ${k('Diferencia (dep. − total)', 'txtDiferenciaConsol')}
+            </div>
+          </div>
+
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">6</span> Combustible <span class="nota">Abastecimiento: ${s('TIPO DE ABASTECIMIENTO', '-')}</span></div>
+            <div class="g">
+              ${c('Precio de petróleo (S/ x gl)', 'txtPrecioPetroleoConsol', s('COSTO DEL PETRÓLEO X GALÓN', 0), true, 'span2')}
+              <div class="span2"></div>
+              <div class="sub">Tracto</div>
+              ${k('GL estimados', 'txtGLEstimadosTractoConsol')}
+              ${c('GL reales', 'txtGLTractoRealConsol', 0, true)}
+              ${k('Diferencia', 'txtDiferenciaTractoConsol')}
+              ${k('Petróleo tracto', 'txtPetroleoTractoConsol')}
+              ${c('Precio gl adicional', 'txtPrecioGalonTractoConsol', 0)}
+              ${c('GL adicional', 'txtGLAdicionalTractoConsol', 0)}
+              ${k('Total adicional', 'txtTotalAdicionalTracto')}
+              ${k('Petróleo tracto B.I.', 'txtPetroleoTractoBIConsol')}
+              <div class="sub">Generador (genset)</div>
+              ${k('GL estimados', 'txtGLEstimadosGeneradorConsol')}
+              ${c('GL reales', 'txtGLGeneradorRealConsol', 0)}
+              ${k('Diferencia', 'txtDiferenciaGeneradorConsol')}
+              ${k('Petróleo generador', 'txtPetroleoGeneradorConsol')}
+              ${c('Precio gl adicional', 'txtPrecioGalonGensetConsol', 0)}
+              ${c('GL adicional', 'txtGLAdicionalGensetConsol', 0)}
+              ${k('Total adicional', 'txtTotalAdicionalGenerador')}
+              ${k('Petróleo generador B.I.', 'txtPetroleoGeneradorBIConsol')}
+              <div class="sub">Adicionales sin IGV</div>
+              ${k('Adic. tracto B.I.', 'txtTotalAdicionalBITracto', 'span2')}
+              ${k('Adic. generador B.I.', 'txtTotalAdicionalBIGenerador', 'span2')}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <input type="hidden" id="txtCostoViajeRealizadoConsol">
+      <input type="hidden" id="txtCostoViajeRealizadoBI">
+
+      <div class="pie">
+        <div class="tot"><span>Total por viaje</span><b id="pieTotalViaje">S/ 0.00</b></div>
+        <div class="tot" id="pieDifCaja"><span>Diferencia</span><b id="pieDiferencia">S/ 0.00</b></div>
+        <div class="tot"><span>Costo por viaje</span><b id="pieCosto">S/ 0.00</b></div>
+        <div class="tot"><span>Costo B.I.</span><b id="pieCostoBI">S/ 0.00</b></div>
+        <span class="esp"></span>
+        <span class="faltan" id="pieFaltan"></span>
+        <button class="boton-secundario" id="btnInicioConsolidado">Cancelar</button>
+        <button class="boton-primario" id="btnGrabarConsol">Grabar consolidado</button>
       </div>`;
 
-    abrirPanel('Consolidado de Servicios - Detalle (Estado: ' + estadoOrigen + ')', html, (raiz) => this._wire(raiz));
+    abrirPanel('Completar consolidado · ' + esc(estadoOrigen), html, (raiz) => this._wire(raiz, servicio), { clase: 'panel-cons' });
   },
 
   _n: function (t) {
@@ -133,14 +249,70 @@ const FormConsolidadoServicio = {
     return isNaN(n) ? 0 : n;
   },
 
-  _wire: function (raiz) {
+  _wire: function (raiz, servicio) {
     const self = this;
     let glManualTracto = 0, glManualGenerador = 0;
+    servicio = servicio || {};
+    raiz.querySelector('#txtGLEstimadosTractoConsol').value = servicio['GL TRACTO'] || 0;
+    raiz.querySelector('#txtGLEstimadosGeneradorConsol').value = servicio['GL GENERADOR'] || 0;
+
+    // Campos obligatorios para un servicio CULMINADO. El código del
+    // servicio no va aquí: lo genera el backend al grabar.
+    const OBLIGATORIOS = [
+      'txtClienteFacturacionConsol','txtCantidadViajesConsol','txtFlotaConsol','txtEmpresaServicioConsol',
+      'txtConductorConsol','txtPlacaTractoConsol','txtPlacaCarretaConsol','txtTipoCargaConsol','txtDestino1Consol',
+      'cboClienteConsol','txtTarifa1Consol','txtAlmacenSalidaConsol','txtAlmacenLlegadaConsol',
+      'txtFechaServicioConsol','txtMesConsol','txtTipoProductoConsol','txtTipoTratamientoConsol',
+      'txtBookingConsol','txtContenedorConsol','txtTaraConsol','txtSemanaConsol','txtMontoDepositadoConsol',
+      'txtNumeroTransferenciaConsol','txtNumeroViaticoConsol','txtGRTransporte1Consol','txtGRCliente1Consol',
+      'txtViaticoConsol','txtPeajeConsol','txtCocheraConsol','txtGLEstimadosTractoConsol','txtGLTractoRealConsol',
+      'txtPrecioPetroleoConsol','txtKmInicialConsol','txtKmFinalConsol','txtNumeroGeneradorConsol',
+      'txtHrInicialConsol','txtHrFinalConsol','txtCostoViajeRealizadoConsol'
+    ];
+    const esCulminado = String(self._estadoOrigen || '').trim().toUpperCase() === 'CULMINADO';
+    let marcarFaltantes = false;
+
+    function faltantes() {
+      if (!esCulminado) return [];
+      return OBLIGATORIOS.filter(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; });
+    }
+    function actualizarFaltantes() {
+      const lista = faltantes();
+      const aviso = raiz.querySelector('#pieFaltan');
+      if (!esCulminado) { aviso.textContent = ''; }
+      else if (lista.length) { aviso.textContent = 'Faltan ' + lista.length + ' campo' + (lista.length === 1 ? '' : 's') + ' obligatorio' + (lista.length === 1 ? '' : 's'); aviso.classList.remove('ok'); }
+      else { aviso.textContent = 'Todo completo'; aviso.classList.add('ok'); }
+      OBLIGATORIOS.forEach(function (id) {
+        const campo = raiz.querySelector('#' + id).closest('.campo');
+        if (campo) campo.classList.toggle('falta', marcarFaltantes && lista.indexOf(id) !== -1);
+      });
+      return lista;
+    }
+
+    function calcularRecorridos() {
+      const kmI = self._n(raiz.querySelector('#txtKmInicialConsol').value);
+      const kmF = self._n(raiz.querySelector('#txtKmFinalConsol').value);
+      raiz.querySelector('#txtKmRecorridoConsol').value = (kmF > 0 && kmF >= kmI) ? (kmF - kmI).toFixed(0) + ' km' : '';
+      const hI = self._n(raiz.querySelector('#txtHrInicialConsol').value);
+      const hF = self._n(raiz.querySelector('#txtHrFinalConsol').value);
+      raiz.querySelector('#txtHrRecorridoConsol').value = (hF > 0 && hF >= hI) ? (hF - hI).toFixed(1) + ' h' : '';
+    }
+
+    function actualizarPie() {
+      raiz.querySelector('#pieTotalViaje').textContent = raiz.querySelector('#txtTotalViajeConsol').value || 'S/ 0.00';
+      const dif = self._n(raiz.querySelector('#txtDiferenciaConsol').value);
+      raiz.querySelector('#pieDiferencia').textContent = raiz.querySelector('#txtDiferenciaConsol').value || 'S/ 0.00';
+      const caja = raiz.querySelector('#pieDifCaja');
+      caja.classList.toggle('pos', dif > 0);
+      caja.classList.toggle('neg', dif < 0);
+      raiz.querySelector('#pieCosto').textContent = raiz.querySelector('#txtCostoViajeRealizadoConsol').value || 'S/ 0.00';
+      raiz.querySelector('#pieCostoBI').textContent = raiz.querySelector('#txtCostoViajeRealizadoBI').value || 'S/ 0.00';
+    }
 
     function pintar(input, valor) {
       if (valor > 0) input.style.background = '#c6efce';
       else if (valor < 0) input.style.background = '#ffc7ce';
-      else input.style.background = '#fff';
+      else input.style.background = '';
     }
 
     function calcularCombustible() {
@@ -201,6 +373,7 @@ const FormConsolidadoServicio = {
       const costoViajeBI = viatico + peajeBI + peajeSDCF + peajeAdicional + llanta + lavado + cochera + otros +
         totalAdicBITracto + totalAdicBIGenerador + bonoTotal + petroleoTractoBI + petroleoGeneradorBI;
       raiz.querySelector('#txtCostoViajeRealizadoBI').value = 'S/ ' + costoViajeBI.toFixed(2);
+      actualizarPie();
     }
 
     function calcularTodo() {
@@ -259,47 +432,56 @@ const FormConsolidadoServicio = {
       calcularTodo();
     });
 
-    raiz.querySelector('#txtFechaServicioConsol').addEventListener('change', function () {
-      const fecha = this.value.trim();
-      if (!fecha) return;
-      // Mes (equivalente a MonthName) y semana (equivalente a DatePart "ww").
-      // El CÓDIGO DEL SERVICIO lo genera el backend recién al grabar
-      // (generarCodigoServicioAutomatico), igual que en el VBA original:
-      // aquí solo se muestra el mes y la semana como referencia visual.
-      const partes = fecha.split(/[\/\-]/);
-      const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-      const mesNum = parseInt(partes[1], 10);
-      if (mesNum >= 1 && mesNum <= 12) raiz.querySelector('#txtMesConsol').value = meses[mesNum - 1];
-
-      const d = new Date(parseInt(partes[2],10), mesNum - 1, parseInt(partes[0],10));
-      if (!isNaN(d.getTime())) {
-        const inicioAnio = new Date(d.getFullYear(), 0, 1);
-        const semanaISO = Math.ceil((((d - inicioAnio) / 86400000) + inicioAnio.getDay() + 1) / 7);
-        raiz.querySelector('#txtSemanaConsol').value = 'SEMANA ' + semanaISO;
+    function calcularMesSemana() {
+      const d = _aFecha(raiz.querySelector('#txtFechaServicioConsol').value.trim());
+      if (!d) {
+        raiz.querySelector('#txtMesConsol').value = '';
+        raiz.querySelector('#txtSemanaConsol').value = '';
+        return;
       }
+      // Mes (equivalente a MonthName) y semana (equivalente a DatePart "ww").
+      // El CÓDIGO DEL SERVICIO lo genera el backend al grabar.
+      raiz.querySelector('#txtMesConsol').value = MESES[d.getMonth() + 1];
+      const inicioAnio = new Date(d.getFullYear(), 0, 1);
+      const semana = Math.ceil((((d - inicioAnio) / 86400000) + inicioAnio.getDay() + 1) / 7);
+      raiz.querySelector('#txtSemanaConsol').value = 'SEMANA ' + semana;
+    }
+    raiz.querySelector('#txtFechaServicioConsol').addEventListener('change', function () {
+      const d = _aFecha(this.value.trim());
+      if (d) this.value = formatoFecha(d);
+      calcularMesSemana();
+      actualizarFaltantes();
     });
 
-    raiz.querySelector('#btnInicioConsolidado').addEventListener('click', cerrarPanel);
+    ['txtKmInicialConsol','txtKmFinalConsol','txtHrInicialConsol','txtHrFinalConsol'].forEach(function (id) {
+      raiz.querySelector('#' + id).addEventListener('input', calcularRecorridos);
+    });
+    raiz.addEventListener('input', actualizarFaltantes);
+    raiz.addEventListener('change', actualizarFaltantes);
 
-    raiz.querySelector('#btnGrabarConsol').addEventListener('click', async function () {
+    raiz.querySelector('#btnInicioConsolidado').addEventListener('click', solicitarCierrePanel);
+
+    protegerClic(raiz.querySelector('#btnGrabarConsol'), async function () {
       const estado = String(self._estadoOrigen || '').trim().toUpperCase();
+
+      const fechaTxt = raiz.querySelector('#txtFechaServicioConsol').value.trim();
+      if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(fechaTxt) || !_aFecha(fechaTxt)) {
+        marcarFaltantes = true; actualizarFaltantes();
+        raiz.querySelector('#txtFechaServicioConsol').closest('.campo').classList.add('falta');
+        raiz.querySelector('#txtFechaServicioConsol').focus();
+        mostrarMensaje('Escribe la fecha del servicio como dd/mm/aaaa.', 'error');
+        return;
+      }
 
       // El botón "Culminado" de la pantalla anterior deja el ESTADO en 'CULMINADO'.
       if (estado === 'CULMINADO') {
-        const obligatorios = [
-          'txtClienteFacturacionConsol','txtCantidadViajesConsol','txtFlotaConsol','txtEmpresaServicioConsol',
-          'txtConductorConsol','txtPlacaTractoConsol','txtPlacaCarretaConsol','txtTipoCargaConsol','txtDestino1Consol',
-          'cboClienteConsol','txtTarifa1Consol','txtAlmacenSalidaConsol','txtAlmacenLlegadaConsol',
-          'txtCodigoServicioConsol','txtFechaServicioConsol','txtMesConsol','txtTipoProductoConsol','txtTipoTratamientoConsol',
-          'txtBookingConsol','txtContenedorConsol','txtTaraConsol','txtSemanaConsol','txtMontoDepositadoConsol',
-          'txtNumeroTransferenciaConsol','txtNumeroViaticoConsol','txtGRTransporte1Consol','txtGRCliente1Consol',
-          'txtViaticoConsol','txtPeajeConsol','txtCocheraConsol','txtGLEstimadosTractoConsol','txtGLTractoRealConsol',
-          'txtPrecioPetroleoConsol','txtKmInicialConsol','txtKmFinalConsol','txtNumeroGeneradorConsol',
-          'txtHrInicialConsol','txtHrFinalConsol','txtCostoViajeRealizadoConsol'
-        ];
-        const faltante = obligatorios.some(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; });
-        if (faltante) {
-          mostrarMensaje('Para servicios CULMINADOS debe completar todos los campos obligatorios.', 'error');
+        marcarFaltantes = true;
+        const lista = actualizarFaltantes();
+        if (lista.length) {
+          const primero = raiz.querySelector('#' + lista[0]);
+          primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (!primero.disabled) primero.focus();
+          mostrarMensaje('Faltan ' + lista.length + ' campo(s) obligatorio(s). Están marcados en rojo.', 'error');
           return;
         }
       }
@@ -347,11 +529,14 @@ const FormConsolidadoServicio = {
         datos: mapaColumnas
       });
 
-      if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
-      mostrarMensaje(resp.mensaje, 'exito');
+      if (!resp || !resp.ok) { mostrarMensaje((resp && resp.mensaje) || 'No se pudo grabar el consolidado.', 'error'); return; }
+      mostrarMensaje(resp.mensaje + (resp.codigoServicio ? ' Código: ' + resp.codigoServicio : ''), 'exito');
       cerrarPanel();
     });
 
+    calcularMesSemana();
+    calcularRecorridos();
     calcularTodo();
+    actualizarFaltantes();
   }
 };
