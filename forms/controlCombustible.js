@@ -23,7 +23,7 @@
  */
 const FormControlCombustible = {
 
-  ESTADOS: ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'CULMINADO', 'FALSO FLETE', 'CANCELADO'],
+  ESTADOS: ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'CULMINADO', 'FALSO FLETE', 'REPROGRAMADO', 'CANCELADO'],
 
   abrir: async function () {
     const opcionesEstado = this.ESTADOS.map(function (e) {
