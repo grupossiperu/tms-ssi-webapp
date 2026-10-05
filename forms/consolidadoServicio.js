@@ -215,7 +215,9 @@ const FormConsolidadoServicio = {
               ${c('Bono', 'txtBonoConsol', 0)}
               ${k('Bono + Dom. + Feriado', 'txtBonoTotalConsol')}
               ${k('Total por viaje', 'txtTotalViajeConsol')}
-              ${k('Diferencia (dep. − total)', 'txtDiferenciaConsol')}
+              ${k('Diferencia', 'txtDiferenciaConsol')}
+              ${k('Monto sustentado', 'txtSustentadoConsol', 'span2')}
+              <div class="nota-campo span2" style="grid-column:span 2;margin:0;align-self:center" id="notaDiferenciaConsol"></div>
               <div class="nota-campo" id="notaBonoConsol"></div>
             </div>
           </div>
@@ -237,7 +239,7 @@ const FormConsolidadoServicio = {
               <div></div>
               <div class="sub">Recargas</div>
               <table class="tabla-mini" id="tablaRecargasConsol">
-                <thead><tr><th>Lugar / grifo</th><th style="width:105px">Equipo</th><th style="width:85px">Galones</th><th style="width:95px">S/ x gl</th><th style="width:95px">Total</th><th style="width:28px"></th></tr></thead>
+                <thead><tr><th>Lugar / grifo</th><th style="width:95px">Equipo</th><th style="width:115px">Pagó</th><th style="width:75px">Galones</th><th style="width:85px">S/ x gl</th><th style="width:90px">Total</th><th style="width:28px"></th></tr></thead>
                 <tbody></tbody>
               </table>
               <button type="button" class="btn-agregar" id="btnAgregarRecargaConsol">+ Agregar recarga</button>
@@ -268,9 +270,8 @@ const FormConsolidadoServicio = {
 
       <div class="pie">
         <div class="tot"><span>Total por viaje</span><b id="pieTotalViaje">S/ 0.00</b></div>
-        <div class="tot" id="pieDifCaja"><span>Diferencia</span><b id="pieDiferencia">S/ 0.00</b></div>
-        <div class="tot"><span>Costo por viaje</span><b id="pieCosto">S/ 0.00</b></div>
-        <div class="tot"><span>Costo B.I.</span><b id="pieCostoBI">S/ 0.00</b></div>
+        <div class="tot" id="pieDifCaja"><span id="pieDifTitulo">Diferencia</span><b id="pieDiferencia">S/ 0.00</b></div>
+        <div class="tot"><span>Monto sustentado</span><b id="pieSustentado">S/ 0.00</b></div>
         <span class="esp"></span>
         <span class="faltan" id="pieFaltan"></span>
         <button class="boton-secundario" id="btnInicioConsolidado">Cancelar</button>
@@ -294,6 +295,7 @@ const FormConsolidadoServicio = {
     const q = function (id) { return raiz.querySelector('#' + id); };
     const dinero = function (n) { return 'S/ ' + (Number(n) || 0).toFixed(2); };
     let depAdicionales = 0;
+    let recargasTotal = 0, recargasConductor = 0;
     let depositosApoyo = [];
     function recalcularDepAdic() {
       depAdicionales = Array.from(raiz.querySelectorAll('.chk-dep-adic')).filter(function (c) { return c.checked; })
@@ -355,15 +357,21 @@ const FormConsolidadoServicio = {
       raiz.querySelector('#txtHrRecorridoConsol').value = (hF > 0 && hF >= hI) ? (hF - hI).toFixed(1) + ' h' : '';
     }
 
+    // Diferencia > 0: el conductor devuelve; < 0: hay que reintegrarle.
+    function textoDiferencia(dif) {
+      if (dif > 0.004) return 'Conductor devuelve';
+      if (dif < -0.004) return 'Reintegrar al conductor';
+      return 'Cuadrado';
+    }
     function actualizarPie() {
       raiz.querySelector('#pieTotalViaje').textContent = raiz.querySelector('#txtTotalViajeConsol').value || 'S/ 0.00';
       const dif = self._n(raiz.querySelector('#txtDiferenciaConsol').value);
-      raiz.querySelector('#pieDiferencia').textContent = raiz.querySelector('#txtDiferenciaConsol').value || 'S/ 0.00';
+      raiz.querySelector('#pieDiferencia').textContent = dinero(Math.abs(dif));
+      raiz.querySelector('#pieDifTitulo').textContent = textoDiferencia(dif);
       const caja = raiz.querySelector('#pieDifCaja');
-      caja.classList.toggle('pos', dif > 0);
-      caja.classList.toggle('neg', dif < 0);
-      raiz.querySelector('#pieCosto').textContent = raiz.querySelector('#txtCostoViajeRealizadoConsol').value || 'S/ 0.00';
-      raiz.querySelector('#pieCostoBI').textContent = raiz.querySelector('#txtCostoViajeRealizadoBI').value || 'S/ 0.00';
+      caja.classList.toggle('pos', dif > 0.004);
+      caja.classList.toggle('neg', dif < -0.004);
+      raiz.querySelector('#pieSustentado').textContent = q('txtSustentadoConsol').value || 'S/ 0.00';
     }
 
     function pintar(input, valor) {
@@ -457,20 +465,27 @@ const FormConsolidadoServicio = {
       const balanza = self._n(raiz.querySelector('#txtBalanzaConsol').value);
       const cochera = self._n(raiz.querySelector('#txtCocheraConsol').value);
       const otros = self._n(raiz.querySelector('#txtOtrosConsol').value);
-      const totalAdicTracto = self._n(raiz.querySelector('#txtTotalAdicionalTracto').value);
-      const totalAdicGenerador = self._n(raiz.querySelector('#txtTotalAdicionalGenerador').value);
+      // Gastos del conductor en ruta.
+      const gastos = viatico + peaje + peajeSDCF + peajeAdicional + cochera + llanta + lavado + balanza + otros;
 
-      const totalViaje = viatico + peaje + peajeSDCF + peajeAdicional + llanta + lavado + balanza + cochera + otros + totalAdicTracto + totalAdicGenerador;
+      // Total por viaje = gastos + todas las recargas de combustible + depósitos adicionales.
+      const totalViaje = gastos + recargasTotal + depAdicionales;
+      // Monto sustentado = lo que el conductor justifica con gastos (las recargas
+      // abastecidas con Repsol no las pagó él, por eso no cuentan).
+      const sustentado = gastos + recargasConductor;
 
       raiz.querySelector('#txtPeajeBIConsol').value = 'S/ ' + (peaje / 1.18).toFixed(2);
       raiz.querySelector('#txtTotalViajeConsol').value = 'S/ ' + totalViaje.toFixed(2);
+      q('txtSustentadoConsol').value = dinero(sustentado);
 
+      // Diferencia = lo que recibió (depósito + adicionales) − lo sustentado.
       const montoDepositado = self._n(raiz.querySelector('#txtMontoDepositadoConsol').value) + depAdicionales;
       q('txtDepAdicionalesConsol').value = dinero(depAdicionales);
       q('txtTotalDepositadoConsol').value = dinero(montoDepositado);
-      const diferencia = montoDepositado - totalViaje;
+      const diferencia = montoDepositado - sustentado;
       raiz.querySelector('#txtDiferenciaConsol').value = 'S/ ' + diferencia.toFixed(2);
       pintar(raiz.querySelector('#txtDiferenciaConsol'), diferencia);
+      q('notaDiferenciaConsol').textContent = textoDiferencia(diferencia) + (Math.abs(diferencia) > 0.004 ? ': ' + dinero(Math.abs(diferencia)) : '');
 
       calcularCombustible();
     }
@@ -543,11 +558,18 @@ const FormConsolidadoServicio = {
       tr.innerHTML =
         '<td><input class="lugar" autocomplete="off" placeholder="Ej. Grifo Repsol Ica"></td>' +
         '<td><select class="equipo"><option value="TRACTO">Tracto</option><option value="GENSET">Genset</option></select></td>' +
+        '<td><select class="pago" title="Si se abasteció con Repsol (crédito), el conductor no lo pagó y no se descuenta de lo depositado"><option value="CONDUCTOR">Conductor</option><option value="REPSOL">Repsol</option></select></td>' +
         '<td><input class="gal" inputmode="decimal" autocomplete="off" placeholder="0"></td>' +
         '<td><input class="precio" inputmode="decimal" autocomplete="off"></td>' +
         '<td class="tot-celda">S/ 0.00</td>' +
         '<td><button type="button" class="btn-quitar" title="Quitar recarga">×</button></td>';
       tr.querySelector('.precio').value = q('txtPrecioPetroleoConsol').value || '';
+      // Si el lugar dice Repsol, se propone "Pagó: Repsol" (se puede cambiar).
+      let pagoTocado = false;
+      tr.querySelector('.pago').addEventListener('change', function () { pagoTocado = true; });
+      tr.querySelector('.lugar').addEventListener('input', function () {
+        if (!pagoTocado) tr.querySelector('.pago').value = /REPSOL/i.test(this.value) ? 'REPSOL' : 'CONDUCTOR';
+      });
       tr.querySelector('.btn-quitar').addEventListener('click', function () { tr.remove(); calcularTodo(); });
       tr.querySelectorAll('input, select').forEach(function (el) { el.addEventListener('input', calcularTodo); el.addEventListener('change', calcularTodo); });
       tbodyRec.appendChild(tr);
@@ -556,7 +578,7 @@ const FormConsolidadoServicio = {
     function leerRecargas() {
       return Array.from(tbodyRec.querySelectorAll('tr.rec-fila')).map(function (tr) {
         return {
-          lugar: tr.querySelector('.lugar').value.trim(), equipo: tr.querySelector('.equipo').value,
+          lugar: tr.querySelector('.lugar').value.trim(), equipo: tr.querySelector('.equipo').value, pago: tr.querySelector('.pago').value,
           gal: self._n(tr.querySelector('.gal').value), precio: self._n(tr.querySelector('.precio').value), tr: tr
         };
       });
@@ -565,16 +587,19 @@ const FormConsolidadoServicio = {
     // cálculo: galones totales y precio promedio ponderado por equipo.
     function calcularRecargas() {
       const acc = { TRACTO: { gal: 0, soles: 0 }, GENSET: { gal: 0, soles: 0 } };
+      recargasTotal = 0; recargasConductor = 0;
       leerRecargas().forEach(function (r) {
         const total = r.gal * r.precio;
         r.tr.querySelector('.tot-celda').textContent = dinero(total);
         acc[r.equipo].gal += r.gal;
         acc[r.equipo].soles += total;
+        recargasTotal += total;
+        if (r.pago !== 'REPSOL') recargasConductor += total;
       });
-      const totRec = acc.TRACTO.soles + acc.GENSET.soles;
       q('resumenRecargasConsol').textContent = (acc.TRACTO.gal + acc.GENSET.gal) > 0
-        ? 'Total recargas: ' + dinero(totRec) + ' (B.I. ' + dinero(totRec / 1.18) + ') · tracto ' + acc.TRACTO.gal.toFixed(2) + ' gl ' + dinero(acc.TRACTO.soles) +
-          ' · genset ' + acc.GENSET.gal.toFixed(2) + ' gl ' + dinero(acc.GENSET.soles) + '. Se suman al total por viaje y al costo.'
+        ? 'Total recargas: ' + dinero(recargasTotal) + ' · tracto ' + acc.TRACTO.gal.toFixed(2) + ' gl ' + dinero(acc.TRACTO.soles) +
+          ' · genset ' + acc.GENSET.gal.toFixed(2) + ' gl ' + dinero(acc.GENSET.soles) + '. Pagadas por el conductor: ' + dinero(recargasConductor) +
+          ' (las de Repsol no se descuentan de lo depositado).'
         : 'Sin recargas.';
       q('txtGLAdicionalTractoConsol').value = acc.TRACTO.gal;
       q('txtPrecioGalonTractoConsol').value = acc.TRACTO.gal ? (acc.TRACTO.soles / acc.TRACTO.gal) : 0;
@@ -786,7 +811,7 @@ const FormConsolidadoServicio = {
         'GUIAS DETALLE': guias.map(function (g, i) { return (i + 1) + ') GRT ' + (g.grt || '-') + ' · GRE ' + (g.grc || '-') + ' · ' + g.peso + ' kg'; }).join(' ; '),
         'PESO BRUTO TOTAL': pesoTotal,
         'DEPOSITOS ADICIONALES': depAdicionales,
-        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · ' + r.equipo + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
+        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · ' + r.equipo + ' · pagó ' + r.pago + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
         'P. PETRÓLEO ADIC. TRACTO': self._n(v('txtPrecioGalonTractoConsol')).toFixed(2),
         'P. PETRÓLEO ADIC. GENSED': self._n(v('txtPrecioGalonGensetConsol')).toFixed(2),
         'KM RECORRIDO': kmRec > 0 ? kmRec : '',
