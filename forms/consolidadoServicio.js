@@ -294,6 +294,14 @@ const FormConsolidadoServicio = {
     const q = function (id) { return raiz.querySelector('#' + id); };
     const dinero = function (n) { return 'S/ ' + (Number(n) || 0).toFixed(2); };
     let depAdicionales = 0;
+    let depositosApoyo = [];
+    function recalcularDepAdic() {
+      depAdicionales = Array.from(raiz.querySelectorAll('.chk-dep-adic')).filter(function (c) { return c.checked; })
+        .reduce(function (acc, c) { return acc + (Number((depositosApoyo[Number(c.dataset.i)] || {}).monto) || 0); }, 0);
+    }
+    function depositosSinConfirmar() {
+      return Array.from(raiz.querySelectorAll('.chk-dep-adic')).filter(function (c) { return !c.checked; }).length;
+    }
     raiz.querySelector('#txtGLEstimadosTractoConsol').value = servicio['GL TRACTO'] || 0;
     raiz.querySelector('#txtGLEstimadosGeneradorConsol').value = servicio['GL GENERADOR'] || 0;
     // El abastecimiento inicial es lo estimado al registrar el servicio; lo
@@ -319,7 +327,8 @@ const FormConsolidadoServicio = {
     function faltantes() {
       if (!esCulminado) return [];
       return OBLIGATORIOS.filter(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; })
-        .concat(guiasIncompletas().length ? ['__guias'] : []);
+        .concat(guiasIncompletas().length ? ['__guias'] : [])
+        .concat(depositosSinConfirmar() ? ['__depositos'] : []);
     }
     function actualizarFaltantes() {
       const lista = faltantes();
@@ -654,18 +663,28 @@ const FormConsolidadoServicio = {
       if (d2 && d2 !== '-') txtBono += ' Hay un segundo destino (' + esc(d2) + '): agrega su bono a mano' + (r.bono2 ? ' (referencia: ' + dinero(r.bono2) + ')' : '') + '.';
       notaBono.innerHTML = txtBono;
       notaBono.classList.toggle('alerta', !r.destino1Encontrado || (d2 && d2 !== '-'));
-      // Depósitos adicionales: solo suman los DEPOSITADOS
+      // Depósitos adicionales del servicio (módulo Depósito). Cada uno se
+      // confirma con su check; solo los confirmados suman al depositado.
       const deps = r.depositos || [];
-      const suma = function (x) { return x.estado === 'DEPOSITADO' || x.estado === 'APROBADO'; };
-      depAdicionales = deps.filter(suma).reduce(function (a, x) { return a + (Number(x.monto) || 0); }, 0);
+      const confirmable = function (x) { return x.estado === 'DEPOSITADO' || x.estado === 'APROBADO'; };
       listaDep.innerHTML = deps.length
-        ? deps.map(function (x) {
-            const pend = !suma(x);
-            return '<div' + (pend ? ' class="pend"' : '') + '><b>' + esc(x.motivo) + '</b><span>' + dinero(x.monto) + '</span><span>' + esc(x.estado) +
-              (pend ? (x.estado === 'RECHAZADO' ? ' · rechazado, no suma' : ' · falta aprobación, no suma') : (x.estado === 'APROBADO' ? ' · aprobado, falta depositar' : '')) + '</span>' +
+        ? deps.map(function (x, i) {
+            const ok = confirmable(x);
+            const detalle = [x.medio, x.operacion ? 'N° ' + x.operacion : '', x.persona].filter(Boolean).map(esc).join(' · ');
+            return '<div' + (ok ? '' : ' class="pend"') + '>' +
+              (ok ? '<label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0;font-weight:400;color:inherit;"><input type="checkbox" class="chk-dep-adic" data-i="' + i + '" style="width:auto;margin:0;">' : '<span style="width:21px"></span>') +
+              '<b>' + esc(x.motivo) + '</b>' + (ok ? '</label>' : '') +
+              '<span>' + dinero(x.monto) + '</span>' +
+              '<span style="color:#64748b">' + detalle + '</span>' +
+              (ok ? (x.estado === 'APROBADO' ? '<span>aprobado, falta depositar</span>' : '') : '<span>' + esc(x.estado) + ' · no suma</span>') +
               (x.observacion ? '<span style="color:#64748b">' + esc(x.observacion) + '</span>' : '') + '</div>';
-          }).join('') + '<div style="border:none;color:#64748b">Lo gastado con estos depósitos regístralo en Llanta, Peaje adicional u Otros.</div>'
+          }).join('') + '<div style="border:none;color:#64748b">Marca cada depósito para confirmarlo. Lo gastado con ellos regístralo en Llanta, Peaje adicional u Otros.</div>'
         : '<span style="color:#64748b">Este servicio no tiene depósitos adicionales.</span>';
+      depositosApoyo = deps;
+      listaDep.querySelectorAll('.chk-dep-adic').forEach(function (chk) {
+        chk.addEventListener('change', function () { recalcularDepAdic(); calcularTodo(); actualizarFaltantes(); });
+      });
+      recalcularDepAdic();
       calcularRecorridos();
       validarKm();
       calcularTodo();
@@ -721,7 +740,13 @@ const FormConsolidadoServicio = {
         if (lista.length) {
           const primero = lista[0] === '__guias'
             ? (tbodyGuias.querySelector('td.falta input') || q('txtGRTransporte1Consol'))
+            : lista[0] === '__depositos' ? raiz.querySelector('.chk-dep-adic:not(:checked)')
             : raiz.querySelector('#' + lista[0]);
+          if (lista.indexOf('__depositos') !== -1 && lista.length === 1) {
+            primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            mostrarMensaje('Confirma con el check los depósitos adicionales del servicio (Gastos del viaje).', 'error');
+            return;
+          }
           primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
           if (!primero.disabled) primero.focus();
           mostrarMensaje('Faltan ' + lista.length + ' campo(s) obligatorio(s). Están marcados en rojo.', 'error');

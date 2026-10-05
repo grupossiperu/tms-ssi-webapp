@@ -11,19 +11,22 @@
  * antigua. Filtros: fechas, Cliente, Conductor y Estado (selección
  * múltiple), Booking, Depositado y Adicionales.
  *
- * Depósitos adicionales (imprevistos del viaje: llantas, policía, mal
- * cuadre de peajes, combustible, alimentación, otros): cada uno pasa por
- * Solicitado → Aprobado (gerencia) → Depositado, o Rechazado. Se ven por
- * servicio (botón en la columna Adicionales) y todos juntos en la pestaña
- * "Adicionales", con filtros y totales. Solo los adicionales DEPOSITADOS
- * se suman al total de adicionales del servicio.
+ * Depósitos adicionales (imprevistos del viaje): se registran directo,
+ * ya depositados (sin solicitud ni aprobación). Cada adicional lleva
+ * motivo, quién depositó y uno o varios depósitos (Yape o transferencia,
+ * con su N° y monto). Se ven por servicio (columna Adicionales) y todos
+ * juntos en la pestaña "Adicionales". Un adicional mal registrado se
+ * anula (deja de sumar). Los registros antiguos del flujo con aprobación
+ * (Solicitado/Aprobado) siguen mostrándose con sus botones.
  * -------------------------------------------------------------------------
  */
 const FormDeposito = {
 
-  MOTIVOS: ['LLANTAS', 'POLICIA / CONTROL', 'MAL CUADRE DE PEAJES', 'COMBUSTIBLE', 'ALIMENTACION', 'OTROS'],
-  ESTADOS_ADICIONAL: ['SOLICITADO', 'APROBADO', 'DEPOSITADO', 'RECHAZADO'],
+  MOTIVOS: ['LLANTAS', 'POLICIA / CONTROL', 'MAL CUADRE DE PEAJES', 'COMBUSTIBLE', 'VIATICO', 'MECANICO', 'COMPRA', 'OTROS'],
+  DEPOSITANTES: ['ADRIAN PAJARES', 'EDSON SANTOYO', 'JHONY FLORES'],
+  ESTADOS_ADICIONAL: ['DEPOSITADO', 'ANULADO', 'SOLICITADO', 'APROBADO', 'RECHAZADO'],
   MEDIOS: ['TRANSFERENCIA', 'YAPE', 'EFECTIVO'],
+  MEDIOS_NUEVOS: ['YAPE', 'TRANSFERENCIA'],
 
   abrir: async function () {
     const html = `
@@ -43,6 +46,19 @@ const FormDeposito = {
         .dep-badge.aprobado { background: #dbeafe; color: #1e40af; }
         .dep-badge.depositado { background: #dcfce7; color: #166534; }
         .dep-badge.rechazado { background: #fee2e2; color: #991b1b; }
+        .dep-badge.anulado { background: #e5e7eb; color: #4b5563; text-decoration: line-through; }
+        .dep-nuevo { background: #fff; border: 1px solid #dde4ec; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+        .dep-nuevo .fila1 { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 10px; margin-bottom: 8px; }
+        .dep-nuevo .campo { margin: 0; }
+        .dep-nuevo table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+        .dep-nuevo th { text-align: left; font-size: .74rem; color: #1c3a5e; padding: 0 8px 4px 0; }
+        .dep-nuevo td { padding: 0 8px 6px 0; }
+        .dep-nuevo td input, .dep-nuevo td select { width: 100%; padding: 7px 9px; border: 1.5px solid #c7ced8; border-radius: 8px; font-size: .86rem; font-family: inherit; }
+        .dep-nuevo .pie-nuevo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .dep-nuevo .btn-mas-dep { border: 1.5px dashed #94a3b8; background: #f8fafc; color: #1c3a5e; border-radius: 8px; font-size: .8rem; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+        .dep-nuevo .total-nuevo { font-weight: 700; color: #1c3a5e; margin-left: auto; }
+        .dep-nuevo .quitar-dep { border: none; background: transparent; color: #b91c1c; font-size: 1.1rem; cursor: pointer; }
+        .dep-bk { color: #1c3a5e; font-weight: 700; font-size: .7rem; margin-top: 2px; word-break: normal !important; overflow-wrap: normal !important; white-space: nowrap; }
         .dep-mini { padding: 3px 7px; border-radius: 6px; border: 1.5px solid #1c3a5e; background: #fff; color: #1c3a5e; font-weight: 700; font-size: .7rem; cursor: pointer; white-space: nowrap; }
         .dep-mini:hover { background: #1c3a5e; color: #fff; }
         .dep-mini.verde { border-color: #1f9d55; color: #157a41; }
@@ -97,14 +113,14 @@ const FormDeposito = {
         <div class="dep-wrap">
           <table class="tabla-lista dep-tabla" id="depTabla">
             <colgroup>
-              <col style="width:6%"><col style="width:6%"><col style="width:11%"><col style="width:12%"><col style="width:7.5%">
-              <col style="width:7.5%"><col style="width:9%"><col style="width:9%"><col style="width:6.5%"><col style="width:7%">
-              <col style="width:9%"><col style="width:5.5%"><col style="width:4%">
+              <col style="width:6%"><col style="width:9%"><col style="width:11%"><col style="width:11%"><col style="width:7.5%">
+              <col style="width:7.5%"><col style="width:8%"><col style="width:8%"><col style="width:6.5%"><col style="width:7%">
+              <col style="width:6.5%"><col style="width:8%"><col style="width:4%">
             </colgroup>
             <thead><tr>
               <th>Fecha</th><th>Cliente</th><th>Conductor / placa</th><th>Ruta</th><th>Retiro</th>
               <th>Estado unidad</th><th>Combustible</th><th>Peaje · viático · cochera</th><th>Total viaje</th><th>A depositar</th>
-              <th>Adicionales</th><th>Tarifa</th><th>Dep.</th>
+              <th>Tarifa</th><th>Adicionales</th><th>Dep.</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -127,12 +143,12 @@ const FormDeposito = {
         <div class="dep-wrap">
           <table class="tabla-lista dep-tabla" id="adTabla">
             <colgroup>
-              <col style="width:7%"><col style="width:13%"><col style="width:12%"><col style="width:9%"><col style="width:7%">
-              <col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:13%"><col style="width:14%">
+              <col style="width:7%"><col style="width:16%"><col style="width:13%"><col style="width:11%"><col style="width:7%">
+              <col style="width:10%"><col style="width:8%"><col style="width:15%"><col style="width:13%">
             </colgroup>
             <thead><tr>
-              <th>Solicitado</th><th>Servicio</th><th>Conductor / placa</th><th>Motivo</th><th>Monto</th>
-              <th>Solicitado por</th><th>Estado</th><th>Aprobado por</th><th>Depósito</th><th>Acciones</th>
+              <th>Fecha</th><th>Servicio</th><th>Conductor / placa</th><th>Motivo</th><th>Monto</th>
+              <th>Depositado por</th><th>Estado</th><th>Depósito</th><th>Acciones</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -289,7 +305,7 @@ const FormDeposito = {
         if (check === 'no' && dep) return false;
         const r = resumenDe(f._fila);
         if (filtroAdic === 'pendientes' && r.nPendientes === 0) return false;
-        if (filtroAdic === 'con' && r.n === 0) return false;
+        if (filtroAdic === 'con' && !adicionales.some(a => Number(a['FILA SERVICIO']) === Number(f._fila) && estadoAdic(a) === 'DEPOSITADO')) return false;
         return true;
       });
 
@@ -317,9 +333,9 @@ const FormDeposito = {
         const r = resumenDe(f._fila);
         const depositado = esVerdadero(f['DEPOSITADO']);
         // Ruta completa: ciudad de retiro → destino 1 → destinos adicionales.
-        const adicionales = (f['DESTINO 2'] && String(f['DESTINO 2']).trim() !== '-')
+        const destinosAdic = (f['DESTINO 2'] && String(f['DESTINO 2']).trim() !== '-')
           ? String(f['DESTINO 2']).split('/').map(function (x) { return x.trim(); }).filter(Boolean) : [];
-        const ruta = [f['CIUDAD DE RETIRO'], f['DESTINO 1']].concat(adicionales).filter(Boolean).map(esc).join(' → ');
+        const ruta = [f['CIUDAD DE RETIRO'], f['DESTINO 1']].concat(destinosAdic).filter(Boolean).map(esc).join(' → ');
         const tarifaBase = numero(f['TARIFA 1']);
         const tarifaAdic = numero(f['TARIFA 2']);
         const mon = mayus(f['MONEDA TARIFA 1']) === 'D' ? '$ ' : 'S/ ';
@@ -328,11 +344,14 @@ const FormDeposito = {
         const gl = numero(f['GL TRACTO']).toFixed(0) + ' gl tracto · ' + numero(f['GL GENERADOR']).toFixed(0) + ' gl genset';
 
         let adicHtml;
-        if (r.n === 0) {
+        const misAdic = adicionales.filter(a => Number(a['FILA SERVICIO']) === Number(f._fila));
+        const adicDep = misAdic.filter(a => estadoAdic(a) === 'DEPOSITADO');
+        const totalAdic = adicDep.reduce((s2, a) => s2 + numero(a['MONTO']), 0);
+        if (!misAdic.length) {
           adicHtml = '<button type="button" class="dep-mini btn-adic">+ Adicional</button>';
         } else {
-          adicHtml = (r.depositado > 0 ? '<div>' + soles(r.depositado) + ' dep.</div>' : '') +
-            (r.nPendientes > 0 ? '<div><span class="dep-badge solicitado">' + r.nPendientes + ' pendiente' + (r.nPendientes > 1 ? 's' : '') + ' · ' + soles(r.pendiente) + '</span></div>' : '') +
+          adicHtml = '<div><b>' + soles(totalAdic) + '</b> <span class="sub">(' + adicDep.length + ')</span></div>' +
+            (r.nPendientes > 0 ? '<div><span class="dep-badge solicitado">' + r.nPendientes + ' pendiente' + (r.nPendientes > 1 ? 's' : '') + '</span></div>' : '') +
             '<div style="margin-top:3px;"><button type="button" class="dep-mini btn-adic">Ver / agregar</button></div>';
         }
 
@@ -340,7 +359,7 @@ const FormDeposito = {
         if (depositado) tr.classList.add('dep-hecho');
         tr.innerHTML = `
           <td>${ddmm(f['FECHA DE PROGRAMACION'])}</td>
-          <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}</td>
+          <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}${f['BOOKING'] ? '<div class="dep-bk">BK ' + esc(f['BOOKING']) + '</div>' : ''}</td>
           <td>${esc(f['CONDUCTOR'])}<div class="sub">${esc(f['PLACA TRACTO'])}</div></td>
           <td>${ruta}<div class="sub">Devolución: ${esc(f['CIUDAD DE DEVOLUCION'])}</div></td>
           <td>${ddmm(f['FECHA DE RETIRO'])}<div class="sub">${hora(f['HORA DE RETIRO'])}</div></td>
@@ -349,8 +368,8 @@ const FormDeposito = {
           <td>${soles(numero(f['PEAJE']) + numero(f['VIATICO']) + numero(f['COCHERA']))}<div class="sub">P ${numero(f['PEAJE']).toFixed(0)} · V ${numero(f['VIATICO']).toFixed(0)} · C ${numero(f['COCHERA']).toFixed(0)}</div></td>
           <td>${soles(numero(f['TOTAL POR VIAJE']))}</td>
           <td><b>${soles(base)}</b></td>
-          <td>${adicHtml}</td>
           <td><b>${mon}${(tarifaBase + tarifaAdic).toFixed(2)}</b>${tarifaAdic > 0 ? '<div class="sub">' + tarifaBase.toFixed(2) + ' + ' + tarifaAdic.toFixed(2) + ' adic.</div>' : ''}</td>
+          <td>${adicHtml}</td>
           <td style="text-align:center;"><input type="checkbox" class="chk-depositado" ${depositado ? 'checked' : ''} title="Marcar cuando gerencia ya depositó el monto"></td>`;
 
         const chk = tr.querySelector('.chk-depositado');
@@ -448,6 +467,7 @@ const FormDeposito = {
       if (!a['ID']) return '';
       if (e === 'SOLICITADO') return '<div class="dep-acciones"><button type="button" class="dep-mini verde ac-aprobar">Aprobar</button><button type="button" class="dep-mini rojo ac-rechazar">Rechazar</button></div>';
       if (e === 'APROBADO') return '<div class="dep-acciones"><button type="button" class="dep-mini verde ac-depositar">Registrar depósito</button><button type="button" class="dep-mini rojo ac-rechazar">Rechazar</button></div>';
+      if (e === 'DEPOSITADO') return '<div class="dep-acciones"><button type="button" class="dep-mini rojo ac-anular">Anular</button></div>';
       return '';
     };
     const conectarAcciones = function (tr, a, columnas) {
@@ -457,6 +477,18 @@ const FormDeposito = {
       if (b1) b1.addEventListener('click', function (ev) { ev.stopPropagation(); aprobar(a['ID']); });
       if (b2) b2.addEventListener('click', function (ev) { ev.stopPropagation(); rechazar(a['ID']); });
       if (b3) b3.addEventListener('click', function (ev) { ev.stopPropagation(); mostrarFormDeposito(tr, a['ID'], columnas); });
+      const b4 = tr.querySelector('.ac-anular');
+      if (b4) b4.addEventListener('click', async function (ev) {
+        ev.stopPropagation();
+        const motivo = window.prompt('¿Por qué se anula este adicional de ' + soles(numero(a['MONTO'])) + '? (deja de sumar en el servicio)', '');
+        if (motivo === null) return;
+        if (!motivo.trim()) { mostrarMensaje('Indique por qué se anula.', 'error'); return; }
+        b4.disabled = true;
+        const r = await llamarBackend('anularDepositoAdicional', { id: a['ID'], motivo: motivo.trim() });
+        if (!r || !r.ok) { b4.disabled = false; mostrarMensaje((r && r.mensaje) || 'No se pudo anular.', 'error'); return; }
+        mostrarMensaje(r.mensaje, 'exito');
+        await cargarTodo();
+      });
     };
     const depositoTxt = function (a) {
       const e = estadoAdic(a);
@@ -464,7 +496,7 @@ const FormDeposito = {
         return esc(a['MEDIO']) + (a['N° OPERACION'] ? ' · ' + esc(a['N° OPERACION']) : '') +
           '<div class="sub">' + esc(a['PERSONA']) + (a['FECHA DEPOSITO'] ? ' · ' + ddmm(a['FECHA DEPOSITO']) : (a['FECHA'] ? ' · ' + ddmm(a['FECHA']) : '')) + '</div>';
       }
-      if (e === 'RECHAZADO') return '<span class="sub">' + esc(a['MOTIVO RECHAZO']) + '</span>';
+      if (e === 'RECHAZADO' || e === 'ANULADO') return '<span class="sub">' + (e === 'ANULADO' ? 'Anulado: ' : '') + esc(a['MOTIVO RECHAZO']) + '</span>';
       return '';
     };
 
@@ -491,25 +523,32 @@ const FormDeposito = {
           '<span>Conductor: <b>' + esc(f['CONDUCTOR']) + '</b> (' + esc(f['PLACA TRACTO']) + ')</span>' +
           '<span>Destino: <b>' + esc(f['DESTINO 1']) + '</b></span>' +
           '<span>A depositar: <b>' + soles(montoBase(f)) + '</b></span>' +
-          '<span>Adicionales depositados: <b>' + soles(r.depositado) + '</b></span>' +
-          '<span>Pendientes: <b>' + soles(r.pendiente) + '</b></span>' +
+          '<span>Adicionales: <b>' + soles(lista.filter(a => estadoAdic(a) === 'DEPOSITADO').reduce((s2, a) => s2 + numero(a['MONTO']), 0)) + '</b></span>' +
+          (r.pendiente > 0 ? '<span>Pendientes (registros antiguos): <b>' + soles(r.pendiente) + '</b></span>' : '') +
         '</div>' +
-        '<div class="dep-form">' +
-          '<div class="campo"><label>Motivo</label><select id="nvMotivo"><option value="">Seleccione…</option>' +
-            self.MOTIVOS.map(m => '<option value="' + m + '">' + m.charAt(0) + m.slice(1).toLowerCase() + '</option>').join('') + '</select></div>' +
-          '<div class="campo"><label>Monto (S/)</label><input type="number" min="0" step="0.01" id="nvMonto"></div>' +
-          '<div class="campo"><label>Solicitado por</label><input type="text" id="nvSolicitante" placeholder="Conductor u operaciones" autocomplete="off"></div>' +
-          '<div class="campo"><label>Detalle / observación</label><input type="text" id="nvObs" placeholder="Obligatorio si el motivo es Otros" autocomplete="off"></div>' +
-          '<button type="button" class="boton-primario" id="nvRegistrar">Registrar solicitud</button>' +
+        '<div class="dep-nuevo">' +
+          '<div class="fila1">' +
+            '<div class="campo"><label>Motivo</label><select id="nvMotivo"><option value="">Seleccione…</option>' +
+              self.MOTIVOS.map(m => '<option value="' + m + '">' + m.charAt(0) + m.slice(1).toLowerCase() + '</option>').join('') + '</select></div>' +
+            '<div class="campo"><label>Depositado por</label><select id="nvPersona"><option value="">Seleccione…</option>' +
+              self.DEPOSITANTES.map(p => '<option value="' + p + '">' + p.split(' ').map(x => x.charAt(0) + x.slice(1).toLowerCase()).join(' ') + '</option>').join('') + '</select></div>' +
+            '<div class="campo"><label>Observación</label><input type="text" id="nvObs" placeholder="Obligatoria si el motivo es Otros" autocomplete="off"></div>' +
+          '</div>' +
+          '<table><thead><tr><th style="width:170px">Medio</th><th>N° de operación / transferencia</th><th style="width:150px">Monto (S/)</th><th style="width:30px"></th></tr></thead><tbody id="nvDepositos"></tbody></table>' +
+          '<div class="pie-nuevo">' +
+            '<button type="button" class="btn-mas-dep" id="nvMasDeposito">+ Agregar depósito</button>' +
+            '<span class="total-nuevo" id="nvTotal">Total: S/ 0.00</span>' +
+            '<button type="button" class="boton-primario" id="nvRegistrar">Guardar adicional</button>' +
+          '</div>' +
         '</div>' +
         '<table class="tabla-lista dep-tabla" id="detTabla">' +
-          '<colgroup><col style="width:9%"><col style="width:13%"><col style="width:8%"><col style="width:11%"><col style="width:9%"><col style="width:11%"><col style="width:14%"><col style="width:13%"><col style="width:12%"></colgroup>' +
-          '<thead><tr><th>Solicitado</th><th>Motivo</th><th>Monto</th><th>Solicitado por</th><th>Estado</th><th>Aprobado por</th><th>Depósito</th><th>Observación</th><th>Acciones</th></tr></thead>' +
+          '<colgroup><col style="width:9%"><col style="width:13%"><col style="width:8%"><col style="width:13%"><col style="width:10%"><col style="width:18%"><col style="width:19%"><col style="width:10%"></colgroup>' +
+          '<thead><tr><th>Fecha</th><th>Motivo</th><th>Monto</th><th>Depositado por</th><th>Estado</th><th>Depósito</th><th>Observación</th><th>Acciones</th></tr></thead>' +
           '<tbody></tbody></table>';
 
       const tbody = cont.querySelector('#detTabla tbody');
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#64748b; padding:14px;">Este servicio no tiene depósitos adicionales.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#64748b; padding:14px;">Este servicio no tiene depósitos adicionales.</td></tr>';
       }
       lista.forEach(function (a) {
         const e = estadoAdic(a);
@@ -518,13 +557,12 @@ const FormDeposito = {
           '<td>' + ddmm(a['FECHA SOLICITUD'] || a['FECHA']) + '</td>' +
           '<td>' + esc(a['MOTIVO'] || 'SIN MOTIVO (registro anterior)') + '</td>' +
           '<td>' + soles(numero(a['MONTO'])) + '</td>' +
-          '<td>' + esc(a['SOLICITADO POR']) + '</td>' +
+          '<td>' + esc(a['PERSONA'] || a['SOLICITADO POR']) + '</td>' +
           '<td><span class="dep-badge ' + e.toLowerCase() + '">' + e + '</span></td>' +
-          '<td>' + esc(a['APROBADO POR']) + (a['FECHA APROBACION'] ? '<div class="sub">' + ddmm(a['FECHA APROBACION']) + '</div>' : '') + '</td>' +
           '<td>' + depositoTxt(a) + '</td>' +
           '<td>' + esc(a['OBSERVACION']) + '</td>' +
           '<td>' + accionesHtml(a) + '</td>';
-        conectarAcciones(tr, a, 9);
+        conectarAcciones(tr, a, 8);
         tbody.appendChild(tr);
       });
 
@@ -533,18 +571,50 @@ const FormDeposito = {
         mostrarVista(self._volverA === 'adicionales' ? 'adicionales' : 'servicios');
         if (self._volverA === 'adicionales') pintarAdicionales(); else pintarServicios();
       });
-      cont.querySelector('#nvRegistrar').addEventListener('click', async function () {
+      // Filas de depósitos del adicional (puede pagarse con varios depósitos).
+      const tbDep = cont.querySelector('#nvDepositos');
+      const totalNuevo = function () {
+        const t = Array.from(tbDep.querySelectorAll('tr')).reduce((acc, tr) => acc + numero(tr.querySelector('.nd-monto').value), 0);
+        cont.querySelector('#nvTotal').textContent = 'Total: ' + soles(t);
+        return t;
+      };
+      const agregarFilaDeposito = function () {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><select class="nd-medio">' + self.MEDIOS_NUEVOS.map(m => '<option value="' + m + '">' + (m === 'YAPE' ? 'Yape' : 'Transferencia') + '</option>').join('') + '</select></td>' +
+          '<td><input type="text" class="nd-op" placeholder="N° de operación" autocomplete="off"></td>' +
+          '<td><input type="number" min="0" step="0.01" class="nd-monto" placeholder="0.00"></td>' +
+          '<td><button type="button" class="quitar-dep" title="Quitar depósito">×</button></td>';
+        const medio = tr.querySelector('.nd-medio');
+        const op = tr.querySelector('.nd-op');
+        medio.addEventListener('change', function () { op.placeholder = medio.value === 'YAPE' ? 'N° de operación' : 'N° de transferencia'; });
+        tr.querySelector('.nd-monto').addEventListener('input', totalNuevo);
+        tr.querySelector('.quitar-dep').addEventListener('click', function () {
+          if (tbDep.querySelectorAll('tr').length > 1) { tr.remove(); totalNuevo(); }
+        });
+        tbDep.appendChild(tr);
+        return tr;
+      };
+      agregarFilaDeposito();
+      cont.querySelector('#nvMasDeposito').addEventListener('click', function () {
+        agregarFilaDeposito().querySelector('.nd-op').focus();
+      });
+      protegerClic(cont.querySelector('#nvRegistrar'), async function () {
         const motivo = cont.querySelector('#nvMotivo').value;
-        const monto = numero(cont.querySelector('#nvMonto').value);
-        const solicitante = cont.querySelector('#nvSolicitante').value.trim();
+        const persona = cont.querySelector('#nvPersona').value;
         const obs = cont.querySelector('#nvObs').value.trim();
+        const depositos = Array.from(tbDep.querySelectorAll('tr')).map(function (tr) {
+          return { medio: tr.querySelector('.nd-medio').value, operacion: tr.querySelector('.nd-op').value.trim(), monto: numero(tr.querySelector('.nd-monto').value) };
+        });
         if (!motivo) { mostrarMensaje('Seleccione el motivo.', 'error'); return; }
-        if (!monto || monto <= 0) { mostrarMensaje('Ingrese un monto mayor a 0.', 'error'); return; }
-        if (!solicitante) { mostrarMensaje('Indique quién solicita el adicional.', 'error'); return; }
-        if (motivo === 'OTROS' && !obs) { mostrarMensaje('Para "Otros" describa el motivo en el detalle.', 'error'); return; }
-        this.disabled = true;
-        const r = await llamarBackend('registrarDeposito', { fila: fila, motivo: motivo, monto: monto, solicitadoPor: solicitante, observacion: obs });
-        this.disabled = false;
+        if (!persona) { mostrarMensaje('Seleccione quién realizó el depósito.', 'error'); return; }
+        if (motivo === 'OTROS' && !obs) { mostrarMensaje('Para "Otros" describa el motivo en la observación.', 'error'); return; }
+        for (let i = 0; i < depositos.length; i++) {
+          const d = depositos[i];
+          const n = depositos.length > 1 ? ' (depósito ' + (i + 1) + ')' : '';
+          if (!d.operacion) { mostrarMensaje('Indique el N° de ' + (d.medio === 'YAPE' ? 'operación' : 'transferencia') + n + '.', 'error'); return; }
+          if (!(d.monto > 0)) { mostrarMensaje('Ingrese un monto mayor a 0' + n + '.', 'error'); return; }
+        }
+        const r = await llamarBackend('agregarAdicionales', { fila: fila, motivo: motivo, depositadoPor: persona, observacion: obs, depositos: depositos });
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
         mostrarMensaje(r.mensaje, 'exito');
         await cargarTodo();
@@ -580,7 +650,7 @@ const FormDeposito = {
         if (dHasta && (!f || f > dHasta)) return false;
         return true;
       }).sort(function (x, y) {
-        const orden = { 'SOLICITADO': 0, 'APROBADO': 1, 'DEPOSITADO': 2, 'RECHAZADO': 3 };
+        const orden = { 'SOLICITADO': 0, 'APROBADO': 1, 'DEPOSITADO': 2, 'RECHAZADO': 3, 'ANULADO': 4 };
         const ox = orden[estadoAdic(x)], oy = orden[estadoAdic(y)];
         if (ox !== oy) return ox - oy;
         return (fechaDe(y['FECHA SOLICITUD'] || y['FECHA']) || 0) - (fechaDe(x['FECHA SOLICITUD'] || x['FECHA']) || 0);
@@ -591,14 +661,14 @@ const FormDeposito = {
       lista.forEach(function (a) {
         const e = estadoAdic(a), m = mayus(a['MOTIVO']) || 'SIN MOTIVO', monto = numero(a['MONTO']);
         porEstado[e] = porEstado[e] || { n: 0, s: 0 }; porEstado[e].n++; porEstado[e].s += monto;
-        if (e !== 'RECHAZADO') { porMotivo[m] = (porMotivo[m] || 0) + monto; }
+        if (e === 'DEPOSITADO') { porMotivo[m] = (porMotivo[m] || 0) + monto; }
       });
       raiz.querySelector('#adResumen').innerHTML =
-        self.ESTADOS_ADICIONAL.map(function (e) {
+        self.ESTADOS_ADICIONAL.filter(e => e === 'DEPOSITADO' || porEstado[e]).map(function (e) {
           const x = porEstado[e] || { n: 0, s: 0 };
           return '<div class="dep-chip"><span class="dep-badge ' + e.toLowerCase() + '">' + e + '</span> <b>' + soles(x.s) + '</b> <span style="color:#64748b;">(' + x.n + ')</span></div>';
         }).join('') +
-        '<div class="dep-chip" style="flex-basis:100%;">Por motivo (sin rechazados): ' +
+        '<div class="dep-chip" style="flex-basis:100%;">Por motivo (depositados): ' +
           (Object.keys(porMotivo).length
             ? Object.keys(porMotivo).sort((a, b) => porMotivo[b] - porMotivo[a]).map(m => esc(m) + ' <b>' + soles(porMotivo[m]) + '</b>').join(' · ')
             : '—') + '</div>';
@@ -606,7 +676,7 @@ const FormDeposito = {
       const tbody = raiz.querySelector('#adTabla tbody');
       tbody.innerHTML = '';
       if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#64748b; padding:14px;">No hay adicionales con estos filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#64748b; padding:14px;">No hay adicionales con estos filtros.</td></tr>';
       }
       lista.forEach(function (a) {
         const e = estadoAdic(a);
@@ -617,12 +687,11 @@ const FormDeposito = {
           '<td>' + esc(a['CONDUCTOR']) + '<div class="sub">' + esc(a['PLACA']) + '</div></td>' +
           '<td>' + esc(a['MOTIVO'] || 'SIN MOTIVO') + (a['OBSERVACION'] ? '<div class="sub">' + esc(a['OBSERVACION']) + '</div>' : '') + '</td>' +
           '<td><b>' + soles(numero(a['MONTO'])) + '</b></td>' +
-          '<td>' + esc(a['SOLICITADO POR']) + '</td>' +
+          '<td>' + esc(a['PERSONA'] || a['SOLICITADO POR']) + '</td>' +
           '<td><span class="dep-badge ' + e.toLowerCase() + '">' + e + '</span></td>' +
-          '<td>' + esc(a['APROBADO POR']) + (a['FECHA APROBACION'] ? '<div class="sub">' + ddmm(a['FECHA APROBACION']) + '</div>' : '') + '</td>' +
           '<td>' + depositoTxt(a) + '</td>' +
           '<td>' + accionesHtml(a) + '<div style="margin-top:4px;"><button type="button" class="dep-mini ac-ver">Ver servicio</button></div></td>';
-        conectarAcciones(tr, a, 10);
+        conectarAcciones(tr, a, 9);
         tr.querySelector('.ac-ver').addEventListener('click', function () { abrirDetalle(a['FILA SERVICIO'], 'adicionales'); });
         tbody.appendChild(tr);
       });
