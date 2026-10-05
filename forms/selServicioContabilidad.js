@@ -1,49 +1,31 @@
 /**
  * forms/selServicioContabilidad.js
  * -------------------------------------------------------------------------
- * Equivalente HTML de frmSelServicioContabilidad.frm (VBA). Primera
- * pantalla del botón "Consolidado de Servicios": lista los servicios de
- * SERVICIOS, permite cambiar su ESTADO (Culminado / En Ruta / Falso Flete
- * / Viaje Cancelado) y, al continuar, valida el estado antes de abrir el
- * detalle (frmConsolidadoServicio).
+ * Módulo "Acarreo": lista los servicios de SERVICIOS y permite cambiar su
+ * ESTADO siguiendo la secuencia del viaje (Programado → Retirando → En Ruta
+ * Cliente → En Cliente → En Ruta Retorno → Cola Puerto → Culminado) o
+ * marcarlo como Falso Flete, Reprogramado o Cancelado.
  *
- * Columnas mostradas (a pedido del usuario): Fecha, Cliente, Conductor,
- * Placa, Destino, Fecha/Hora de retiro, Fecha/Hora de posicionamiento,
- * Galones y total de combustible del tracto, Monto a depositar, Tarifa,
- * y una columna "Depositado" con checkbox que se guarda de inmediato en la
- * hoja (columna DEPOSITADO). El filtro de Empresa fue eliminado.
+ * Filtros: Estado, Conductor, Cliente y Planta son de selección múltiple
+ * (se pueden elegir varios a la vez; sin nada marcado = todos). Además
+ * Booking (búsqueda al escribir), rango de fechas y Datos completos /
+ * incompletos.
  * -------------------------------------------------------------------------
  */
 const FormSelServicioContabilidad = {
 
   _filaSeleccionada: null,
 
+  ESTADOS: ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO',
+    'CULMINADO', 'FALSO FLETE', 'REPROGRAMADO', 'CANCELADO'],
+
   abrir: async function () {
     const html = `
       <div class="barra-filtros">
-        <div class="campo"><label>Estado</label>
-          <select id="filtroEstado">
-            <option value="">Todos</option>
-            <option>PROGRAMADO</option><option>RETIRANDO</option><option>EN RUTA CLIENTE</option><option>EN CLIENTE</option><option>EN RUTA RETORNO</option><option>COLA PUERTO</option>
-            <option>CULMINADO</option><option>FALSO FLETE</option>
-            <option>CANCELADO</option>
-          </select>
-        </div>
-        <div class="campo"><label>Conductor</label>
-          <select id="filtroConductor">
-            <option value="">Todos</option>
-          </select>
-        </div>
-        <div class="campo"><label>Cliente</label>
-          <select id="filtroCliente">
-            <option value="">Todos</option>
-          </select>
-        </div>
-        <div class="campo"><label>Planta (packing)</label>
-          <select id="filtroPacking">
-            <option value="">Todas</option>
-          </select>
-        </div>
+        <div class="campo"><label>Estado</label><div id="msEstado"></div></div>
+        <div class="campo"><label>Conductor</label><div id="msConductor"></div></div>
+        <div class="campo"><label>Cliente</label><div id="msCliente"></div></div>
+        <div class="campo"><label>Planta (packing)</label><div id="msPacking"></div></div>
         <div class="campo"><label>Booking</label>
           <input type="text" id="filtroBooking" placeholder="Escriba el booking" autocomplete="off">
         </div>
@@ -60,7 +42,7 @@ const FormSelServicioContabilidad = {
       </div>
       <style>
         .barra-filtros select, .barra-filtros input { max-width: 210px; }
-        .barra-filtros #filtroDesde, .barra-filtros #filtroHasta, .barra-filtros #filtroEstado, .barra-filtros #filtroDatos { max-width: 130px; }
+        .barra-filtros #filtroDesde, .barra-filtros #filtroHasta, .barra-filtros #filtroDatos { max-width: 130px; }
         .acarreo-tabla-wrap { max-height: calc(74vh - 230px); min-height: 220px; overflow-y: auto; overflow-x: hidden; }
         #tablaServicios { width: 100%; table-layout: fixed; font-size: .74rem; }
         #tablaServicios th, #tablaServicios td { padding: 5px 5px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
@@ -77,6 +59,7 @@ const FormSelServicioContabilidad = {
         .est-cola-puerto { background: #ffedd5; color: #9a3412; }
         .est-culminado { background: #dcfce7; color: #166534; }
         .est-falso-flete { background: #fce7f3; color: #9d174d; }
+        .est-reprogramado { background: #fef9c3; color: #854d0e; }
         .est-cancelado { background: #fee2e2; color: #991b1b; }
         .acarreo-estados { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
         .acarreo-estados .boton-secundario, .acarreo-estados .boton-peligro { padding: 7px 10px; font-size: .8rem; }
@@ -111,6 +94,7 @@ const FormSelServicioContabilidad = {
           <button class="boton-secundario btn-estado" data-estado="CULMINADO">Culminado</button>
           <span class="sep"></span>
           <button class="boton-secundario btn-estado" data-estado="FALSO FLETE">Falso Flete</button>
+          <button class="boton-secundario btn-estado" data-estado="REPROGRAMADO">Reprogramado</button>
           <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
         </div>
         <div style="display:flex; gap:8px;">
@@ -124,6 +108,7 @@ const FormSelServicioContabilidad = {
   _wire: function (raiz) {
     const self = this;
     self._filaSeleccionada = null;
+    self._filasCache = null;
 
     function numero(v) {
       if (v === null || v === undefined) return 0;
@@ -140,8 +125,7 @@ const FormSelServicioContabilidad = {
 
     function formatoHora(v) {
       // Google Sheets guarda celdas de solo-hora como fecha/hora completa
-      // (epoch 1899-12-30) al leerlas via API; hay que extraer solo HH:mm
-      // en vez de mostrar el objeto Date/ISO string tal cual.
+      // (epoch 1899-12-30) al leerlas via API; hay que extraer solo HH:mm.
       if (v === null || v === undefined || v === '' || v === '-') return '';
       if (v instanceof Date) {
         return String(v.getUTCHours()).padStart(2, '0') + ':' + String(v.getUTCMinutes()).padStart(2, '0');
@@ -163,20 +147,9 @@ const FormSelServicioContabilidad = {
       return (f + ' ' + h).trim();
     }
 
-    function esVerdadero(v) {
-      return v === true || String(v).trim().toUpperCase() === 'TRUE' || String(v).trim().toUpperCase() === 'SI';
-    }
-
-    function simboloMoneda(m) {
-      return String(m || '').trim().toUpperCase() === 'D' ? '$ ' : 'S/ ';
-    }
-
     // Un registro se considera "completo" cuando NINGUNA casilla del
-    // formulario de Registrar Servicio quedó vacía. En esta base de datos,
-    // "-" significa "no aplica" (usado a propósito para Destino 2, Fecha y
-    // Hora de devolución cuando no corresponden); en cambio "" (celda
-    // realmente vacía) significa que el campo simplemente no se llenó, y
-    // eso SÍ debe marcarse como incompleto (p. ej. N° Contenedor, Booking).
+    // formulario de Registrar Servicio quedó vacía. "-" significa "no
+    // aplica"; "" (celda vacía) significa que el campo no se llenó.
     function vacio(v) {
       return v === null || v === undefined || String(v).trim() === '';
     }
@@ -209,50 +182,24 @@ const FormSelServicioContabilidad = {
       return true;
     }
 
-    function actualizarOpcionesConductor(filas) {
-      const select = raiz.querySelector('#filtroConductor');
-      const valorActual = select.value;
-      const conductores = Array.from(new Set(
-        filas.map(f => String(f['CONDUCTOR'] || '').trim()).filter(v => v !== '')
-      )).sort((a, b) => a.localeCompare(b, 'es'));
+    const estadoDe = function (f) { return String(f['ESTADO'] || '').trim().toUpperCase() || 'PROGRAMADO'; };
+    const mayus = function (v) { return String(v || '').trim().toUpperCase(); };
+    const unicos = function (filas, campo) {
+      return Array.from(new Set(filas.map(f => mayus(f[campo])).filter(v => v !== '' && v !== '-')))
+        .sort((a, b) => a.localeCompare(b, 'es'));
+    };
 
-      select.innerHTML = '<option value="">Todos</option>' +
-        conductores.map(c => `<option value="${c}">${c}</option>`).join('');
+    // Filtros de selección múltiple: solo vuelven a filtrar lo ya traído.
+    const refiltrar = function () { cargar(true); };
+    const msEstado = crearMultiSelect(raiz.querySelector('#msEstado'), { textoTodos: 'Todos', onChange: refiltrar });
+    const msConductor = crearMultiSelect(raiz.querySelector('#msConductor'), { textoTodos: 'Todos', onChange: refiltrar });
+    const msCliente = crearMultiSelect(raiz.querySelector('#msCliente'), { textoTodos: 'Todos', onChange: refiltrar });
+    const msPacking = crearMultiSelect(raiz.querySelector('#msPacking'), { textoTodos: 'Todas', onChange: refiltrar });
+    msEstado.setOpciones(self.ESTADOS);
 
-      if (conductores.includes(valorActual)) select.value = valorActual;
-    }
-
-    function actualizarOpcionesCliente(filas) {
-      const select = raiz.querySelector('#filtroCliente');
-      const valorActual = select.value;
-      const clientes = Array.from(new Set(
-        filas.map(f => String(f['CLIENTE PARA FACTURACIÓN'] || '').trim()).filter(v => v !== '')
-      )).sort((a, b) => a.localeCompare(b, 'es'));
-
-      select.innerHTML = '<option value="">Todos</option>' +
-        clientes.map(c => `<option value="${c}">${c}</option>`).join('');
-
-      if (clientes.includes(valorActual)) select.value = valorActual;
-    }
-
-    function actualizarOpcionesPacking(filas) {
-      const select = raiz.querySelector('#filtroPacking');
-      const valorActual = select.value;
-      const plantas = Array.from(new Set(
-        filas.map(f => String(f['PACKING'] || '').trim().toUpperCase()).filter(v => v !== '' && v !== '-')
-      )).sort((a, b) => a.localeCompare(b, 'es'));
-
-      select.innerHTML = '<option value="">Todas</option>' +
-        plantas.map(p => `<option value="${p}">${p}</option>`).join('');
-
-      if (plantas.includes(valorActual)) select.value = valorActual;
-    }
-
-    // soloFiltrar === true: vuelve a filtrar lo ya traído, sin ir al backend
-    // (se usa al escribir el booking, para que responda al instante).
+    // soloFiltrar === true: vuelve a filtrar lo ya traído, sin ir al backend.
     async function cargar(soloFiltrar) {
       const filtros = {
-        estado: raiz.querySelector('#filtroEstado').value.trim(),
         fechaDesde: raiz.querySelector('#filtroDesde').value.trim(),
         fechaHasta: raiz.querySelector('#filtroHasta').value.trim()
       };
@@ -264,18 +211,18 @@ const FormSelServicioContabilidad = {
         self._filasCache = filas.slice();
       }
 
-      actualizarOpcionesConductor(filas);
-      actualizarOpcionesCliente(filas);
-      actualizarOpcionesPacking(filas);
+      msConductor.setOpciones(unicos(self._filasCache, 'CONDUCTOR'));
+      msCliente.setOpciones(unicos(self._filasCache, 'CLIENTE PARA FACTURACIÓN'));
+      msPacking.setOpciones(unicos(self._filasCache, 'PACKING'));
+      const estadosEnDatos = unicos(self._filasCache, 'ESTADO').filter(e => self.ESTADOS.indexOf(e) === -1);
+      msEstado.setOpciones(self.ESTADOS.concat(estadosEnDatos));
 
-      const conductor = raiz.querySelector('#filtroConductor').value;
-      if (conductor) filas = filas.filter(f => String(f['CONDUCTOR'] || '').trim() === conductor);
-
-      const cliente = raiz.querySelector('#filtroCliente').value;
-      if (cliente) filas = filas.filter(f => String(f['CLIENTE PARA FACTURACIÓN'] || '').trim() === cliente);
-
-      const planta = raiz.querySelector('#filtroPacking').value;
-      if (planta) filas = filas.filter(f => String(f['PACKING'] || '').trim().toUpperCase() === planta);
+      filas = filas.filter(function (f) {
+        return msEstado.cumple(estadoDe(f)) &&
+          msConductor.cumple(mayus(f['CONDUCTOR'])) &&
+          msCliente.cumple(mayus(f['CLIENTE PARA FACTURACIÓN'])) &&
+          msPacking.cumple(mayus(f['PACKING']));
+      });
 
       const booking = raiz.querySelector('#filtroBooking').value.trim().toUpperCase();
       if (booking) filas = filas.filter(f => String(f['BOOKING'] || '').toUpperCase().indexOf(booking) !== -1);
@@ -288,9 +235,9 @@ const FormSelServicioContabilidad = {
         const e = String(estado || '').trim().toUpperCase();
         if (e === '' || e === 'PROGRAMADO') return 0;
         if (['RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'EN RUTA'].indexOf(e) !== -1) return 1;
-        if (e === 'FALSO FLETE' || e === 'CANCELADO') return 2;
+        if (e === 'FALSO FLETE' || e === 'REPROGRAMADO' || e === 'CANCELADO') return 2;
         return 3;
-            }
+      }
       function distanciaHoy(f) {
         const d = new Date(f['FECHA DE PROGRAMACION']);
         if (isNaN(d.getTime())) return Infinity;
@@ -312,6 +259,7 @@ const FormSelServicioContabilidad = {
         const completo = esServicioCompleto(f);
         const tr = document.createElement('tr');
         tr.dataset.fila = f._fila;
+        if (self._filaSeleccionada === f._fila) tr.classList.add('seleccionada');
         const reeferSeco = String(f['REEFER O DRY'] || '').trim().toUpperCase() === 'DRY' ? 'SECO' : (f['REEFER O DRY'] || '');
         // Dos datos por celda (valor + fecha/hora debajo) para que la tabla
         // entre completa en pantalla sin barra horizontal.
@@ -364,31 +312,31 @@ const FormSelServicioContabilidad = {
 
       // Si el booking escrito ubica un solo servicio, queda seleccionado.
       if (booking && filas.length === 1) tbody.querySelector('tr').click();
-      if (booking && filas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; color:#64748b; padding:14px;">No se encontró ningún servicio con ese booking.</td></tr>';
+      if (filas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; color:#64748b; padding:14px;">' +
+          (booking ? 'No se encontró ningún servicio con ese booking.' : 'No hay servicios con estos filtros.') + '</td></tr>';
       }
+      // Cambiar filtros no cuenta como "datos sin guardar" al cerrar.
+      if (typeof _refrescarSnapshotFormulario === 'function') _refrescarSnapshotFormulario();
     }
 
-    ['filtroEstado', 'filtroConductor', 'filtroCliente', 'filtroDesde', 'filtroHasta', 'filtroDatos'].forEach(function (id) {
-      raiz.querySelector('#' + id).addEventListener('change', cargar);
+    ['filtroDesde', 'filtroHasta'].forEach(function (id) {
+      raiz.querySelector('#' + id).addEventListener('change', function () { cargar(); });
     });
-    raiz.querySelector('#filtroPacking').addEventListener('change', function () { cargar(true); });
+    raiz.querySelector('#filtroDatos').addEventListener('change', refiltrar);
 
     let esperaBooking = null;
     raiz.querySelector('#filtroBooking').addEventListener('input', function () {
       clearTimeout(esperaBooking);
-      esperaBooking = setTimeout(function () { cargar(true); }, 250);
+      esperaBooking = setTimeout(refiltrar, 250);
     });
 
     raiz.querySelector('#btnBorrarFiltro').addEventListener('click', function () {
-      raiz.querySelector('#filtroEstado').value = '';
-      raiz.querySelector('#filtroConductor').value = '';
-      raiz.querySelector('#filtroCliente').value = '';
+      msEstado.limpiar(); msConductor.limpiar(); msCliente.limpiar(); msPacking.limpiar();
       raiz.querySelector('#filtroDesde').value = '';
       raiz.querySelector('#filtroHasta').value = '';
       raiz.querySelector('#filtroDatos').value = '';
       raiz.querySelector('#filtroBooking').value = '';
-      raiz.querySelector('#filtroPacking').value = '';
       cargar();
     });
 
@@ -409,8 +357,6 @@ const FormSelServicioContabilidad = {
     });
 
     raiz.querySelector('#btnCancelarSelServicio').addEventListener('click', cerrarPanel);
-
-
 
     cargar();
   }

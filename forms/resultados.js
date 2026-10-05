@@ -506,7 +506,7 @@ const FormResultados = {
 
     // 2) Estados
     const est = top(agrupar(filas, f => self._estado(f)), 10);
-    const colorDona = { 'PROGRAMADO': '#94a3b8', 'RETIRANDO': '#f59e0b', 'EN RUTA CLIENTE': '#3b82f6', 'EN RUTA': '#3b82f6', 'EN CLIENTE': '#8b5cf6', 'EN RUTA RETORNO': '#06b6d4', 'COLA PUERTO': '#f97316', 'CULMINADO': '#22c55e', 'FALSO FLETE': '#ec4899', 'CANCELADO': '#ef4444' };
+    const colorDona = { 'PROGRAMADO': '#94a3b8', 'RETIRANDO': '#f59e0b', 'EN RUTA CLIENTE': '#3b82f6', 'EN RUTA': '#3b82f6', 'EN CLIENTE': '#8b5cf6', 'EN RUTA RETORNO': '#06b6d4', 'COLA PUERTO': '#f97316', 'CULMINADO': '#22c55e', 'FALSO FLETE': '#ec4899', 'REPROGRAMADO': '#eab308', 'CANCELADO': '#ef4444' };
     dibujar('gEstados', {
       type: 'doughnut',
       data: { labels: est.map(p => p[0]), datasets: [{ data: est.map(p => p[1]), backgroundColor: est.map((p, i) => colorDona[p[0]] || paleta[i % paleta.length]) }] },
