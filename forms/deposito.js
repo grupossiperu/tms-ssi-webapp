@@ -316,7 +316,13 @@ const FormDeposito = {
         const base = montoBase(f);
         const r = resumenDe(f._fila);
         const depositado = esVerdadero(f['DEPOSITADO']);
-        const d2 = f['DESTINO 2'] && String(f['DESTINO 2']).trim() !== '-' ? ' / ' + f['DESTINO 2'] : '';
+        // Ruta completa: ciudad de retiro → destino 1 → destinos adicionales.
+        const adicionales = (f['DESTINO 2'] && String(f['DESTINO 2']).trim() !== '-')
+          ? String(f['DESTINO 2']).split('/').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+        const ruta = [f['CIUDAD DE RETIRO'], f['DESTINO 1']].concat(adicionales).filter(Boolean).map(esc).join(' → ');
+        const tarifaBase = numero(f['TARIFA 1']);
+        const tarifaAdic = numero(f['TARIFA 2']);
+        const mon = mayus(f['MONEDA TARIFA 1']) === 'D' ? '$ ' : 'S/ ';
         const estado = mayus(f['ESTADO']) || 'PROGRAMADO';
         const combustibleSoles = numero(f['TOTAL TRACTO']) + numero(f['TOTAL GENERADOR']);
         const gl = numero(f['GL TRACTO']).toFixed(0) + ' gl tracto · ' + numero(f['GL GENERADOR']).toFixed(0) + ' gl genset';
@@ -336,7 +342,7 @@ const FormDeposito = {
           <td>${ddmm(f['FECHA DE PROGRAMACION'])}</td>
           <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}</td>
           <td>${esc(f['CONDUCTOR'])}<div class="sub">${esc(f['PLACA TRACTO'])}</div></td>
-          <td>${esc(f['CIUDAD DE RETIRO'])} → ${esc(f['DESTINO 1'])}${esc(d2)}<div class="sub">Devolución: ${esc(f['CIUDAD DE DEVOLUCION'])}</div></td>
+          <td>${ruta}<div class="sub">Devolución: ${esc(f['CIUDAD DE DEVOLUCION'])}</div></td>
           <td>${ddmm(f['FECHA DE RETIRO'])}<div class="sub">${hora(f['HORA DE RETIRO'])}</div></td>
           <td><span class="badge-estado est-${estado.replace(/\s+/g, '-').toLowerCase()}">${esc(estado)}</span></td>
           <td>${esProveedor ? 'Proveedor' : soles(combustibleSoles)}<div class="sub">${gl}</div></td>
@@ -344,7 +350,7 @@ const FormDeposito = {
           <td>${soles(numero(f['TOTAL POR VIAJE']))}</td>
           <td><b>${soles(base)}</b></td>
           <td>${adicHtml}</td>
-          <td>${mayus(f['MONEDA TARIFA 1']) === 'D' ? '$ ' : 'S/ '}${numero(f['TARIFA 1']).toFixed(2)}</td>
+          <td><b>${mon}${(tarifaBase + tarifaAdic).toFixed(2)}</b>${tarifaAdic > 0 ? '<div class="sub">' + tarifaBase.toFixed(2) + ' + ' + tarifaAdic.toFixed(2) + ' adic.</div>' : ''}</td>
           <td style="text-align:center;"><input type="checkbox" class="chk-depositado" ${depositado ? 'checked' : ''} title="Marcar cuando gerencia ya depositó el monto"></td>`;
 
         const chk = tr.querySelector('.chk-depositado');

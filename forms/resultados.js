@@ -286,7 +286,8 @@ const FormResultados = {
   },
   _estado: function (f) { return String(f['ESTADO'] || 'PROGRAMADO').trim().toUpperCase() || 'PROGRAMADO'; },
   _ingresoSoles: function (f) {
-    const t = this._num(f['TARIFA 1']);
+    // Venta = tarifa base + tarifas de destinos adicionales (TARIFA 2).
+    const t = this._num(f['TARIFA 1']) + this._num(f['TARIFA 2']);
     const esDolar = String(f['MONEDA TARIFA 1'] || '').trim().toUpperCase() === 'D';
     return esDolar ? t * (this._tc || 0) : t;
   },
@@ -332,7 +333,7 @@ const FormResultados = {
     const validos = filas.filter(f => self._estado(f) !== 'CANCELADO');
     let ingresos = 0, ingS = 0, ingD = 0, gastos = 0, galones = 0, viajesConGl = 0;
     validos.forEach(function (f) {
-      const t = self._num(f['TARIFA 1']);
+      const t = self._num(f['TARIFA 1']) + self._num(f['TARIFA 2']);
       if (String(f['MONEDA TARIFA 1'] || '').trim().toUpperCase() === 'D') ingD += t; else ingS += t;
       ingresos += self._ingresoSoles(f);
       gastos += self._num(f['TOTAL POR VIAJE']);

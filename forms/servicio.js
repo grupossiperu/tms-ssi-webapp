@@ -54,6 +54,18 @@ const FormServicio = {
         .panel-srv .chk-gas { display: flex !important; align-items: center; gap: 6px; margin: 0 0 0 10px !important; white-space: nowrap; font-weight: 600; font-size: .85rem; color: #1c3a5e; cursor: pointer; }
         .panel-srv .chk-gas input { width: auto; margin: 0; }
         .panel-srv .panel-footer { position: sticky; bottom: 0; background: #fff; margin: 0 -22px; padding: 12px 22px; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
+        .panel-srv .adic-bloque { grid-column: 1 / -1; border-top: 1px dashed #dbe2ea; padding-top: 10px; margin-bottom: 10px; }
+        .panel-srv .adic-tit { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+        .panel-srv .adic-tit b { color: #1c3a5e; font-size: .85rem; }
+        .panel-srv .adic-tit small { color: #64748b; font-weight: 500; }
+        .panel-srv .total-venta { background: #eef3f8; color: #1c3a5e; border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: .9rem; }
+        .panel-srv .tabla-adic { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+        .panel-srv .tabla-adic th { text-align: left; font-size: .75rem; color: #1c3a5e; padding: 0 8px 4px 0; }
+        .panel-srv .tabla-adic td { padding: 0 8px 6px 0; }
+        .panel-srv .tabla-adic input { width: 100%; padding: 8px 10px; border: 1.5px solid #c7ced8; border-radius: 8px; font-size: .9rem; font-family: inherit; }
+        .panel-srv .btn-quitar-adic { border: none; background: transparent; color: #b91c1c; font-size: 1.2rem; cursor: pointer; }
+        .panel-srv .btn-agregar-adic { border: 1.5px dashed #94a3b8; background: #f8fafc; color: #1c3a5e; border-radius: 8px; font-size: .82rem; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+        .panel-srv .btn-agregar-adic:hover { border-color: #1c3a5e; background: #eef3f8; }
         @media (max-width: 1000px) { .panel-srv .seg-grid, .panel-srv .seg-grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 600px) { .panel-srv .seg-grid, .panel-srv .seg-grid.c3 { grid-template-columns: 1fr; } .panel-srv .seg-grid .span2 { grid-column: auto; } }
       </style>
@@ -124,9 +136,9 @@ const FormServicio = {
           <label>Destino 1</label>
           <input list="lst-destinos" id="cboDestino1Servicio">
         </div>
-          <div class="campo">
-          <label>Destino 2 (solo carga consolidado)</label>
-          <input list="lst-destinos" id="cboDestino2Servicio" disabled>
+          <div style="display:none">
+          <!-- Destino 2 = destinos adicionales unidos con " / " (se arma solo). -->
+          <input type="hidden" id="cboDestino2Servicio">
           <datalist id="lst-destinos">${datos.destinos.map(v => `<option value="${v}">`).join('')}</datalist>
         </div>
           <div class="campo">
@@ -146,6 +158,17 @@ const FormServicio = {
               <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="S">S/</button>
               <button type="button" class="boton-moneda" data-campo="txtTarifa1Servicio" data-moneda="D">$</button>
             </div>
+          </div>
+          <div class="adic-bloque">
+            <div class="adic-tit">
+              <b>Destinos adicionales <small>· cada punto extra de la ruta con su tarifa adicional (misma moneda que la tarifa)</small></b>
+              <span class="total-venta" id="txtTotalVentaServicio">Total venta por viaje: —</span>
+            </div>
+            <table class="tabla-adic" id="tablaDestinosAdic">
+              <thead><tr><th>Destino adicional</th><th style="width:200px">Tarifa adicional</th><th style="width:30px"></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <button type="button" class="btn-agregar-adic" id="btnAgregarDestinoAdic">+ Agregar destino</button>
           </div>
         </div>
       </div>
@@ -456,6 +479,16 @@ const FormServicio = {
     set('txtContenedorServicio', f['N° CONTENEDOR']);
     set('cboDestino1Servicio', f['DESTINO 1']);
     set('cboDestino2Servicio', f['DESTINO 2'] && f['DESTINO 2'] !== '-' ? f['DESTINO 2'] : '');
+    if (typeof self._cargarDestinosAdic === 'function') {
+      let lista = [];
+      try { lista = JSON.parse(f['DESTINOS ADICIONALES'] || '[]'); } catch (e) { lista = []; }
+      if (!Array.isArray(lista) || !lista.length) {
+        const d2 = String(f['DESTINO 2'] || '').trim();
+        const partes = (d2 && d2 !== '-') ? d2.split('/').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+        lista = partes.map(function (d) { return { destino: d, tarifa: partes.length === 1 ? (Number(f['TARIFA 2']) || 0) : 0 }; });
+      }
+      self._cargarDestinosAdic(lista);
+    }
     set('cboDepositoRetiro', f['DEPOSITO DE RETIRO']);
     set('txtLugarPosicionamiento1', f['LUGAR DE POSICIONAMIENTO 1'] || f['DESTINO 1']);
     set('txtLugarPosicionamiento2', f['LUGAR DE POSICIONAMIENTO 2'] ||
@@ -515,7 +548,6 @@ const FormServicio = {
     }
 
     const esConsolidado = String(f['TIPO DE CARGA'] || '').trim().toUpperCase() === 'CARGA CONSOLIDADO';
-    raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
     ['dtPosicionamiento2Servicio', 'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
       raiz.querySelector('#' + id).disabled = !esConsolidado;
     });
@@ -535,6 +567,7 @@ const FormServicio = {
       });
     }
     pintarTarifa('txtTarifa1Servicio', f['TARIFA 1'], f['MONEDA TARIFA 1']);
+    if (typeof self._actualizarTotalVenta === 'function') self._actualizarTotalVenta();
   },
 
   _fechaHoy: function () {
@@ -993,24 +1026,73 @@ const FormServicio = {
     // quedar desincronizados.
     function sincronizarLugaresPosicionamiento() {
       raiz.querySelector('#txtLugarPosicionamiento1').value = raiz.querySelector('#cboDestino1Servicio').value.trim();
-      raiz.querySelector('#txtLugarPosicionamiento2').value = raiz.querySelector('#cboDestino2Servicio').value.trim();
+      raiz.querySelector('#txtLugarPosicionamiento2').value = (raiz.querySelector('#cboDestino2Servicio').value.split('/')[0] || '').trim();
     }
+
+    /* ---------- Destinos adicionales (varios), cada uno con su tarifa ---------- */
+    const tbodyAdic = raiz.querySelector('#tablaDestinosAdic tbody');
+    function leerDestinosAdic() {
+      return Array.from(tbodyAdic.querySelectorAll('tr')).map(function (tr) {
+        return { destino: tr.querySelector('.adic-destino').value.trim().toUpperCase(), tarifa: self._numero(tr.querySelector('.adic-tarifa').value) };
+      }).filter(function (d) { return d.destino !== ''; });
+    }
+    function monedaTarifa() {
+      return String(raiz.querySelector('#txtTarifa1Servicio').value || '').indexOf('$') !== -1 ? '$ ' : 'S/ ';
+    }
+    function actualizarTotalVenta() {
+      const base = self._numero(raiz.querySelector('#txtTarifa1Servicio').value);
+      const adic = leerDestinosAdic().reduce(function (s, d) { return s + d.tarifa; }, 0);
+      const el = raiz.querySelector('#txtTotalVentaServicio');
+      el.textContent = 'Total venta por viaje: ' + monedaTarifa() + (base + adic).toFixed(2) +
+        (adic > 0 ? '  (tarifa ' + base.toFixed(2) + ' + adicionales ' + adic.toFixed(2) + ')' : '');
+    }
+    function sincronizarDestino2() {
+      const oculto = raiz.querySelector('#cboDestino2Servicio');
+      const nuevo = leerDestinosAdic().map(function (d) { return d.destino; }).join(' / ');
+      if (oculto.value !== nuevo) {
+        oculto.value = nuevo;
+        oculto.dispatchEvent(new Event('change'));
+      }
+      sincronizarLugaresPosicionamiento();
+      actualizarTotalVenta();
+    }
+    function agregarDestinoAdic(destino, tarifa) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><input class="adic-destino" list="lst-destinos" autocomplete="off" placeholder="Ej. PISCO"></td>' +
+        '<td><input class="adic-tarifa" inputmode="decimal" autocomplete="off" placeholder="0.00"></td>' +
+        '<td><button type="button" class="btn-quitar-adic" title="Quitar destino">×</button></td>';
+      tr.querySelector('.adic-destino').value = destino || '';
+      tr.querySelector('.adic-tarifa').value = tarifa ? Number(tarifa).toFixed(2) : '';
+      tr.querySelector('.adic-destino').addEventListener('change', sincronizarDestino2);
+      tr.querySelector('.adic-tarifa').addEventListener('input', actualizarTotalVenta);
+      tr.querySelector('.btn-quitar-adic').addEventListener('click', function () { tr.remove(); sincronizarDestino2(); });
+      tbodyAdic.appendChild(tr);
+      return tr;
+    }
+    raiz.querySelector('#btnAgregarDestinoAdic').addEventListener('click', function () {
+      agregarDestinoAdic().querySelector('.adic-destino').focus();
+    });
+    raiz.querySelector('#txtTarifa1Servicio').addEventListener('input', actualizarTotalVenta);
+    raiz.querySelectorAll('.boton-moneda').forEach(function (b) { b.addEventListener('click', function () { setTimeout(actualizarTotalVenta, 0); }); });
+    self._leerDestinosAdic = leerDestinosAdic;
+    self._actualizarTotalVenta = actualizarTotalVenta;
+    self._cargarDestinosAdic = function (lista) {
+      tbodyAdic.innerHTML = '';
+      (lista || []).forEach(function (d) { agregarDestinoAdic(d.destino, d.tarifa); });
+      sincronizarDestino2();
+    };
     raiz.querySelector('#cboDestino1Servicio').addEventListener('input', sincronizarLugaresPosicionamiento);
     raiz.querySelector('#cboDestino1Servicio').addEventListener('change', sincronizarLugaresPosicionamiento);
-    raiz.querySelector('#cboDestino2Servicio').addEventListener('input', sincronizarLugaresPosicionamiento);
-    raiz.querySelector('#cboDestino2Servicio').addEventListener('change', sincronizarLugaresPosicionamiento);
 
-    // Tipo de carga: habilita/bloquea Destino 2 y todo el bloque de
-    // posicionamiento 2. La tarifa es única y cubre la ruta completa.
+    // Tipo de carga: habilita/bloquea el posicionamiento 2 y las barras
+    // (solo carga consolidado). Los destinos adicionales valen para todos.
     function aplicarTipoCarga(esConsolidado) {
-      raiz.querySelector('#cboDestino2Servicio').disabled = !esConsolidado;
       // Todo lo que solo aplica a carga consolidado.
       ['dtPosicionamiento2Servicio', 'cboBarrasConsolidado', 'txtCantidadBarras'].forEach(function (id) {
         raiz.querySelector('#' + id).disabled = !esConsolidado;
       });
 
       if (!esConsolidado) {
-        raiz.querySelector('#cboDestino2Servicio').value = '';
         raiz.querySelector('#dtPosicionamiento2Servicio').value = '';
         raiz.querySelector('#cboBarrasConsolidado').value = 'NO';
         raiz.querySelector('#txtCantidadBarras').value = '';
@@ -1061,9 +1143,6 @@ const FormServicio = {
     // abrir confirm()/prompt() de forma síncrona ahí puede dejar el diálogo
     // reabriéndose en bucle en Chrome.
     raiz.querySelector('#cboDestino1Servicio').addEventListener('change', function () { setTimeout(function () { alCambiarDestino(1); }, 0); });
-    raiz.querySelector('#cboDestino2Servicio').addEventListener('change', function () {
-      if (raiz.querySelector('#cboTipoCarga').value.trim().toUpperCase() === 'CARGA CONSOLIDADO') setTimeout(function () { alCambiarDestino(2); }, 0);
-    });
 
     // Tarifa automática: en cuanto están los 5 campos de la ruta, busca en
     // la matriz de TARIFAS la tarifa vigente (la más reciente) y la
@@ -1075,7 +1154,9 @@ const FormServicio = {
       const cliente = v('cboClienteFacturacion');
       const ciudadRetiro = v('cboCiudadRetiroServicio');
       const destino1 = v('cboDestino1Servicio');
-      const destino2 = v('cboDestino2Servicio');
+      // La tarifa de la tabla es la de la ruta base; cada destino adicional
+      // lleva su propia tarifa adicional escrita a mano.
+      const destino2 = '';
       const ciudadDevolucion = v('cboCiudadDevolucionServicio');
 
       const campoFechaVigencia = raiz.querySelector('#fechaVigenciaTarifa');
@@ -1133,6 +1214,7 @@ const FormServicio = {
       raiz.querySelectorAll('.boton-moneda[data-campo="txtTarifa1Servicio"]').forEach(function (b) {
         b.classList.toggle('activo', b.dataset.moneda === (resp.moneda === 'D' ? 'D' : 'S'));
       });
+      actualizarTotalVenta();
     }
 
     ['cboClienteFacturacion', 'cboCiudadRetiroServicio', 'cboDestino1Servicio',
@@ -1362,6 +1444,7 @@ const FormServicio = {
         tipoCarga: v('cboTipoCarga'),
         destino1: v('cboDestino1Servicio'),
         destino2: v('cboDestino2Servicio'),
+        destinosAdicionales: JSON.stringify(leerDestinosAdic()),
         booking: v('txtBookingServicio'),
         contenedor: v('txtContenedorServicio'),
         depositoRetiro: v('cboDepositoRetiro'),
@@ -1437,7 +1520,7 @@ const FormServicio = {
       clienteFacturacion: 'cboClienteFacturacion', empresaServicio: 'cboEmpresaServicio',
       conductor: 'cboConductorServicio', placaTracto: 'cboPlacaTractoServicio',
       placaCarreta: 'cboPlacaCarretaServicio', tipoCarga: 'cboTipoCarga',
-      destino1: 'cboDestino1Servicio', destino2: 'cboDestino2Servicio',
+      destino1: 'cboDestino1Servicio', destino2: 'btnAgregarDestinoAdic',
       depositoRetiro: 'cboDepositoRetiro', fechaRetiro: 'dtRetiroServicio',
       horaRetiro: 'dtRetiroServicio', depositoDevolucion: 'cboDepositoDevolucion',
       fechaDevolucion: 'dtDevolucionServicio', horaDevolucion: 'dtDevolucionServicio',
