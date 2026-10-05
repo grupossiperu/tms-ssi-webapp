@@ -10,20 +10,20 @@ const FormFacturaSobrecosto = {
 
   abrir: async function (fila) {
     const datos = await llamarBackend('cargarDatosFacturaSobrecosto', { fila: fila });
-    if (!datos) { mostrarMensaje('No se pudo cargar la factura de sobrecosto.', 'error'); return; }
+    if (!respuestaValida(datos)) { mostrarMensaje((datos && datos.mensaje) || 'No se pudo cargar la factura de sobrecosto.', 'error'); return; }
 
     const detalle = await llamarBackend('generarDetalleSobrecosto', datos);
 
     const html = `
       <div class="fila-campos">
-        <div class="campo"><label>Booking</label><input id="txtBookingSC" value="${datos.booking||''}" disabled></div>
-        <div class="campo"><label>Contenedor</label><input id="txtContenedorSC" value="${datos.contenedor||''}" disabled></div>
-        <div class="campo"><label>Cliente</label><input id="txtClienteSC" value="${datos.cliente||''}" disabled></div>
-        <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioSC" value="${datos.fechaServicio||'-'}" disabled></div>
-        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioSC" value="${datos.codigoServicio||''}" disabled></div>
-        <div class="campo"><label>Placa</label><input id="txtPlacaSC" value="${datos.placa||''}" disabled></div>
-        <div class="campo"><label>Tipo sobrecosto</label><input id="txtTipoSobrecostoSC" value="${datos.tipoSobrecosto||''}" disabled></div>
-        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionSC" value="${datos.fechaFacturacion||''}" disabled></div>
+        <div class="campo"><label>Booking</label><input id="txtBookingSC" value="${esc(datos.booking)}" disabled></div>
+        <div class="campo"><label>Contenedor</label><input id="txtContenedorSC" value="${esc(datos.contenedor)}" disabled></div>
+        <div class="campo"><label>Cliente</label><input id="txtClienteSC" value="${esc(datos.cliente)}" disabled></div>
+        <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioSC" value="${esc(formatoFecha(datos.fechaServicio))}" disabled></div>
+        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioSC" value="${esc(datos.codigoServicio)}" disabled></div>
+        <div class="campo"><label>Placa</label><input id="txtPlacaSC" value="${esc(datos.placa)}" disabled></div>
+        <div class="campo"><label>Tipo sobrecosto</label><input id="txtTipoSobrecostoSC" value="${esc(datos.tipoSobrecosto)}" disabled></div>
+        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionSC" value="${esc(formatoFecha(datos.fechaFacturacion, ''))}" disabled></div>
         <div class="campo"><label>Mes de facturación</label><input id="txtMesFacturacionSC" disabled></div>
         <div class="campo"><label>Mes de ejecución</label>
           <select id="cboMesEjecucionSC"><option></option><option>ENERO</option><option>FEBRERO</option><option>MARZO</option><option>ABRIL</option>
@@ -40,7 +40,7 @@ const FormFacturaSobrecosto = {
         <div class="campo"><label>Detracción ($)</label><input id="txtDetraccionDolaresSC" value="${(datos.detraccionDolares||0).toFixed(2)}" disabled></div>
         <div class="campo"><label>Importe facturado ($)</label><input id="txtImporteFacturadoSC" value="${(datos.importeFacturado||0).toFixed(2)}" disabled></div>
       </div>
-      <div class="campo"><label>Detalle de facturación</label><textarea id="txtDetalleFacturacionSC" rows="5" disabled>${detalle}</textarea></div>
+      <div class="campo"><label>Detalle de facturación</label><textarea id="txtDetalleFacturacionSC" rows="5" disabled>${esc(typeof detalle === 'string' ? detalle : '')}</textarea></div>
       <div class="panel-footer" style="padding-top:10px;">
         <button class="boton-secundario" id="btnInicioSC">Inicio</button>
         <button class="boton-primario" id="btnGrabarSC">Grabar</button>
@@ -52,7 +52,7 @@ const FormFacturaSobrecosto = {
   _wire: function (raiz, datos) {
     raiz.querySelector('#btnInicioSC').addEventListener('click', cerrarPanel);
 
-    raiz.querySelector('#btnGrabarSC').addEventListener('click', async function () {
+    protegerClic(raiz.querySelector('#btnGrabarSC'), async function () {
       const numeroFactura = raiz.querySelector('#txtNumeroFacturaSC').value.trim();
       if (numeroFactura === '') { mostrarMensaje('Ingrese el número de factura.', 'error'); return; }
       if (raiz.querySelector('#cboMesEjecucionSC').value.trim() === '') { mostrarMensaje('Seleccione el mes de ejecución.', 'error'); return; }
@@ -75,10 +75,6 @@ const FormFacturaSobrecosto = {
     });
 
     // Mes de facturación textual (a partir de la fecha ya calculada en backend).
-    const meses = ['','ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-    if (datos.fechaFacturacion) {
-      const d = new Date(datos.fechaFacturacion);
-      if (!isNaN(d.getTime())) raiz.querySelector('#txtMesFacturacionSC').value = meses[d.getMonth() + 1];
-    }
+    raiz.querySelector('#txtMesFacturacionSC').value = mesDeFecha(datos.fechaFacturacion);
   }
 };

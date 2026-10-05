@@ -13,30 +13,26 @@ const FormFacturaViaje = {
 
   abrir: async function (fila, tipoFacturacionActual) {
     const datos = await llamarBackend('cargarDatosFacturaViaje', { fila: fila });
-    if (!datos) { mostrarMensaje('No se pudo cargar la factura.', 'error'); return; }
+    if (!respuestaValida(datos)) { mostrarMensaje((datos && datos.mensaje) || 'No se pudo cargar la factura.', 'error'); return; }
 
-    const fechaTxt = function (v) {
-      if (!v) return '';
-      const d = new Date(v);
-      return isNaN(d.getTime()) ? String(v) : (String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear());
-    };
+    const fechaTxt = function (v) { return esc(formatoFecha(v, '')); };
 
     const html = `
-      <input type="hidden" id="hidCodigoServicio" value="${datos.codigoServicio||''}">
-      <input type="hidden" id="hidTipoFacturacionActual" value="${tipoFacturacionActual||''}">
+      <input type="hidden" id="hidCodigoServicio" value="${esc(datos.codigoServicio)}">
+      <input type="hidden" id="hidTipoFacturacionActual" value="${esc(tipoFacturacionActual)}">
       <div class="fila-campos">
-        <div class="campo"><label>Booking</label><input id="txtBookingFact" value="${datos.booking||''}" disabled></div>
-        <div class="campo"><label>Contenedor</label><input id="txtContenedorFact" value="${datos.contenedor||''}" disabled></div>
-        <div class="campo"><label>Cliente</label><input id="txtClienteFact" value="${datos.cliente||''}" disabled></div>
+        <div class="campo"><label>Booking</label><input id="txtBookingFact" value="${esc(datos.booking)}" disabled></div>
+        <div class="campo"><label>Contenedor</label><input id="txtContenedorFact" value="${esc(datos.contenedor)}" disabled></div>
+        <div class="campo"><label>Cliente</label><input id="txtClienteFact" value="${esc(datos.cliente)}" disabled></div>
         <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioFact" value="${fechaTxt(datos.fechaServicio)}" disabled></div>
-        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioFact" value="${datos.codigoServicio||''}" disabled></div>
-        <div class="campo"><label>Placa</label><input id="txtPlacaFact" value="${datos.placa||''}" disabled></div>
-        <div class="campo"><label>Destino 1</label><input id="txtDestino1Fact" value="${datos.destino1||''}" disabled></div>
-        <div class="campo"><label>Destino 2</label><input id="txtDestino2Fact" value="${datos.destino2||''}" disabled></div>
+        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioFact" value="${esc(datos.codigoServicio)}" disabled></div>
+        <div class="campo"><label>Placa</label><input id="txtPlacaFact" value="${esc(datos.placa)}" disabled></div>
+        <div class="campo"><label>Destino 1</label><input id="txtDestino1Fact" value="${esc(datos.destino1)}" disabled></div>
+        <div class="campo"><label>Destino 2</label><input id="txtDestino2Fact" value="${esc(datos.destino2)}" disabled></div>
         <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionFact" value="${fechaTxt(datos.fechaFacturacion)}" disabled></div>
         <div class="campo"><label>Mes de facturación</label><input id="txtMesFacturacionFact" value="${mesDeFecha(datos.fechaFacturacion)}" disabled></div>
         <div class="campo"><label>Mes de ejecución</label>
-          <select id="cboMesEjecucionFact">${meses().map(m=>`<option>${m}</option>`).join('')}</select>
+          <select id="cboMesEjecucionFact">${MESES.map(m=>`<option>${m}</option>`).join('')}</select>
         </div>
         <div class="campo"><label>N° de factura</label><input id="txtNumeroFacturaFact"></div>
         <div class="campo"><label>Tipo de cambio</label><input id="txtTipoCambioFact" value="${(datos.tipoCambio||0).toFixed(3)}" disabled></div>
@@ -66,14 +62,7 @@ const FormFacturaViaje = {
         <button class="boton-primario" id="btnGrabarFact">Grabar</button>
       </div>`;
 
-    function meses() { return ['','ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE']; }
-    function mesDeFecha(v) {
-      if (!v) return '';
-      const d = new Date(v);
-      return isNaN(d.getTime()) ? '' : meses()[d.getMonth()+1];
-    }
-
-    abrirPanel('Facturar Viaje - ' + (tipoFacturacionActual||''), html, (raiz) => this._wire(raiz, datos));
+    abrirPanel('Facturar Viaje - ' + esc(tipoFacturacionActual), html, (raiz) => this._wire(raiz, datos));
   },
 
   _n: function (t) {
@@ -90,31 +79,66 @@ const FormFacturaViaje = {
       const ventaDolares = self._n(raiz.querySelector('#txtVentaDolaresFact').value);
       const sobreestadia = self._n(raiz.querySelector('#txtSobreestadiaFact').value);
       const tipoCambio = self._n(raiz.querySelector('#txtTipoCambioFact').value);
-      if (tipoCambio <= 0) return;
+      if (tipoCambio <= 0) {
+        ['#txtVentaSolesFact', '#txtValorVentaFact', '#txtIGVFact', '#txtPrecioVentaFact'].forEach(function (s) { raiz.querySelector(s).value = ''; });
+        return;
+      }
 
       const ventaSoles = (ventaDolares + sobreestadia) * tipoCambio;
       raiz.querySelector('#txtVentaSolesFact').value = 'S/ ' + ventaSoles.toFixed(2);
-      raiz.querySelector('#txtValorVentaFact').value = '$ ' + ventaDolares.toFixed(2);
-      const igv = ventaDolares * 0.18;
+      // La sobreestadía también lleva IGV: valor venta = venta + sobreestadía.
+      const valorVenta = ventaDolares + sobreestadia;
+      raiz.querySelector('#txtValorVentaFact').value = '$ ' + valorVenta.toFixed(2);
+      const igv = valorVenta * 0.18;
       raiz.querySelector('#txtIGVFact').value = '$ ' + igv.toFixed(2);
-      raiz.querySelector('#txtPrecioVentaFact').value = '$ ' + (ventaDolares + igv).toFixed(2);
+      raiz.querySelector('#txtPrecioVentaFact').value = '$ ' + (valorVenta + igv).toFixed(2);
     }
 
+    // Solo vale la respuesta de la última consulta: si el usuario sigue escribiendo, las anteriores se descartan.
+    let consultaDetraccion = 0;
     async function calcularDetraccion() {
-      const resp = await llamarBackend('calcularDetraccionFactura', {
-        precioVenta: self._n(raiz.querySelector('#txtPrecioVentaFact').value),
-        tipoCambio: self._n(raiz.querySelector('#txtTipoCambioFact').value),
-        vrCargaEfectiva: self._n(raiz.querySelector('#txtVRCargaEfectivaFact').value),
-        valorVenta: self._n(raiz.querySelector('#txtValorVentaFact').value),
-        costoViaje: self._n(raiz.querySelector('#txtCostoViajeRealizadoFact').value),
-        porcentaje: self._n(raiz.querySelector('#cboPorcentajeDetraccionFact').value.replace('%','')) / 100
-      });
-      if (!resp) return;
+      const miConsulta = ++consultaDetraccion;
+      const campos = ['#txtImporteOperacionFact', '#txtDetraccionFact', '#txtEstimacionResultanteFact', '#txtDetraccionDolarFact', '#txtImporteFacturadoFact'];
+      let resp;
+      try {
+        resp = await llamarBackend('calcularDetraccionFactura', {
+          precioVenta: self._n(raiz.querySelector('#txtPrecioVentaFact').value),
+          tipoCambio: self._n(raiz.querySelector('#txtTipoCambioFact').value),
+          vrCargaEfectiva: self._n(raiz.querySelector('#txtVRCargaEfectivaFact').value),
+          valorVenta: self._n(raiz.querySelector('#txtValorVentaFact').value),
+          costoViaje: self._n(raiz.querySelector('#txtCostoViajeRealizadoFact').value),
+          porcentaje: self._n(raiz.querySelector('#cboPorcentajeDetraccionFact').value.replace('%','')) / 100
+        });
+      } catch (e) {
+        resp = null;
+      }
+      if (miConsulta !== consultaDetraccion || !document.body.contains(raiz)) return;
+      if (!respuestaValida(resp) || typeof resp.importeOperacion !== 'number') {
+        // Mejor campos vacíos que valores de otro monto: Grabar exige que estén calculados.
+        campos.forEach(function (s) { raiz.querySelector(s).value = ''; });
+        return;
+      }
       raiz.querySelector('#txtImporteOperacionFact').value = 'S/ ' + resp.importeOperacion.toFixed(2);
       raiz.querySelector('#txtDetraccionFact').value = 'S/ ' + resp.detraccionSoles.toFixed(2);
       raiz.querySelector('#txtEstimacionResultanteFact').value = 'S/ ' + resp.estimacionResultante.toFixed(2);
       raiz.querySelector('#txtDetraccionDolarFact').value = '$ ' + resp.detraccionDolares.toFixed(2);
       raiz.querySelector('#txtImporteFacturadoFact').value = '$ ' + resp.importeFacturado.toFixed(2);
+    }
+
+    // Se espera 300 ms tras la última tecla para consultar; Grabar fuerza y espera el cálculo pendiente.
+    let temporizadorDetraccion = null;
+    let calculoPendiente = Promise.resolve();
+    function programarDetraccion() {
+      clearTimeout(temporizadorDetraccion);
+      temporizadorDetraccion = setTimeout(function () { temporizadorDetraccion = null; calculoPendiente = calcularDetraccion(); }, 300);
+    }
+    async function asegurarDetraccion() {
+      if (temporizadorDetraccion) {
+        clearTimeout(temporizadorDetraccion);
+        temporizadorDetraccion = null;
+        calculoPendiente = calcularDetraccion();
+      }
+      await calculoPendiente;
     }
 
     async function generarDetalle() {
@@ -125,7 +149,7 @@ const FormFacturaViaje = {
         destino1: raiz.querySelector('#txtDestino1Fact').value, destino2: raiz.querySelector('#txtDestino2Fact').value,
         vrCargaEfectiva: self._n(raiz.querySelector('#txtVRCargaEfectivaFact').value), vrCargaUtil: self._n(raiz.querySelector('#txtVRCargaUtilFact').value)
       });
-      raiz.querySelector('#txtDetalleFacturacionFact').value = detalle;
+      if (typeof detalle === 'string') raiz.querySelector('#txtDetalleFacturacionFact').value = detalle;
     }
 
     raiz.querySelector('#chkCompraDolaresTerceroFact').addEventListener('change', function () {
@@ -137,15 +161,21 @@ const FormFacturaViaje = {
       if (!this.checked) raiz.querySelector('#txtCompraSolesTerceroFact').value = '0.00';
     });
 
-    raiz.querySelector('#txtVentaDolaresFact').addEventListener('input', function () { calcularVenta(); calcularDetraccion(); });
-    raiz.querySelector('#cboPorcentajeDetraccionFact').addEventListener('change', calcularDetraccion);
+    raiz.querySelector('#txtVentaDolaresFact').addEventListener('input', function () { calcularVenta(); programarDetraccion(); });
+    raiz.querySelector('#cboPorcentajeDetraccionFact').addEventListener('change', programarDetraccion);
 
     raiz.querySelector('#btnInicioFact').addEventListener('click', cerrarPanel);
 
-    raiz.querySelector('#btnGrabarFact').addEventListener('click', async function () {
+    protegerClic(raiz.querySelector('#btnGrabarFact'), async function () {
       const numeroFactura = raiz.querySelector('#txtNumeroFacturaFact').value.trim();
       if (numeroFactura === '') { mostrarMensaje('Ingrese el número de factura.', 'error'); return; }
       if (self._n(raiz.querySelector('#txtVentaDolaresFact').value) <= 0) { mostrarMensaje('Ingrese la venta en dólares.', 'error'); return; }
+
+      await asegurarDetraccion();
+      if (!raiz.querySelector('#txtImporteFacturadoFact').value || !raiz.querySelector('#txtVentaSolesFact').value) {
+        mostrarMensaje('No se pudo calcular la detracción ni los importes. Revise el tipo de cambio e intente de nuevo.', 'error');
+        return;
+      }
 
       const resp = await llamarBackend('grabarFacturaViaje', {
         booking: raiz.querySelector('#txtBookingFact').value, contenedor: raiz.querySelector('#txtContenedorFact').value,

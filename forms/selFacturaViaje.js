@@ -46,24 +46,22 @@ const FormSelFacturaViaje = {
   _wire: function (raiz) {
     let seleccionado = null;
 
-    function formatoFecha(v) {
-      if (!v || v === '-') return '-';
-      const d = new Date(v);
-      if (isNaN(d.getTime())) return String(v);
-      return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-    }
-
     async function cargar() {
       const filas = await llamarBackend('filtrarFacturacionPendiente', {
         tipo: raiz.querySelector('#cboFiltroTipoFact').value,
         texto: raiz.querySelector('#txtBuscarFact').value
       });
+      if (!Array.isArray(filas)) {
+        mostrarMensaje((filas && filas.mensaje) || 'No se pudo cargar la lista de facturación.', 'error');
+        return;
+      }
       const tbody = raiz.querySelector('#tablaFact tbody');
       tbody.innerHTML = '';
+      seleccionado = null;
       filas.forEach(function (f) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${f.booking||''}</td><td>${f.contenedor||''}</td><td>${f.destino1||''}</td><td>${f.cliente1||''}</td>
-          <td>${f.destino2||''}</td><td>${formatoFecha(f.fechaServicio)}</td><td>${f.codigo||''}</td><td>${f.placa||''}</td><td>${f.tipoFact||''}</td>`;
+        tr.innerHTML = `<td>${esc(f.booking)}</td><td>${esc(f.contenedor)}</td><td>${esc(f.destino1)}</td><td>${esc(f.cliente1)}</td>
+          <td>${esc(f.destino2)}</td><td>${esc(formatoFecha(f.fechaServicio))}</td><td>${esc(f.codigo)}</td><td>${esc(f.placa)}</td><td>${esc(f.tipoFact)}</td>`;
         tr.addEventListener('click', function () {
           tbody.querySelectorAll('tr').forEach(x => x.classList.remove('seleccionada'));
           tr.classList.add('seleccionada');

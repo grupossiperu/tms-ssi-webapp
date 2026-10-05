@@ -385,12 +385,20 @@ const FormDeposito = {
     });
 
     /* ===================== Acciones sobre adicionales ===================== */
+    // Una sola operación a la vez: un doble clic en Depositar/Aprobar no debe repetirla.
+    let gestionando = false;
     const gestionar = async function (datos) {
-      const r = await llamarBackend('gestionarDepositoAdicional', datos);
-      if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo actualizar el adicional.', 'error'); return false; }
-      mostrarMensaje(r.mensaje, 'exito');
-      await cargarTodo();
-      return true;
+      if (gestionando) return false;
+      gestionando = true;
+      try {
+        const r = await llamarBackend('gestionarDepositoAdicional', datos);
+        if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo actualizar el adicional.', 'error'); return false; }
+        mostrarMensaje(r.mensaje, 'exito');
+        await cargarTodo();
+        return true;
+      } finally {
+        gestionando = false;
+      }
     };
     const aprobar = function (id) {
       const nombre = window.prompt('Nombre de quien aprueba (gerencia):', '');

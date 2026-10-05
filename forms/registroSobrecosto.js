@@ -30,10 +30,7 @@ const FormRegistroSobrecosto = {
   },
 
   _fechaTxt: function (servicio) {
-    const fecha = servicio['FECHA DE PROGRAMACION'] ? new Date(servicio['FECHA DE PROGRAMACION']) : null;
-    return fecha && !isNaN(fecha.getTime())
-      ? (String(fecha.getDate()).padStart(2, '0') + '/' + String(fecha.getMonth() + 1).padStart(2, '0') + '/' + fecha.getFullYear())
-      : '-';
+    return formatoFecha(servicio['FECHA DE PROGRAMACION']);
   },
 
   abrir: function (servicio) {
@@ -42,11 +39,11 @@ const FormRegistroSobrecosto = {
 
     const html = `
       <div class="fila-campos">
-        <div class="campo"><label>Cliente</label><input value="${servicio['CLIENTE PARA FACTURACIÓN'] || ''}" disabled></div>
-        <div class="campo"><label>Conductor</label><input value="${servicio['CONDUCTOR'] || ''}" disabled></div>
-        <div class="campo"><label>Placa tracto</label><input value="${servicio['PLACA TRACTO'] || ''}" disabled></div>
-        <div class="campo"><label>Booking</label><input value="${servicio['BOOKING'] || ''}" disabled></div>
-        <div class="campo"><label>Fecha de servicio</label><input value="${fechaTxt}" disabled></div>
+        <div class="campo"><label>Cliente</label><input value="${esc(servicio['CLIENTE PARA FACTURACIÓN'])}" disabled></div>
+        <div class="campo"><label>Conductor</label><input value="${esc(servicio['CONDUCTOR'])}" disabled></div>
+        <div class="campo"><label>Placa tracto</label><input value="${esc(servicio['PLACA TRACTO'])}" disabled></div>
+        <div class="campo"><label>Booking</label><input value="${esc(servicio['BOOKING'])}" disabled></div>
+        <div class="campo"><label>Fecha de servicio</label><input value="${esc(fechaTxt)}" disabled></div>
         <div class="campo"><label>Motivo</label>
           <select id="cboMotivoSobrecosto">
             <option value="">Seleccione...</option>
@@ -75,7 +72,7 @@ const FormRegistroSobrecosto = {
 
     raiz.querySelector('#btnCancelarSobrecosto').addEventListener('click', cerrarPanel);
 
-    raiz.querySelector('#btnGuardarSobrecosto').addEventListener('click', async function () {
+    protegerClic(raiz.querySelector('#btnGuardarSobrecosto'), async function () {
       const motivo = raiz.querySelector('#cboMotivoSobrecosto').value;
       const observacion = raiz.querySelector('#txtObservacionSobrecosto').value.trim();
       const precioTxt = raiz.querySelector('#txtPrecioSobrecosto').value;

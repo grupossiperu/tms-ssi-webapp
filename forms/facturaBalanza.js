@@ -10,25 +10,20 @@ const FormFacturaBalanza = {
 
   abrir: async function (fila) {
     const datos = await llamarBackend('cargarDatosFacturaBalanza', { fila: fila });
-    if (!datos) { mostrarMensaje('No se pudo cargar la factura de balanza.', 'error'); return; }
+    if (!respuestaValida(datos)) { mostrarMensaje((datos && datos.mensaje) || 'No se pudo cargar la factura de balanza.', 'error'); return; }
 
     const detalle = await llamarBackend('generarDetalleBalanza', datos);
-    const meses = ['','ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-    let mesFact = '';
-    if (datos.fechaFacturacion) {
-      const d = new Date(datos.fechaFacturacion);
-      if (!isNaN(d.getTime())) mesFact = meses[d.getMonth() + 1];
-    }
+    const mesFact = mesDeFecha(datos.fechaFacturacion);
 
     const html = `
       <div class="fila-campos">
-        <div class="campo"><label>Booking</label><input id="txtBookingBal" value="${datos.booking||''}" disabled></div>
-        <div class="campo"><label>Contenedor</label><input id="txtContenedorBal" value="${datos.contenedor||''}" disabled></div>
-        <div class="campo"><label>Cliente</label><input id="txtClienteBal" value="${datos.cliente||''}" disabled></div>
-        <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioBal" value="${datos.fechaServicio||'-'}" disabled></div>
-        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioBal" value="${datos.codigoServicio||''}" disabled></div>
-        <div class="campo"><label>Placa</label><input id="txtPlacaBal" value="${datos.placa||''}" disabled></div>
-        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionBal" value="${datos.fechaFacturacion||''}" disabled></div>
+        <div class="campo"><label>Booking</label><input id="txtBookingBal" value="${esc(datos.booking)}" disabled></div>
+        <div class="campo"><label>Contenedor</label><input id="txtContenedorBal" value="${esc(datos.contenedor)}" disabled></div>
+        <div class="campo"><label>Cliente</label><input id="txtClienteBal" value="${esc(datos.cliente)}" disabled></div>
+        <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioBal" value="${esc(formatoFecha(datos.fechaServicio))}" disabled></div>
+        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioBal" value="${esc(datos.codigoServicio)}" disabled></div>
+        <div class="campo"><label>Placa</label><input id="txtPlacaBal" value="${esc(datos.placa)}" disabled></div>
+        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionBal" value="${esc(formatoFecha(datos.fechaFacturacion, ''))}" disabled></div>
         <div class="campo"><label>Mes de facturación</label><input id="txtMesFacturacionBal" value="${mesFact}" disabled></div>
         <div class="campo"><label>Mes de ejecución</label>
           <select id="cboMesEjecucionBal"><option></option><option>ENERO</option><option>FEBRERO</option><option>MARZO</option><option>ABRIL</option>
@@ -40,7 +35,7 @@ const FormFacturaBalanza = {
         <div class="campo"><label>IGV (S/)</label><input id="txtIGVBal" value="${(datos.igv||0).toFixed(2)}" disabled></div>
         <div class="campo"><label>Importe (S/)</label><input id="txtImporteBal" value="${(datos.importe||0).toFixed(2)}" disabled></div>
       </div>
-      <div class="campo"><label>Detalle de facturación</label><textarea id="txtDetalleFacturacionBal" rows="5" disabled>${detalle}</textarea></div>
+      <div class="campo"><label>Detalle de facturación</label><textarea id="txtDetalleFacturacionBal" rows="5" disabled>${esc(typeof detalle === 'string' ? detalle : '')}</textarea></div>
       <div class="panel-footer" style="padding-top:10px;">
         <button class="boton-secundario" id="btnInicioBal">Inicio</button>
         <button class="boton-primario" id="btnGrabarBal">Grabar</button>
@@ -52,7 +47,7 @@ const FormFacturaBalanza = {
   _wire: function (raiz, datos) {
     raiz.querySelector('#btnInicioBal').addEventListener('click', cerrarPanel);
 
-    raiz.querySelector('#btnGrabarBal').addEventListener('click', async function () {
+    protegerClic(raiz.querySelector('#btnGrabarBal'), async function () {
       const numeroFactura = raiz.querySelector('#txtNumeroFacturaBal').value.trim();
       if (numeroFactura === '') { mostrarMensaje('Ingrese el número de factura.', 'error'); return; }
       if (raiz.querySelector('#cboMesEjecucionBal').value.trim() === '') { mostrarMensaje('Seleccione el mes de ejecución.', 'error'); return; }
