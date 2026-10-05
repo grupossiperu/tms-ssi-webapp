@@ -162,13 +162,15 @@ const FormConsolidadoServicio = {
             <div class="g">
               ${c('N° de transferencia', 'txtNumeroTransferenciaConsol', '', true)}
               ${c('N° de viático', 'txtNumeroViaticoConsol', '', true)}
-              ${k('Peso bruto total (kg)', 'txtPesoBrutoTotalConsol')}
+              ${c('Nombre de cliente de la guía (GRE)', 'txtClienteGuiaConsol', '', true, 'span2')}
               <div class="sub">Guías de remisión <span style="text-transform:none;font-weight:500">· por cada guía del cliente va una guía de transporte</span></div>
               <table class="tabla-mini" id="tablaGuiasConsol">
                 <thead><tr><th>G.R. Transporte (GRT)${req}</th><th>G.R. Cliente (GRE)${req}</th><th style="width:150px">Peso bruto (kg)</th><th style="width:28px"></th></tr></thead>
                 <tbody></tbody>
               </table>
-              <button type="button" class="btn-agregar" id="btnAgregarGuiaConsol">+ Agregar guía</button>
+              <button type="button" class="btn-agregar" id="btnAgregarGuiaConsol" style="grid-column:span 2;align-self:center;">+ Agregar guía</button>
+              <div></div>
+              ${k('Peso bruto total (kg)', 'txtPesoBrutoTotalConsol')}
             </div>
           </div>
 
@@ -319,7 +321,7 @@ const FormConsolidadoServicio = {
       'txtTarifa1Consol','txtAlmacenSalidaConsol','txtAlmacenLlegadaConsol',
       'txtFechaServicioConsol','txtMesConsol','txtTipoProductoConsol','txtTipoTratamientoConsol',
       'txtBookingConsol','txtContenedorConsol','txtSemanaConsol','txtMontoDepositadoConsol',
-      'txtNumeroTransferenciaConsol','txtNumeroViaticoConsol','txtGRTransporte1Consol','txtGRCliente1Consol',
+      'txtNumeroTransferenciaConsol','txtNumeroViaticoConsol','txtClienteGuiaConsol','txtGRTransporte1Consol','txtGRCliente1Consol',
       'txtViaticoConsol','txtPeajeConsol','txtCocheraConsol','txtGLEstimadosTractoConsol','txtGLTractoRealConsol',
       'txtPrecioPetroleoConsol','txtKmInicialConsol','txtKmFinalConsol','txtNumeroGeneradorConsol',
       'txtHrInicialConsol','txtHrFinalConsol','txtCostoViajeRealizadoConsol'
@@ -812,6 +814,7 @@ const FormConsolidadoServicio = {
         'G.R. TRANSPORTE 3': guiaCol(2, 'grt'), 'G.R. CLIENTE 3': guiaCol(2, 'grc'),
         'GUIAS DETALLE': guias.map(function (g, i) { return (i + 1) + ') GRT ' + (g.grt || '-') + ' · GRE ' + (g.grc || '-') + ' · ' + g.peso + ' kg'; }).join(' ; '),
         'PESO BRUTO TOTAL': pesoTotal,
+        'CLIENTE GUIA': v('txtClienteGuiaConsol').trim().toUpperCase(),
         'DEPOSITOS ADICIONALES': depAdicionales,
         'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · ' + r.equipo + ' · pagó ' + r.pago + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
         'P. PETRÓLEO ADIC. TRACTO': self._n(v('txtPrecioGalonTractoConsol')).toFixed(2),

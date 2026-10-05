@@ -24,20 +24,19 @@ const FormFacturaViaje = {
         <div class="campo"><label>Booking</label><input id="txtBookingFact" value="${esc(datos.booking)}" disabled></div>
         <div class="campo"><label>Contenedor</label><input id="txtContenedorFact" value="${esc(datos.contenedor)}" disabled></div>
         <div class="campo"><label>Cliente</label><input id="txtClienteFact" value="${esc(datos.cliente)}" disabled></div>
+        <div class="campo"><label>Cliente de la guía (GRE)</label><input id="txtClienteGuiaFact" value="${esc(datos.clienteGuia || datos.cliente)}" disabled></div>
         <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioFact" value="${fechaTxt(datos.fechaServicio)}" disabled></div>
         <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioFact" value="${esc(datos.codigoServicio)}" disabled></div>
         <div class="campo"><label>Placa</label><input id="txtPlacaFact" value="${esc(datos.placa)}" disabled></div>
         <div class="campo"><label>Destino 1</label><input id="txtDestino1Fact" value="${esc(datos.destino1)}" disabled></div>
         <div class="campo"><label>Destino 2</label><input id="txtDestino2Fact" value="${esc(datos.destino2)}" disabled></div>
-        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionFact" value="${fechaTxt(datos.fechaFacturacion)}" disabled></div>
+        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionFact" value="${fechaTxt(datos.fechaFacturacion)}" placeholder="dd/mm/aaaa" autocomplete="off"></div>
         <div class="campo"><label>Mes de facturación</label><input id="txtMesFacturacionFact" value="${mesDeFecha(datos.fechaFacturacion)}" disabled></div>
-        <div class="campo"><label>Mes de ejecución</label>
-          <select id="cboMesEjecucionFact">${MESES.map(m=>`<option>${m}</option>`).join('')}</select>
-        </div>
         <div class="campo"><label>N° de factura</label><input id="txtNumeroFacturaFact"></div>
-        <div class="campo"><label>Tipo de cambio</label><input id="txtTipoCambioFact" value="${(datos.tipoCambio||0).toFixed(3)}" disabled></div>
-        <div class="campo"><label>Venta en dólares ($)</label><input id="txtVentaDolaresFact" value="${(datos.ventaDolares||0).toFixed(2)}"></div>
-        <div class="campo"><label>Sobreestadía ($)</label><input id="txtSobreestadiaFact" value="${(datos.sobreestadia||0).toFixed(2)}" disabled></div>
+        <div class="campo"><label>Tipo de cambio (de la fecha)</label><input id="txtTipoCambioFact" value="${datos.tipoCambio > 0 ? Number(datos.tipoCambio).toFixed(3) : ''}" disabled></div>
+        <div class="campo" id="avisoTipoCambioFact" style="grid-column:1 / -1; ${datos.tipoCambio > 0 ? 'display:none;' : ''} background:#fef3c7; color:#92400e; border-radius:8px; padding:8px 12px; font-weight:600; font-size:.85rem;">No hay tipo de cambio registrado para la fecha de facturación. Regístrelo en el módulo Tipo de cambio antes de facturar.</div>
+        <input type="hidden" id="txtVentaDolaresFact" value="${(datos.ventaDolares||0).toFixed(2)}">
+        <input type="hidden" id="txtSobreestadiaFact" value="0">
         <div class="campo"><label>Venta en soles (S/)</label><input id="txtVentaSolesFact" disabled></div>
         <div class="campo"><label><input type="checkbox" id="chkCompraDolaresTerceroFact"> Compra dólares tercero ($)</label><input id="txtCompraDolaresTerceroFact" value="0.00" disabled></div>
         <div class="campo"><label><input type="checkbox" id="chkCompraSolesTerceroFact"> Compra soles tercero (S/)</label><input id="txtCompraSolesTerceroFact" value="0.00" disabled></div>
@@ -77,7 +76,7 @@ const FormFacturaViaje = {
 
     function calcularVenta() {
       const ventaDolares = self._n(raiz.querySelector('#txtVentaDolaresFact').value);
-      const sobreestadia = self._n(raiz.querySelector('#txtSobreestadiaFact').value);
+      const sobreestadia = 0; // La sobreestadía se factura aparte (factura de sobrecosto).
       const tipoCambio = self._n(raiz.querySelector('#txtTipoCambioFact').value);
       if (tipoCambio <= 0) {
         ['#txtVentaSolesFact', '#txtValorVentaFact', '#txtIGVFact', '#txtPrecioVentaFact'].forEach(function (s) { raiz.querySelector(s).value = ''; });
@@ -86,7 +85,6 @@ const FormFacturaViaje = {
 
       const ventaSoles = (ventaDolares + sobreestadia) * tipoCambio;
       raiz.querySelector('#txtVentaSolesFact').value = 'S/ ' + ventaSoles.toFixed(2);
-      // La sobreestadía también lleva IGV: valor venta = venta + sobreestadía.
       const valorVenta = ventaDolares + sobreestadia;
       raiz.querySelector('#txtValorVentaFact').value = '$ ' + valorVenta.toFixed(2);
       const igv = valorVenta * 0.18;
@@ -141,16 +139,44 @@ const FormFacturaViaje = {
       await calculoPendiente;
     }
 
-    async function generarDetalle() {
-      const detalle = await llamarBackend('generarDetalleFacturacion', {
-        booking: raiz.querySelector('#txtBookingFact').value, contenedor: raiz.querySelector('#txtContenedorFact').value,
-        cliente: raiz.querySelector('#txtClienteFact').value, fechaServicio: raiz.querySelector('#txtFechaServicioFact').value,
-        codigoServicio: raiz.querySelector('#txtCodigoServicioFact').value, placa: raiz.querySelector('#txtPlacaFact').value,
-        destino1: raiz.querySelector('#txtDestino1Fact').value, destino2: raiz.querySelector('#txtDestino2Fact').value,
-        vrCargaEfectiva: self._n(raiz.querySelector('#txtVRCargaEfectivaFact').value), vrCargaUtil: self._n(raiz.querySelector('#txtVRCargaUtilFact').value)
-      });
-      if (typeof detalle === 'string') raiz.querySelector('#txtDetalleFacturacionFact').value = detalle;
+    function generarDetalle() {
+      const v = function (id) { return raiz.querySelector('#' + id).value; };
+      raiz.querySelector('#txtDetalleFacturacionFact').value =
+        'POR LOS SERVICIOS DE FLETE Y FRIO\n' +
+        'BOOKING: ' + v('txtBookingFact') + '\n' +
+        'CONTENEDOR: ' + v('txtContenedorFact') + '\n' +
+        'CLIENTE: ' + v('txtClienteGuiaFact') + '\n' +
+        'FECHA DE SERVICIO: ' + v('txtFechaServicioFact') + '\n' +
+        'CODIGO: ' + v('txtCodigoServicioFact') + '\n' +
+        'PLACA: ' + v('txtPlacaFact');
     }
+
+    // Tipo de cambio de la fecha de facturación (obligatorio para grabar).
+    async function cargarTipoCambio() {
+      const campoFecha = raiz.querySelector('#txtFechaFacturacionFact');
+      const d = _aFecha(campoFecha.value.trim());
+      const aviso = raiz.querySelector('#avisoTipoCambioFact');
+      raiz.querySelector('#txtMesFacturacionFact').value = d ? MESES[d.getMonth() + 1] : '';
+      if (!d) {
+        raiz.querySelector('#txtTipoCambioFact').value = '';
+        aviso.textContent = 'Escriba la fecha de facturación como dd/mm/aaaa.';
+        aviso.style.display = '';
+        calcularVenta(); programarDetraccion();
+        return;
+      }
+      campoFecha.value = formatoFecha(d);
+      const r = await llamarBackend('tipoCambioDeFecha', { fecha: campoFecha.value });
+      if (r && r.ok && r.tipoCambio > 0) {
+        raiz.querySelector('#txtTipoCambioFact').value = Number(r.tipoCambio).toFixed(3);
+        aviso.style.display = 'none';
+      } else {
+        raiz.querySelector('#txtTipoCambioFact').value = '';
+        aviso.textContent = (r && r.mensaje) || 'No hay tipo de cambio registrado para esa fecha.';
+        aviso.style.display = '';
+      }
+      calcularVenta(); programarDetraccion();
+    }
+    raiz.querySelector('#txtFechaFacturacionFact').addEventListener('change', cargarTipoCambio);
 
     raiz.querySelector('#chkCompraDolaresTerceroFact').addEventListener('change', function () {
       raiz.querySelector('#txtCompraDolaresTerceroFact').disabled = !this.checked;
@@ -161,7 +187,6 @@ const FormFacturaViaje = {
       if (!this.checked) raiz.querySelector('#txtCompraSolesTerceroFact').value = '0.00';
     });
 
-    raiz.querySelector('#txtVentaDolaresFact').addEventListener('input', function () { calcularVenta(); programarDetraccion(); });
     raiz.querySelector('#cboPorcentajeDetraccionFact').addEventListener('change', programarDetraccion);
 
     raiz.querySelector('#btnInicioFact').addEventListener('click', cerrarPanel);
@@ -169,7 +194,8 @@ const FormFacturaViaje = {
     protegerClic(raiz.querySelector('#btnGrabarFact'), async function () {
       const numeroFactura = raiz.querySelector('#txtNumeroFacturaFact').value.trim();
       if (numeroFactura === '') { mostrarMensaje('Ingrese el número de factura.', 'error'); return; }
-      if (self._n(raiz.querySelector('#txtVentaDolaresFact').value) <= 0) { mostrarMensaje('Ingrese la venta en dólares.', 'error'); return; }
+      if (self._n(raiz.querySelector('#txtVentaDolaresFact').value) <= 0) { mostrarMensaje('El servicio no tiene tarifa (venta en dólares). Revise la tarifa en el consolidado.', 'error'); return; }
+      if (self._n(raiz.querySelector('#txtTipoCambioFact').value) <= 0) { mostrarMensaje('No hay tipo de cambio para la fecha de facturación. Regístrelo en Tipo de cambio antes de facturar.', 'error'); return; }
 
       await asegurarDetraccion();
       if (!raiz.querySelector('#txtImporteFacturadoFact').value || !raiz.querySelector('#txtVentaSolesFact').value) {
@@ -183,7 +209,7 @@ const FormFacturaViaje = {
         codigoServicio: raiz.querySelector('#hidCodigoServicio').value, placa: raiz.querySelector('#txtPlacaFact').value,
         destino1: raiz.querySelector('#txtDestino1Fact').value, destino2: raiz.querySelector('#txtDestino2Fact').value,
         fechaFacturacion: raiz.querySelector('#txtFechaFacturacionFact').value, mesFacturacion: raiz.querySelector('#txtMesFacturacionFact').value,
-        mesEjecucion: raiz.querySelector('#cboMesEjecucionFact').value, numeroFactura: numeroFactura,
+        mesEjecucion: '', numeroFactura: numeroFactura,
         tipoCambio: raiz.querySelector('#txtTipoCambioFact').value, ventaDolares: raiz.querySelector('#txtVentaDolaresFact').value,
         sobreestadia: raiz.querySelector('#txtSobreestadiaFact').value, ventaSoles: raiz.querySelector('#txtVentaSolesFact').value,
         compraDolaresTercero: raiz.querySelector('#txtCompraDolaresTerceroFact').value, compraSolesTercero: raiz.querySelector('#txtCompraSolesTerceroFact').value,
@@ -202,6 +228,7 @@ const FormFacturaViaje = {
     });
 
     calcularVenta();
-    calcularDetraccion().then(generarDetalle);
+    generarDetalle();
+    calcularDetraccion();
   }
 };
