@@ -143,6 +143,12 @@ const FormResultados = {
 
   _mostrarDashboard: function () {
     const html = `
+      <div class="res-tabs">
+        <button type="button" class="res-tab activo" data-vista="dash">Indicadores</button>
+        <button type="button" class="res-tab" data-vista="er">Estado de resultados</button>
+      </div>
+      <div id="resVistaER" style="display:none"></div>
+      <div id="resVistaDash">
       <div class="res-barra">
         <div class="campo"><label>Período</label>
           <select id="resPeriodo">
@@ -183,6 +189,7 @@ const FormResultados = {
         <div class="res-card"><h3>Tipo de carga</h3><div class="res-canvas"><canvas id="gTipoCarga"></canvas></div></div>
         <div class="res-card"><h3>Top plantas (packing)</h3><div class="res-canvas"><canvas id="gPlantas"></canvas></div></div>
         <div class="res-card ancho3"><h3>Detalle de viajes en curso</h3><div id="resTablaCurso"></div></div>
+      </div>
       </div>`;
 
     actualizarPanel('Resultados', html, (raiz) => this._wire(raiz));
@@ -214,6 +221,15 @@ const FormResultados = {
       raiz.querySelector('#' + id).addEventListener('change', function () { self._render(raiz); });
     });
     raiz.querySelector('#resActualizar').addEventListener('click', function () { self._cargar(raiz); });
+    raiz.querySelectorAll('.res-tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        raiz.querySelectorAll('.res-tab').forEach(function (x) { x.classList.toggle('activo', x === b); });
+        const er = b.dataset.vista === 'er';
+        raiz.querySelector('#resVistaDash').style.display = er ? 'none' : '';
+        raiz.querySelector('#resVistaER').style.display = er ? '' : 'none';
+        if (er) FormEstadoResultados.mostrar(raiz.querySelector('#resVistaER'), self._token);
+      });
+    });
 
     self._cargar(raiz);
     // Actualización automática cada 60 s mientras el módulo esté abierto.

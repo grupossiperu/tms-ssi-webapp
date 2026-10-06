@@ -338,7 +338,7 @@ const FormAlmacen = {
         <div class="mt-seccion"><h3>Producto</h3>
           <div class="fila-campos">
             <div class="campo ancho2"><label>Código del producto</label>
-              <div class="mt-buscar"><input type="text" id="pCodigo" autocomplete="off" style="text-transform:uppercase"><button type="button" id="btnGenerarCodigo">Generar código</button></div>
+              <div class="mt-buscar"><input type="text" id="pCodigo" autocomplete="off" placeholder="Escanea el código de barras o genera uno" style="text-transform:uppercase"><button type="button" id="btnEscanearCodigo" title="Escanear con la cámara">Escanear</button><button type="button" id="btnGenerarCodigo">Generar código</button></div>
             </div>
             ${self._campoUsuario('pUsuario')}
             <div class="campo"><label>Tipo de producto</label><input type="text" id="pTipo" list="dlTipos" autocomplete="off" style="text-transform:uppercase">${MT.datalist('dlTipos', tipos)}</div>
@@ -377,6 +377,17 @@ const FormAlmacen = {
         if (t === 'GENERICO') return 'GEN';
         return t.replace(/\s/g, '').slice(0, 3);
       };
+      // Código de barras del fabricante: con el lector USB (escribe y da Enter) o con la cámara.
+      const avisarSiExiste = function () {
+        const c = $('pCodigo').value.trim().toUpperCase();
+        $('pCodigo').value = c;
+        if (c && self._producto(c)) mostrarMensaje('El código ' + c + ' ya está registrado (' + self._producto(c).producto + ').', 'error');
+      };
+      $('pCodigo').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); avisarSiExiste(); $('pProducto').focus(); } });
+      $('pCodigo').addEventListener('change', avisarSiExiste);
+      $('btnEscanearCodigo').addEventListener('click', function () {
+        MT.escanear(function (c) { $('pCodigo').value = c; avisarSiExiste(); $('pProducto').focus(); });
+      });
       $('btnGenerarCodigo').addEventListener('click', function () {
         const prod = $('pProducto').value.trim(), marca = $('pMarca').value.trim();
         if (!prod) { mostrarMensaje('Ingrese primero el nombre del producto.', 'error'); return; }
