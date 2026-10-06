@@ -326,7 +326,7 @@ const FormConsolidadoServicio = {
       'txtPrecioPetroleoConsol','txtKmInicialConsol','txtKmFinalConsol','txtNumeroGeneradorConsol',
       'txtHrInicialConsol','txtHrFinalConsol','txtCostoViajeRealizadoConsol',
       'txtPeajeSDCFConsol','txtPeajeAdicionalConsol','txtLlantaConsol','txtLavadoConsol','txtBalanzaConsol','txtOtrosConsol','txtBonoConsol'
-    ].concat(raiz.querySelector('#txtDestino2Consol').disabled ? [] : ['txtDestino2Consol', 'txtTarifa2Consol']);
+    ];  // Destinos adicionales y su tarifa no son obligatorios (vienen del servicio si existen).
     // Todos los datos son obligatorios, sea cual sea el estado del servicio.
     const esCulminado = true;
     let marcarFaltantes = false;
