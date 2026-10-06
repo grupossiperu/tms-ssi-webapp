@@ -55,13 +55,43 @@ const MT = {
   },
   /** Llama al backend y avisa si falla. Devuelve la respuesta o null. */
   llamar: async function (accion, datos) {
-    const r = await llamarBackend(accion, datos);
+    MT._cargando(1);
+    let r;
+    try {
+      try {
+        r = await llamarBackend(accion, datos);
+      } catch (e) {
+        // Las lecturas se reintentan una vez (Apps Script a veces falla al "despertar").
+        // Las grabaciones NO, para no registrar dos veces.
+        if (accion.indexOf('mtDatos') !== 0) throw e;
+        await new Promise(res => setTimeout(res, 1500));
+        r = await llamarBackend(accion, datos);
+      }
+    } finally {
+      MT._cargando(-1);
+    }
     if (!r || r.ok === false || r.error) {
       if (r && r.confirmarKm) return r;
       mostrarMensaje((r && (r.mensaje || r.error)) || 'No se pudo completar la operación.', 'error');
       return null;
     }
     return r;
+  },
+  /** Aviso "Cargando…" fijo mientras hay llamadas al servidor en curso. */
+  _pendientes: 0,
+  _cargando: function (delta) {
+    MT._pendientes = Math.max(0, MT._pendientes + delta);
+    let el = document.getElementById('mtCargando');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'mtCargando';
+      el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:3000;background:#142a44;color:#fff;' +
+        'padding:10px 18px;border-radius:10px;font-weight:700;font-size:.9rem;box-shadow:0 6px 20px rgba(0,0,0,.25);display:none;';
+      el.textContent = 'Cargando… un momento';
+      document.body.appendChild(el);
+    }
+    el.style.display = MT._pendientes > 0 ? 'block' : 'none';
+    document.body.style.cursor = MT._pendientes > 0 ? 'progress' : '';
   },
   /** Ventana encima del formulario abierto (no lo cierra). */
   sobreventana: function (titulo, html, alInicializar) {
@@ -619,7 +649,10 @@ const FormAlmacen = {
 };
 
 document.addEventListener('DOMContentLoaded', function () {
-  const enlazar = function (id, fn) { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
+  const enlazar = function (id, fn) {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', function () { if (!MT._pendientes) fn(); });
+  };
   enlazar('btn-mt-producto', () => FormAlmacen.abrirProducto());
   enlazar('btn-mt-proveedor', () => FormAlmacen.abrirProveedor());
   enlazar('btn-mt-ingreso', () => FormAlmacen.abrirIngreso());

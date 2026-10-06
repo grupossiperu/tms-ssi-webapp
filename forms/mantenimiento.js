@@ -404,7 +404,10 @@ const FormMantenimiento = {
 };
 
 document.addEventListener('DOMContentLoaded', function () {
-  const enlazar = function (id, fn) { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
+  const enlazar = function (id, fn) {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', function () { if (!MT._pendientes) fn(); });
+  };
   enlazar('btn-mt-mantenimiento', () => FormMantenimiento.abrirRegistrar());
   enlazar('btn-mt-reporte-fallas', () => FormMantenimiento.abrirReporteFallas());
   enlazar('btn-mt-control-fallas', () => FormMantenimiento.abrirControlFallas());
