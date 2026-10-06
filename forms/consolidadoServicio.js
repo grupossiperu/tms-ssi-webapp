@@ -227,21 +227,20 @@ const FormConsolidadoServicio = {
           <div class="seg">
             <div class="seg-tit"><span class="seg-num">6</span> Combustible <span class="nota">Abastecimiento: ${s('TIPO DE ABASTECIMIENTO', '-')}</span></div>
             <div class="g">
-              ${c('Precio petróleo contado (S/. x gl)', 'txtPrecioPetroleoConsol', s('COSTO DEL PETRÓLEO X GALÓN', 0), true, 'span2')}
-              <div class="nota-campo span2" style="grid-column:span 2;margin:0;align-self:center">Viene del registro del servicio.</div>
+              <div class="sub">Estimado del servicio <span style="text-transform:none;font-weight:500">· viene del registro del servicio</span></div>
+              ${k('GL estimados tracto', 'txtGLEstimadosTractoConsol')}
+              ${k('GL estimados generador', 'txtGLEstimadosGeneradorConsol')}
+              ${c('Precio petróleo (S/ x gl)', 'txtPrecioPetroleoConsol', s('COSTO DEL PETRÓLEO X GALÓN', 0), false, 'span2', true)}
               <div class="sub">Tracto</div>
-              ${k('GL estimados', 'txtGLEstimadosTractoConsol')}
-              ${k('Petróleo inicial', 'txtPetroleoTractoConsol')}
-              ${k('Petróleo B.I.', 'txtPetroleoTractoBIConsol')}
-              <div></div>
+              ${k('Petróleo inicial', 'txtPetroleoTractoConsol', 'span2')}
+              ${k('Petróleo B.I.', 'txtPetroleoTractoBIConsol', 'span2')}
               <div class="sub">Generador (genset)</div>
-              ${k('GL estimados', 'txtGLEstimadosGeneradorConsol')}
-              ${k('Petróleo inicial', 'txtPetroleoGeneradorConsol')}
-              ${k('Petróleo B.I.', 'txtPetroleoGeneradorBIConsol')}
-              <div></div>
+              ${k('Petróleo inicial', 'txtPetroleoGeneradorConsol', 'span2')}
+              ${k('Petróleo B.I.', 'txtPetroleoGeneradorBIConsol', 'span2')}
               <div class="sub">Recargas</div>
-              <table class="tabla-mini" id="tablaRecargasConsol">
-                <thead><tr><th>Lugar / grifo</th><th style="width:95px">Equipo</th><th style="width:115px">Pagó</th><th style="width:75px">Galones</th><th style="width:85px">S/ x gl</th><th style="width:90px">Total</th><th style="width:28px"></th></tr></thead>
+              <datalist id="dlGrifosConsol"></datalist>
+              <table class="tabla-mini" id="tablaRecargasConsol" style="table-layout:fixed">
+                <colgroup><col><col style="width:16%"><col style="width:13%"><col style="width:15%"><col style="width:10%"><col style="width:10%"><col style="width:12%"><col style="width:26px"></colgroup><thead><tr><th>Grifo</th><th>N° nota de venta</th><th>Equipo</th><th>Pagó</th><th>Galones</th><th>S/ x gl</th><th>Total</th><th></th></tr></thead>
                 <tbody></tbody>
               </table>
               <button type="button" class="btn-agregar" id="btnAgregarRecargaConsol">+ Agregar recarga</button>
@@ -560,7 +559,8 @@ const FormConsolidadoServicio = {
       const tr = document.createElement('tr');
       tr.className = 'rec-fila';
       tr.innerHTML =
-        '<td><input class="lugar" autocomplete="off" placeholder="Ej. Grifo Repsol Ica"></td>' +
+        '<td><input class="lugar" list="dlGrifosConsol" autocomplete="off" placeholder="Elija o escriba el grifo" style="text-transform:uppercase"></td>' +
+        '<td><input class="nv" autocomplete="off" placeholder="N° NV" style="text-transform:uppercase"></td>' +
         '<td><select class="equipo"><option value="TRACTO">Tracto</option><option value="GENSET">Genset</option></select></td>' +
         '<td><select class="pago" title="Si se abasteció con Repsol (crédito), el conductor no lo pagó y no se descuenta de lo depositado"><option value="CONDUCTOR">Conductor</option><option value="REPSOL">Repsol</option></select></td>' +
         '<td><input class="gal" inputmode="decimal" autocomplete="off" placeholder="0"></td>' +
@@ -582,7 +582,7 @@ const FormConsolidadoServicio = {
     function leerRecargas() {
       return Array.from(tbodyRec.querySelectorAll('tr.rec-fila')).map(function (tr) {
         return {
-          lugar: tr.querySelector('.lugar').value.trim(), equipo: tr.querySelector('.equipo').value, pago: tr.querySelector('.pago').value,
+          lugar: tr.querySelector('.lugar').value.trim().toUpperCase(), nv: tr.querySelector('.nv').value.trim().toUpperCase(), equipo: tr.querySelector('.equipo').value, pago: tr.querySelector('.pago').value,
           gal: self._n(tr.querySelector('.gal').value), precio: self._n(tr.querySelector('.precio').value), tr: tr
         };
       });
@@ -694,6 +694,8 @@ const FormConsolidadoServicio = {
       notaBono.classList.toggle('alerta', !r.destino1Encontrado || (d2 && d2 !== '-'));
       // Depósitos adicionales del servicio (módulo Depósito). Cada uno se
       // confirma con su check; solo los confirmados suman al depositado.
+      // Grifos usados antes (históricos de recargas) para la lista desplegable.
+      q('dlGrifosConsol').innerHTML = (r.grifos || []).map(function (g) { return '<option value="' + esc(g) + '">'; }).join('');
       const deps = r.depositos || [];
       const confirmable = function (x) { return x.estado === 'DEPOSITADO' || x.estado === 'APROBADO'; };
       listaDep.innerHTML = deps.length
@@ -816,7 +818,7 @@ const FormConsolidadoServicio = {
         'PESO BRUTO TOTAL': pesoTotal,
         'CLIENTE GUIA': v('txtClienteGuiaConsol').trim().toUpperCase(),
         'DEPOSITOS ADICIONALES': depAdicionales,
-        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · ' + r.equipo + ' · pagó ' + r.pago + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
+        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · NV ' + (r.nv || '-') + ' · ' + r.equipo + ' · pagó ' + r.pago + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
         'P. PETRÓLEO ADIC. TRACTO': self._n(v('txtPrecioGalonTractoConsol')).toFixed(2),
         'P. PETRÓLEO ADIC. GENSED': self._n(v('txtPrecioGalonGensetConsol')).toFixed(2),
         'KM RECORRIDO': kmRec > 0 ? kmRec : '',

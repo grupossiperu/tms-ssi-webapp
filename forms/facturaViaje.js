@@ -17,51 +17,141 @@ const FormFacturaViaje = {
 
     const fechaTxt = function (v) { return esc(formatoFecha(v, '')); };
 
+    const ruta = [datos.destino1, datos.destino2].filter(function (x) { return x && String(x).trim() !== '' && String(x).trim() !== '-'; }).map(esc).join(' → ');
     const html = `
+      <style>
+        .panel-modal.panel-fact { max-width: min(1250px, 96vw); }
+        .panel-fact .panel-body { padding: 16px 20px 0; }
+        .panel-fact .cab { display: flex; flex-wrap: wrap; gap: 6px 18px; background: #f1f5f9; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: .84rem; color: #334155; }
+        .panel-fact .cab b { color: #1c3a5e; }
+        .panel-fact .cab .ruta { font-weight: 700; color: #1c3a5e; font-size: .95rem; width: 100%; }
+        .panel-fact .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; }
+        .panel-fact .seg { border: 1px solid #dbe2ea; border-radius: 10px; margin: 0 0 14px; background: #fff; overflow: hidden; }
+        .panel-fact .seg-tit { background: #eef3f8; color: #1c3a5e; font-weight: 700; font-size: .78rem; letter-spacing: .4px; text-transform: uppercase; padding: 8px 14px; border-bottom: 1px solid #dbe2ea; display: flex; align-items: center; gap: 8px; }
+        .panel-fact .seg-num { background: #1c3a5e; color: #fff; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; }
+        .panel-fact .seg.destacado { border: 2px solid #1c3a5e; }
+        .panel-fact .seg.destacado .seg-tit { background: #1c3a5e; color: #fff; }
+        .panel-fact .seg.destacado .seg-num { background: #fff; color: #1c3a5e; }
+        .panel-fact .g { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px; padding: 12px 14px 2px; }
+        .panel-fact .campo { margin-bottom: 10px; }
+        .panel-fact .campo label { font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .panel-fact .campo input, .panel-fact .campo select, .panel-fact textarea { padding: 7px 9px; font-size: .86rem; }
+        .panel-fact .campo input:disabled { background: #f1f5f9; color: #1c3a5e; font-weight: 700; border-color: #e2e8f0; }
+        .panel-fact .chk-lbl { display: flex !important; align-items: center; gap: 6px; }
+        .panel-fact .chk-lbl input { width: auto !important; margin: 0; }
+        .panel-fact .aviso-tc { grid-column: 1 / -1; background: #fef3c7; color: #92400e; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: .85rem; margin-bottom: 10px; }
+        .panel-fact .facturas { padding: 12px 14px 4px; }
+        .panel-fact .fila-fac { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .panel-fact .fila-fac span { font-size: .78rem; font-weight: 700; color: #64748b; width: 22px; }
+        .panel-fact .fila-fac input { flex: 1; padding: 9px 11px; border: 1.5px solid #c7ced8; border-radius: 8px; font-size: 1rem; font-weight: 700; text-transform: uppercase; font-family: inherit; }
+        .panel-fact .fila-fac input.falta { border-color: #dc2626; background: #fef2f2; }
+        .panel-fact .btn-quitar { border: none; background: transparent; color: #b91c1c; font-size: 1.2rem; cursor: pointer; padding: 0 6px; }
+        .panel-fact .btn-agregar { border: 1.5px dashed #94a3b8; background: #f8fafc; color: #1c3a5e; border-radius: 8px; font-size: .8rem; font-weight: 700; padding: 6px 12px; cursor: pointer; margin-bottom: 10px; }
+        .panel-fact .btn-agregar:hover { border-color: #1c3a5e; background: #eef3f8; }
+        .panel-fact textarea { width: 100%; border: 1.5px solid #e2e8f0; border-radius: 8px; background: #f8fafc; font-family: inherit; resize: vertical; }
+        .panel-fact .det { padding: 12px 14px; }
+        .panel-fact .pie { position: sticky; bottom: 0; background: #fff; margin: 0 -20px; padding: 10px 20px; box-shadow: 0 -2px 10px rgba(0,0,0,.08); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .panel-fact .tot { display: flex; flex-direction: column; background: #f1f5f9; border-radius: 8px; padding: 5px 12px; min-width: 130px; }
+        .panel-fact .tot span { font-size: .68rem; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: .3px; }
+        .panel-fact .tot b { font-size: 1rem; color: #1c3a5e; }
+        .panel-fact .tot.prin { background: #dcfce7; } .panel-fact .tot.prin b { color: #166534; }
+        .panel-fact .pie .esp { flex: 1; }
+        @media (max-width: 1000px) { .panel-fact .cols { grid-template-columns: 1fr; } }
+        @media (max-width: 640px) { .panel-fact .g { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      </style>
       <input type="hidden" id="hidCodigoServicio" value="${esc(datos.codigoServicio)}">
       <input type="hidden" id="hidTipoFacturacionActual" value="${esc(tipoFacturacionActual)}">
-      <div class="fila-campos">
-        <div class="campo"><label>Booking</label><input id="txtBookingFact" value="${esc(datos.booking)}" disabled></div>
-        <div class="campo"><label>Contenedor</label><input id="txtContenedorFact" value="${esc(datos.contenedor)}" disabled></div>
-        <div class="campo"><label>Cliente</label><input id="txtClienteFact" value="${esc(datos.cliente)}" disabled></div>
-        <div class="campo"><label>Cliente de la guía (GRE)</label><input id="txtClienteGuiaFact" value="${esc(datos.clienteGuia || datos.cliente)}" disabled></div>
-        <div class="campo"><label>Fecha de servicio</label><input id="txtFechaServicioFact" value="${fechaTxt(datos.fechaServicio)}" disabled></div>
-        <div class="campo"><label>Código de servicio</label><input id="txtCodigoServicioFact" value="${esc(datos.codigoServicio)}" disabled></div>
-        <div class="campo"><label>Placa</label><input id="txtPlacaFact" value="${esc(datos.placa)}" disabled></div>
-        <div class="campo"><label>Destino 1</label><input id="txtDestino1Fact" value="${esc(datos.destino1)}" disabled></div>
-        <div class="campo"><label>Destino 2</label><input id="txtDestino2Fact" value="${esc(datos.destino2)}" disabled></div>
-        <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionFact" value="${fechaTxt(datos.fechaFacturacion)}" placeholder="dd/mm/aaaa" autocomplete="off"></div>
-        <div class="campo"><label>Mes de facturación</label><input id="txtMesFacturacionFact" value="${mesDeFecha(datos.fechaFacturacion)}" disabled></div>
-        <div class="campo"><label>N° de factura</label><input id="txtNumeroFacturaFact"></div>
-        <div class="campo"><label>Tipo de cambio (de la fecha)</label><input id="txtTipoCambioFact" value="${datos.tipoCambio > 0 ? Number(datos.tipoCambio).toFixed(3) : ''}" disabled></div>
-        <div class="campo" id="avisoTipoCambioFact" style="grid-column:1 / -1; ${datos.tipoCambio > 0 ? 'display:none;' : ''} background:#fef3c7; color:#92400e; border-radius:8px; padding:8px 12px; font-weight:600; font-size:.85rem;">No hay tipo de cambio registrado para la fecha de facturación. Regístrelo en el módulo Tipo de cambio antes de facturar.</div>
-        <input type="hidden" id="txtVentaDolaresFact" value="${(datos.ventaDolares||0).toFixed(2)}">
-        <input type="hidden" id="txtSobreestadiaFact" value="0">
-        <div class="campo"><label>Venta en soles (S/)</label><input id="txtVentaSolesFact" disabled></div>
-        <div class="campo"><label><input type="checkbox" id="chkCompraDolaresTerceroFact"> Compra dólares tercero ($)</label><input id="txtCompraDolaresTerceroFact" value="0.00" disabled></div>
-        <div class="campo"><label><input type="checkbox" id="chkCompraSolesTerceroFact"> Compra soles tercero (S/)</label><input id="txtCompraSolesTerceroFact" value="0.00" disabled></div>
-        <div class="campo"><label>Valor venta ($)</label><input id="txtValorVentaFact" disabled></div>
-        <div class="campo"><label>IGV ($)</label><input id="txtIGVFact" disabled></div>
-        <div class="campo"><label>Precio venta ($)</label><input id="txtPrecioVentaFact" disabled></div>
-        <div class="campo"><label>Costo por viaje realizado B.I. (S/)</label><input id="txtCostoViajeRealizadoFact" value="${(datos.costoViajeRealizado||0).toFixed(2)}" disabled></div>
-        <div class="campo"><label>V.R. carga efectiva (S/)</label><input id="txtVRCargaEfectivaFact" value="${(datos.vrCargaEfectiva||0).toFixed(2)}" disabled></div>
-        <div class="campo"><label>V.R. carga útil nominal (S/)</label><input id="txtVRCargaUtilFact" value="${(datos.vrCargaUtil||0).toFixed(2)}" disabled></div>
-        <div class="campo"><label>% Detracción</label>
-          <select id="cboPorcentajeDetraccionFact"><option value="4.00%">4.00%</option><option value="5.40%">5.40%</option></select>
-        </div>
-        <div class="campo"><label>Importe operación (S/)</label><input id="txtImporteOperacionFact" disabled></div>
-        <div class="campo"><label>Detracción (S/)</label><input id="txtDetraccionFact" disabled></div>
-        <div class="campo"><label>Estimación resultante (S/)</label><input id="txtEstimacionResultanteFact" disabled></div>
-        <div class="campo"><label>Detracción ($)</label><input id="txtDetraccionDolarFact" disabled></div>
-        <div class="campo"><label>Importe facturado dsct. detracción ($)</label><input id="txtImporteFacturadoFact" disabled></div>
+      <!-- Datos del servicio (se usan en el detalle y al grabar) -->
+      <input type="hidden" id="txtBookingFact" value="${esc(datos.booking)}">
+      <input type="hidden" id="txtContenedorFact" value="${esc(datos.contenedor)}">
+      <input type="hidden" id="txtClienteFact" value="${esc(datos.cliente)}">
+      <input type="hidden" id="txtClienteGuiaFact" value="${esc(datos.clienteGuia || datos.cliente)}">
+      <input type="hidden" id="txtFechaServicioFact" value="${fechaTxt(datos.fechaServicio)}">
+      <input type="hidden" id="txtCodigoServicioFact" value="${esc(datos.codigoServicio)}">
+      <input type="hidden" id="txtPlacaFact" value="${esc(datos.placa)}">
+      <input type="hidden" id="txtDestino1Fact" value="${esc(datos.destino1)}">
+      <input type="hidden" id="txtDestino2Fact" value="${esc(datos.destino2)}">
+      <input type="hidden" id="txtVentaDolaresFact" value="${(datos.ventaDolares||0).toFixed(2)}">
+      <input type="hidden" id="txtSobreestadiaFact" value="0">
+
+      <div class="cab">
+        <span class="ruta">${ruta || '-'}</span>
+        <span>Cliente: <b>${esc(datos.cliente || '-')}</b></span>
+        <span>Cliente guía (GRE): <b>${esc(datos.clienteGuia || datos.cliente || '-')}</b></span>
+        <span>Booking: <b>${esc(datos.booking || '-')}</b></span>
+        <span>Contenedor: <b>${esc(datos.contenedor || '-')}</b></span>
+        <span>Fecha servicio: <b>${fechaTxt(datos.fechaServicio) || '-'}</b></span>
+        <span>Código: <b>${esc(datos.codigoServicio || '-')}</b></span>
+        <span>Placa: <b>${esc(datos.placa || '-')}</b></span>
+        <span>Venta: <b>$ ${(datos.ventaDolares||0).toFixed(2)}</b></span>
       </div>
-      <div class="campo"><label>Detalle de facturación</label><textarea id="txtDetalleFacturacionFact" rows="6" disabled></textarea></div>
-      <div class="panel-footer" style="padding-top:10px;">
+
+      <div class="cols">
+        <div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">1</span> Fecha y tipo de cambio</div>
+            <div class="g">
+              <div class="campo"><label>Fecha de facturación</label><input id="txtFechaFacturacionFact" value="${fechaTxt(datos.fechaFacturacion)}" placeholder="dd/mm/aaaa" autocomplete="off"></div>
+              <div class="campo"><label>Mes de facturación</label><input id="txtMesFacturacionFact" value="${mesDeFecha(datos.fechaFacturacion)}" disabled></div>
+              <div class="campo"><label>Tipo de cambio (de la fecha)</label><input id="txtTipoCambioFact" value="${datos.tipoCambio > 0 ? Number(datos.tipoCambio).toFixed(3) : ''}" disabled></div>
+              <div class="aviso-tc" id="avisoTipoCambioFact" style="${datos.tipoCambio > 0 ? 'display:none;' : ''}">No hay tipo de cambio registrado para la fecha de facturación. Regístrelo en el módulo Tipo de cambio antes de facturar.</div>
+            </div>
+          </div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">2</span> Venta</div>
+            <div class="g">
+              <div class="campo"><label>Valor venta ($)</label><input id="txtValorVentaFact" disabled></div>
+              <div class="campo"><label>IGV 18% ($)</label><input id="txtIGVFact" disabled></div>
+              <div class="campo"><label>Precio venta ($)</label><input id="txtPrecioVentaFact" disabled></div>
+              <div class="campo"><label>Venta en soles (S/)</label><input id="txtVentaSolesFact" disabled></div>
+              <div class="campo"><label class="chk-lbl"><input type="checkbox" id="chkCompraDolaresTerceroFact"> Compra tercero ($)</label><input id="txtCompraDolaresTerceroFact" value="0.00" disabled></div>
+              <div class="campo"><label class="chk-lbl"><input type="checkbox" id="chkCompraSolesTerceroFact"> Compra tercero (S/)</label><input id="txtCompraSolesTerceroFact" value="0.00" disabled></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">3</span> Detracción</div>
+            <div class="g">
+              <div class="campo"><label>Costo viaje realizado B.I. (S/)</label><input id="txtCostoViajeRealizadoFact" value="${(datos.costoViajeRealizado||0).toFixed(2)}" disabled></div>
+              <div class="campo"><label>V.R. carga efectiva (S/)</label><input id="txtVRCargaEfectivaFact" value="${(datos.vrCargaEfectiva||0).toFixed(2)}" disabled></div>
+              <div class="campo"><label>V.R. carga útil nominal (S/)</label><input id="txtVRCargaUtilFact" value="${(datos.vrCargaUtil||0).toFixed(2)}" disabled></div>
+              <div class="campo"><label>% Detracción</label>
+                <select id="cboPorcentajeDetraccionFact"><option value="4.00%">4.00%</option><option value="5.40%">5.40%</option></select>
+              </div>
+              <div class="campo"><label>Importe operación (S/)</label><input id="txtImporteOperacionFact" disabled></div>
+              <div class="campo"><label>Detracción (S/)</label><input id="txtDetraccionFact" disabled></div>
+              <div class="campo"><label>Estimación resultante (S/)</label><input id="txtEstimacionResultanteFact" disabled></div>
+              <div class="campo"><label>Detracción ($)</label><input id="txtDetraccionDolarFact" disabled></div>
+              <div class="campo"><label>Importe fact. dsct. detracción ($)</label><input id="txtImporteFacturadoFact" disabled></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="seg destacado">
+        <div class="seg-tit"><span class="seg-num">4</span> N° de factura</div>
+        <div class="facturas">
+          <div id="listaFacturasFact"></div>
+          <button type="button" class="btn-agregar" id="btnAgregarFacturaFact">+ Agregar otra factura</button>
+        </div>
+      </div>
+
+      <div class="seg">
+        <div class="seg-tit"><span class="seg-num">5</span> Detalle de facturación</div>
+        <div class="det"><textarea id="txtDetalleFacturacionFact" rows="7" readonly></textarea></div>
+      </div>
+
+      <div class="pie">
+        <div class="tot"><span>Precio venta</span><b id="totPrecioVentaFact">-</b></div>
+        <div class="tot"><span>Detracción</span><b id="totDetraccionFact">-</b></div>
+        <div class="tot prin"><span>Importe facturado</span><b id="totImporteFact">-</b></div>
+        <div class="esp"></div>
         <button class="boton-secundario" id="btnInicioFact">Inicio</button>
         <button class="boton-primario" id="btnGrabarFact">Grabar</button>
       </div>`;
 
-    abrirPanel('Facturar Viaje - ' + esc(tipoFacturacionActual), html, (raiz) => this._wire(raiz, datos));
+    abrirPanel('Facturar viaje - ' + esc(tipoFacturacionActual), html, (raiz) => this._wire(raiz, datos), { clase: 'panel-fact' });
   },
 
   _n: function (t) {
@@ -80,6 +170,7 @@ const FormFacturaViaje = {
       const tipoCambio = self._n(raiz.querySelector('#txtTipoCambioFact').value);
       if (tipoCambio <= 0) {
         ['#txtVentaSolesFact', '#txtValorVentaFact', '#txtIGVFact', '#txtPrecioVentaFact'].forEach(function (s) { raiz.querySelector(s).value = ''; });
+        pintarTotales();
         return;
       }
 
@@ -114,6 +205,7 @@ const FormFacturaViaje = {
       if (!respuestaValida(resp) || typeof resp.importeOperacion !== 'number') {
         // Mejor campos vacíos que valores de otro monto: Grabar exige que estén calculados.
         campos.forEach(function (s) { raiz.querySelector(s).value = ''; });
+        pintarTotales();
         return;
       }
       raiz.querySelector('#txtImporteOperacionFact').value = 'S/ ' + resp.importeOperacion.toFixed(2);
@@ -121,7 +213,40 @@ const FormFacturaViaje = {
       raiz.querySelector('#txtEstimacionResultanteFact').value = 'S/ ' + resp.estimacionResultante.toFixed(2);
       raiz.querySelector('#txtDetraccionDolarFact').value = '$ ' + resp.detraccionDolares.toFixed(2);
       raiz.querySelector('#txtImporteFacturadoFact').value = '$ ' + resp.importeFacturado.toFixed(2);
+      pintarTotales();
     }
+
+    function pintarTotales() {
+      const val = function (id) { return raiz.querySelector('#' + id).value || '-'; };
+      raiz.querySelector('#totPrecioVentaFact').textContent = val('txtPrecioVentaFact');
+      raiz.querySelector('#totDetraccionFact').textContent = val('txtDetraccionDolarFact');
+      raiz.querySelector('#totImporteFact').textContent = val('txtImporteFacturadoFact');
+    }
+
+    /* ---- N° de factura: una o varias ---- */
+    const listaFacturas = raiz.querySelector('#listaFacturasFact');
+    function renumerarFacturas() {
+      const filas = listaFacturas.querySelectorAll('.fila-fac');
+      filas.forEach(function (f, i) {
+        f.querySelector('span').textContent = (i + 1) + '.';
+        f.querySelector('.btn-quitar').style.visibility = filas.length > 1 ? 'visible' : 'hidden';
+      });
+    }
+    function agregarFactura() {
+      const f = document.createElement('div');
+      f.className = 'fila-fac';
+      f.innerHTML = '<span></span><input class="num-fac" autocomplete="off" placeholder="Ej.: F001-000123"><button type="button" class="btn-quitar" title="Quitar">×</button>';
+      f.querySelector('.btn-quitar').addEventListener('click', function () { f.remove(); renumerarFacturas(); });
+      f.querySelector('input').addEventListener('input', function () { this.classList.remove('falta'); });
+      listaFacturas.appendChild(f);
+      renumerarFacturas();
+      return f.querySelector('input');
+    }
+    function leerFacturas() {
+      return Array.from(listaFacturas.querySelectorAll('.num-fac')).map(function (i) { return i.value.trim().toUpperCase(); }).filter(Boolean);
+    }
+    raiz.querySelector('#btnAgregarFacturaFact').addEventListener('click', function () { agregarFactura().focus(); });
+    agregarFactura();
 
     // Se espera 300 ms tras la última tecla para consultar; Grabar fuerza y espera el cálculo pendiente.
     let temporizadorDetraccion = null;
@@ -192,8 +317,16 @@ const FormFacturaViaje = {
     raiz.querySelector('#btnInicioFact').addEventListener('click', cerrarPanel);
 
     protegerClic(raiz.querySelector('#btnGrabarFact'), async function () {
-      const numeroFactura = raiz.querySelector('#txtNumeroFacturaFact').value.trim();
-      if (numeroFactura === '') { mostrarMensaje('Ingrese el número de factura.', 'error'); return; }
+      const facturas = leerFacturas();
+      if (!facturas.length) {
+        const primera = listaFacturas.querySelector('.num-fac');
+        if (primera) { primera.classList.add('falta'); primera.focus(); }
+        mostrarMensaje('Ingrese el número de factura.', 'error');
+        return;
+      }
+      if (new Set(facturas).size !== facturas.length) { mostrarMensaje('Hay un número de factura repetido.', 'error'); return; }
+      // Varias facturas del mismo viaje se guardan juntas: "F001-1 / F001-2".
+      const numeroFactura = facturas.join(' / ');
       if (self._n(raiz.querySelector('#txtVentaDolaresFact').value) <= 0) { mostrarMensaje('El servicio no tiene tarifa (venta en dólares). Revise la tarifa en el consolidado.', 'error'); return; }
       if (self._n(raiz.querySelector('#txtTipoCambioFact').value) <= 0) { mostrarMensaje('No hay tipo de cambio para la fecha de facturación. Regístrelo en Tipo de cambio antes de facturar.', 'error'); return; }
 
