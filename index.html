@@ -4,8 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema de Servicios - Transportes SSI S.A.C.</title>
-<link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="home.css">
+<!-- Se cargan con ?v=... para que el navegador siempre use la versión publicada (sin caché vieja). -->
+<script>
+  window.__VERSION_APP = Date.now();
+  ['styles.css', 'home.css'].forEach(function (h) {
+    document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
+  });
+</script>
+<noscript><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="home.css"></noscript>
 </head>
 <body class="home-body">
 
@@ -264,32 +270,37 @@
 <!-- Contenedor único de paneles/modales (SPA, sin recarga de página) -->
 <div id="contenedor-panel"></div>
 
-<!-- Núcleo -->
-<script src="app.js"></script>
-<script src="forms/multiSelect.js"></script>
-
-<!-- Un archivo por cada UserForm original, sin fusionar -->
-<script src="forms/accesoServicios.js"></script>
-<script src="forms/tipoCambio.js"></script>
-<script src="forms/servicio.js"></script>
-<script src="forms/selServicioContabilidad.js"></script>
-<script src="forms/consolidadoServicio.js"></script>
-<script src="forms/serviciosCulminados.js"></script>
-<script src="forms/consolidadoServicios.js"></script>
-<script src="forms/datosViaje.js"></script>
-<script src="forms/sobrecostos.js"></script>
-<script src="forms/registroSobrecosto.js"></script>
-<script src="forms/selFacturaViaje.js"></script>
-<script src="forms/facturaViaje.js"></script>
-<script src="forms/facturaSobrecosto.js"></script>
-<script src="forms/facturaBalanza.js"></script>
-<script src="forms/peajes.js"></script>
-<script src="forms/conductores.js"></script>
-<script src="forms/tarifas.js"></script>
-<script src="forms/deposito.js"></script>
-<script src="forms/documentos.js"></script>
-<script src="forms/controlCombustible.js"></script>
-<script src="forms/resultados.js"></script>
+<!-- Scripts: núcleo y un archivo por formulario. Se cargan en este orden y
+     con ?v=... para evitar que el navegador use una versión vieja en caché. -->
+<script>
+  [
+    'app.js',
+    'forms/multiSelect.js',
+    'forms/accesoServicios.js',
+    'forms/tipoCambio.js',
+    'forms/servicio.js',
+    'forms/selServicioContabilidad.js',
+    'forms/consolidadoServicio.js',
+    'forms/serviciosCulminados.js',
+    'forms/consolidadoServicios.js',
+    'forms/datosViaje.js',
+    'forms/sobrecostos.js',
+    'forms/registroSobrecosto.js',
+    'forms/selFacturaViaje.js',
+    'forms/facturaViaje.js',
+    'forms/facturaSobrecosto.js',
+    'forms/facturaBalanza.js',
+    'forms/peajes.js',
+    'forms/conductores.js',
+    'forms/tarifas.js',
+    'forms/deposito.js',
+    'forms/documentos.js',
+    'forms/controlCombustible.js',
+    'forms/resultados.js'
+  ].forEach(function (src) {
+    document.write('<script src="' + src + '?v=' + window.__VERSION_APP + '"><\/script>');
+  });
+</script>
 
 </body>
 </html>
