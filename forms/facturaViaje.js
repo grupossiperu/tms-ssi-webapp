@@ -151,7 +151,8 @@ const FormFacturaViaje = {
         <div class="g" style="padding-bottom:0">
           <div class="campo"><label>RUC del cliente</label><input id="txtRucClienteFact" value="${esc(datos.rucCliente || '')}" disabled></div>
           <div class="campo" style="grid-column:span 2"><label>Razón social</label><input id="txtRazonSocialFact" value="${esc(datos.razonSocialCliente || '')}" disabled></div>
-          <div class="campo" style="grid-column:1 / -1"><label>G.R. Cliente (GRE)</label><input id="txtGRClienteFact" value="${esc(datos.grCliente || '')}" disabled></div>
+          <div class="campo"><label>G.R. Transporte (GRT)</label><input id="txtGRTransporteFact" value="${esc(datos.grTransporte || '')}" disabled></div>
+          <div class="campo" style="grid-column:span 2"><label>G.R. Cliente (GRE)</label><input id="txtGRClienteFact" value="${esc(datos.grCliente || '')}" disabled></div>
           <div class="aviso-tc" id="avisoClienteFact" style="${datos.rucCliente ? 'display:none;' : ''}">El cliente ${esc(datos.cliente || '')} no está en el maestro de clientes. Regístralo en Maestros &gt; Clientes (código, razón social y RUC) y vuelve a abrir esta factura.</div>
         </div>
         <div class="facturas">
@@ -394,6 +395,7 @@ const FormFacturaViaje = {
       // Varias facturas del mismo viaje se guardan juntas: "F001-1 / F001-2".
       const numeroFactura = facturas.join(' / ');
       if (!raiz.querySelector('#txtRucClienteFact').value || !raiz.querySelector('#txtRazonSocialFact').value) { mostrarMensaje('Falta el RUC y la razón social del cliente. Regístralo en Maestros > Clientes.', 'error'); return; }
+      if (!raiz.querySelector('#txtGRTransporteFact').value) { mostrarMensaje('El consolidado no tiene la G.R. Transporte (GRT). Complétala en Consolidado de servicios (Revisar).', 'error'); return; }
       if (!raiz.querySelector('#txtGRClienteFact').value) { mostrarMensaje('El consolidado no tiene la G.R. Cliente (GRE). Complétala en Consolidado de servicios (Revisar).', 'error'); return; }
       if (!mtc.punto) { raiz.querySelector('#cboPuntoMtcFact').focus(); mostrarMensaje('Elige el punto del MTC para el destino.', 'error'); return; }
       if (!(mtc.ce > 0)) { mostrarMensaje('Falta la carga efectiva (peso bruto de las guías). Complétalo en el consolidado.', 'error'); return; }
@@ -421,6 +423,7 @@ const FormFacturaViaje = {
         precioVenta: raiz.querySelector('#txtPrecioVentaFact').value, costoViajeRealizado: raiz.querySelector('#txtCostoViajeRealizadoFact').value,
         vrCargaEfectiva: mtc.vrEf, vrCargaUtil: mtc.vrNom,
         grCliente: raiz.querySelector('#txtGRClienteFact').value,
+        grTransporte: raiz.querySelector('#txtGRTransporteFact').value,
         rucCliente: raiz.querySelector('#txtRucClienteFact').value, razonSocialCliente: raiz.querySelector('#txtRazonSocialFact').value,
         puntoMtc: mtc.punto, kmMtc: mtc.km, valorMtc: mtc.valor, factor: mtc.factor,
         cargaEfectiva: mtc.ce, cargaNominal: mtc.cn, valorReferencial: mtc.vr,

@@ -77,6 +77,62 @@ const MT = {
     }
     return r;
   },
+  /**
+   * Escanea un código de barras/QR con la cámara (celular o laptop).
+   * Usa el lector nativo del navegador si existe; si no, carga ZXing.
+   */
+  escanear: async function (alLeer) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      mostrarMensaje('Este navegador no permite usar la cámara. Usa el lector de código de barras o escribe el código.', 'error');
+      return;
+    }
+    const capa = document.createElement('div');
+    capa.className = 'overlay-modal';
+    capa.style.zIndex = '1600';
+    capa.innerHTML = '<div class="panel-modal" style="max-width:520px"><div class="panel-header"><h2>Escanear código</h2><button class="cerrar-panel" title="Cerrar">&times;</button></div>' +
+      '<div class="panel-body" style="text-align:center"><video playsinline muted style="width:100%;border-radius:10px;background:#000;max-height:60vh"></video>' +
+      '<div style="font-size:.85rem;color:#64748b;margin-top:8px">Apunta la cámara al código de barras del producto.</div></div></div>';
+    document.body.appendChild(capa);
+    const video = capa.querySelector('video');
+    let stream = null, activo = true, lectorZx = null;
+    const cerrar = function () {
+      activo = false;
+      try { if (lectorZx) lectorZx.reset(); } catch (e) { /* no-op */ }
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      capa.remove();
+    };
+    const leido = function (codigo) { if (!activo) return; cerrar(); alLeer(String(codigo).trim().toUpperCase()); };
+    capa.querySelector('.cerrar-panel').addEventListener('click', cerrar);
+    try {
+      if ('BarcodeDetector' in window) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        await video.play();
+        const detector = new window.BarcodeDetector();
+        const buscar = async function () {
+          if (!activo) return;
+          try { const r = await detector.detect(video); if (r && r.length) { leido(r[0].rawValue); return; } } catch (e) { /* sigue */ }
+          setTimeout(buscar, 250);
+        };
+        buscar();
+      } else {
+        if (!window.ZXing) {
+          await new Promise(function (ok, mal) {
+            const sc = document.createElement('script');
+            sc.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+            sc.onload = ok; sc.onerror = mal;
+            document.head.appendChild(sc);
+          });
+        }
+        lectorZx = new window.ZXing.BrowserMultiFormatReader();
+        lectorZx.decodeFromConstraints({ video: { facingMode: 'environment' } }, video, function (r) { if (r) leido(r.getText()); });
+      }
+    } catch (e) {
+      cerrar();
+      mostrarMensaje('No se pudo abrir la cámara (' + (e && e.message ? e.message : 'permiso denegado') + ').', 'error');
+    }
+  },
+
   /** Aviso "Cargando…" fijo mientras hay llamadas al servidor en curso. */
   _pendientes: 0,
   _cargando: function (delta) {
@@ -134,6 +190,20 @@ const MT_ESTILOS = `
     .mt-tabla-wrap tr.mt-sel td{ background:#dbeafe !important; }
     .mt-tabla-wrap tbody tr{ cursor:pointer; }
     .mt-bajo{ color:#b91c1c; font-weight:800; }
+    .mt-lineas{ width:100%; table-layout:fixed; font-size:.82rem; margin-bottom:8px; }
+    .mt-lineas td{ vertical-align:middle; padding:5px 6px; }
+    .mt-lineas input{ width:100%; padding:7px 9px; border:1.5px solid #c7ced8; border-radius:8px; font-size:.88rem; font-family:inherit; }
+    .mt-lineas input.falta{ border-color:#dc2626; background:#fef2f2; }
+    .mt-lineas .mt-buscar button{ padding:0 8px; font-size:.75rem; display:flex; align-items:center; }
+    .mt-lineas .btn-quitar-l{ border:none; background:transparent; color:#b91c1c; font-size:1.2rem; cursor:pointer; }
+    .mt-agregar{ border:1.5px dashed #94a3b8; background:#f8fafc; color:#1c3a5e; border-radius:8px; font-size:.82rem; font-weight:700; padding:7px 14px; cursor:pointer; margin-bottom:6px; }
+    .mt-agregar:hover{ border-color:#1c3a5e; background:#eef3f8; }
+    .mt-mini{ border:1px solid #1c3a5e; background:#fff; color:#1c3a5e; border-radius:6px; font-size:.72rem; font-weight:700; padding:2px 8px; cursor:pointer; }
+    .mt-kres{ display:flex; flex-wrap:wrap; gap:10px; margin:4px 0 10px; }
+    .mt-kres div{ background:#f1f5f9; border-radius:8px; padding:6px 12px; display:flex; flex-direction:column; min-width:120px; }
+    .mt-kres span{ font-size:.68rem; text-transform:uppercase; color:#64748b; font-weight:700; }
+    .mt-kres b{ font-size:1rem; color:#1c3a5e; }
+    .mt-kres small{ font-size:.72rem; color:#64748b; }
     @media (max-width: 900px){ .mt-form .fila-campos{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
   </style>`;
 
@@ -142,18 +212,23 @@ const MT_TIPOS_PRODUCTO = ['FILTRO', 'RODAJE', 'LUCES', 'MOTOR', 'FAJA', 'ACEITE
 const MT_CATEGORIAS = ['NUEVO', 'USADO', 'REMAN', 'CORE'];
 const MT_UNIDADES = ['UNIDAD', 'DOCENA', 'CILINDRO', 'BALDE', 'CAJA', 'GALÓN', 'KILO', 'BOLSA', 'PAQUETE', 'JUEGO', 'LITRO', 'METRO', 'PAR', 'KIT'];
 const MT_MOTIVOS_SALIDA = ['MANTENIMIENTO', 'CONSUMO INTERNO', 'OTROS'];
+const MT_DIAS_AVISO_VENCIMIENTO = 30;
 
 const FormAlmacen = {
 
   _datos: null,
 
-  _cargar: async function () {
+  _t: 0,
+
+  /** Usa los datos ya cargados si tienen menos de 1 minuto (forzar = siempre del servidor). */
+  _cargar: async function (forzar) {
+    if (!forzar && this._datos && Date.now() - this._t < 60000) return this._datos;
     const r = await MT.llamar('mtDatosAlmacen', {});
     if (r && !Array.isArray(r.productos)) {
       mostrarMensaje('El servidor no devolvió los datos del almacén. Intente de nuevo en unos segundos.', 'error');
       return null;
     }
-    if (r) this._datos = r;
+    if (r) { this._datos = r; this._t = Date.now(); this.actualizarAvisoAlertas(); }
     return r;
   },
 
@@ -246,7 +321,7 @@ const FormAlmacen = {
   },
 
   abrirConsultaStock: async function () {
-    this._datos = null;
+    if (!(await this._cargar(true))) return;
     await this.consultarStock(null);
   },
 
@@ -392,6 +467,87 @@ const FormAlmacen = {
     });
   },
 
+  /* ============================ LÍNEAS DE PRODUCTOS (ingreso y salida) ============================ */
+
+  /**
+   * Tabla de productos de un documento. Cada línea: código (escribir, lector
+   * de código de barras, lupa o cámara), producto, stock y cantidad.
+   * Enter en el código pasa a la cantidad; Enter en la cantidad agrega otra línea.
+   */
+  _lineas: function (raiz, idTabla, esSalida) {
+    const self = this;
+    const tbody = raiz.querySelector('#' + idTabla + ' tbody');
+    const camara = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
+    function pintarFila(tr) {
+      const p = self._producto(tr.querySelector('.l-cod').value);
+      const cant = MT.num(tr.querySelector('.l-cant').value);
+      tr.querySelector('.l-prod').innerHTML = p ? '<b>' + esc(p.producto) + '</b><div class="mt-ayuda">' + esc([p.marca, p.categoria, p.ubicacion].filter(Boolean).join(' · ')) + '</div>'
+        : (tr.querySelector('.l-cod').value.trim() ? '<span class="mt-bajo">Código no encontrado</span>' : '');
+      tr.querySelector('.l-stock').textContent = p ? p.stock : '';
+      const mal = esSalida && p && !isNaN(cant) && cant > p.stock;
+      tr.querySelector('.l-stock').classList.toggle('mt-bajo', !!mal);
+      tr.querySelector('.l-cant').classList.toggle('falta', !!mal);
+    }
+    function agregar(codigo) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><div class="mt-buscar"><input class="l-cod" autocomplete="off" placeholder="Código o escanear" style="text-transform:uppercase">' +
+        '<button type="button" class="l-lupa" title="Buscar en el stock">Buscar</button><button type="button" class="l-cam" title="Escanear con la cámara">' + camara + '</button></div></td>' +
+        '<td class="l-prod"></td><td class="l-stock mt-stock" style="text-align:center"></td>' +
+        '<td><input class="l-cant" type="number" min="0" step="any" placeholder="0"></td>' +
+        '<td style="text-align:center"><button type="button" class="btn-quitar-l" title="Quitar">×</button></td>';
+      const cod = tr.querySelector('.l-cod'), cant = tr.querySelector('.l-cant');
+      const elegir = function (p) { if (p) { cod.value = p.codigo; pintarFila(tr); cant.focus(); } };
+      cod.addEventListener('change', function () { pintarFila(tr); });
+      cod.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); pintarFila(tr); if (self._producto(cod.value)) cant.focus(); } });
+      cant.addEventListener('input', function () { pintarFila(tr); });
+      cant.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); agregar().querySelector('.l-cod').focus(); } });
+      tr.querySelector('.l-lupa').addEventListener('click', function () { self.consultarStock(elegir); });
+      tr.querySelector('.l-cam').addEventListener('click', function () { MT.escanear(function (c) { elegir(self._producto(c) || (cod.value = c, null)); pintarFila(tr); }); });
+      tr.querySelector('.btn-quitar-l').addEventListener('click', function () {
+        if (tbody.children.length > 1) tr.remove(); else { cod.value = ''; cant.value = ''; pintarFila(tr); }
+      });
+      if (codigo) { cod.value = codigo; }
+      tbody.appendChild(tr);
+      pintarFila(tr);
+      return tr;
+    }
+    function leer() {
+      return Array.from(tbody.querySelectorAll('tr')).map(function (tr) {
+        return { codigo: tr.querySelector('.l-cod').value.trim().toUpperCase(), cantidad: tr.querySelector('.l-cant').value.trim() };
+      }).filter(function (x) { return x.codigo || x.cantidad; });
+    }
+    function validar() {
+      const items = leer();
+      if (!items.length) return 'Agrega al menos un producto.';
+      for (let i = 0; i < items.length; i++) {
+        const p = self._producto(items[i].codigo);
+        if (!p) return 'Producto ' + (i + 1) + ': el código ' + (items[i].codigo || '(vacío)') + ' no existe.';
+        const c = MT.num(items[i].cantidad);
+        if (isNaN(c) || c <= 0) return 'Producto ' + (i + 1) + ' (' + p.producto + '): escribe la cantidad.';
+      }
+      if (esSalida) {
+        const suma = {};
+        items.forEach(function (it) { suma[it.codigo] = (suma[it.codigo] || 0) + MT.num(it.cantidad); });
+        for (const c in suma) {
+          const p = self._producto(c);
+          if (suma[c] > p.stock) return 'No hay stock suficiente de ' + p.producto + '. Stock: ' + p.stock + ', pedido: ' + suma[c] + '.';
+        }
+      }
+      return '';
+    }
+    function limpiar() { tbody.innerHTML = ''; agregar(); }
+    agregar();
+    return { agregar: agregar, leer: leer, validar: validar, limpiar: limpiar };
+  },
+
+  /** Actualiza el stock local con lo que devolvió el servidor. */
+  _aplicarStocks: function (items) {
+    const self = this;
+    (items || []).forEach(function (it) { const p = self._producto(it.codigo); if (p) p.stock = it.stockFinal; });
+    FormAlmacen.actualizarAvisoAlertas();
+  },
+
   /* ============================ INGRESO ============================ */
 
   abrirIngreso: async function () {
@@ -401,25 +557,25 @@ const FormAlmacen = {
 
     const html = MT_ESTILOS + `
       <div class="mt-form">
-        <div class="mt-seccion"><h3>Ingreso de productos</h3>
+        <div class="mt-seccion"><h3>Documento de compra</h3>
           <div class="fila-campos">
             <div class="campo"><label>Fecha</label><input type="date" id="iFecha" value="${MT.hoy()}"></div>
             <div class="campo"><label>Hora</label><input type="time" step="1" id="iHora" value="${MT.ahora()}"></div>
             ${self._campoUsuario('iUsuario')}
-            <div class="campo"><label>N° documento</label><input type="text" id="iDocumento" autocomplete="off" style="text-transform:uppercase"></div>
-            <div class="campo ancho2"><label>Código del producto</label>
-              <div class="mt-buscar"><input type="text" id="iCodigo" autocomplete="off" style="text-transform:uppercase" placeholder="Escriba o escanee el código"><button type="button" id="btnBuscarIngreso" title="Consultar stock">Buscar</button></div>
-            </div>
-            <div class="campo ancho2"><label>Producto</label><input type="text" id="iProducto" readonly></div>
-            <div class="campo"><label>Marca</label><input type="text" id="iMarca" readonly></div>
-            <div class="campo"><label>Categoría</label><input type="text" id="iCategoria" readonly></div>
-            <div class="campo"><label>Ubicación</label><input type="text" id="iUbicacion" readonly></div>
-            <div class="campo"><label>Stock actual</label><input type="text" id="iStock" readonly class="mt-stock"></div>
-            <div class="campo"><label>Cantidad ingresada</label><input type="number" id="iCantidad" min="0" step="any"></div>
+            <div class="campo"><label>Tipo de documento</label><select id="iTipoDoc"><option value=""></option><option value="FACTURA">FACTURA</option><option value="BOLETA">BOLETA</option></select></div>
+            <div class="campo"><label>N° de documento</label><input type="text" id="iDocumento" autocomplete="off" placeholder="Ej. F001-000123" style="text-transform:uppercase"></div>
             <div class="campo ancho2"><label>Razón social (proveedor)</label><select id="iRazon">${MT.opciones(self._datos.proveedores.map(p => p.razonSocial), '')}</select></div>
             <div class="campo"><label>RUC</label><input type="text" id="iRuc" readonly></div>
-            <div class="campo ancho4"><label>Observación</label><input type="text" id="iObs" autocomplete="off" style="text-transform:uppercase"></div>
+            <div class="campo ancho4"><label>Observación (opcional)</label><input type="text" id="iObs" autocomplete="off" style="text-transform:uppercase"></div>
           </div>
+        </div>
+        <div class="mt-seccion"><h3>Productos</h3>
+          <table class="tabla-lista mt-lineas" id="tablaLineasIng">
+            <colgroup><col style="width:30%"><col><col style="width:80px"><col style="width:120px"><col style="width:40px"></colgroup>
+            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad ingresada</th><th></th></tr></thead><tbody></tbody>
+          </table>
+          <button type="button" class="mt-agregar" id="btnAgregarLineaIng">+ Agregar producto</button>
+          <div class="mt-ayuda">Con el lector de código de barras: escanea, escribe la cantidad y presiona Enter para pasar al siguiente producto.</div>
           <div class="mt-botones">
             <button class="boton-secundario" id="btnInicioIngreso">Inicio</button>
             <button class="boton-secundario" id="btnLimpiarIngreso">Limpiar</button>
@@ -438,34 +594,16 @@ const FormAlmacen = {
 
     abrirPanel('Registrar ingreso', html, function (raiz) {
       const $ = id => raiz.querySelector('#' + id);
-      function mostrarProducto(p) {
-        $('iCodigo').value = p ? p.codigo : $('iCodigo').value;
-        $('iProducto').value = p ? p.producto : '';
-        $('iMarca').value = p ? p.marca : '';
-        $('iCategoria').value = p ? p.categoria : '';
-        $('iUbicacion').value = p ? p.ubicacion : '';
-        $('iStock').value = p ? p.stock : '';
-      }
-      function buscar() {
-        const c = $('iCodigo').value.trim();
-        if (!c) { mostrarProducto(null); return; }
-        const p = self._producto(c);
-        if (!p) { mostrarProducto(null); mostrarMensaje('Producto no encontrado. Verifique el código.', 'error'); return; }
-        mostrarProducto(p);
-      }
-      $('iCodigo').addEventListener('change', buscar);
-      $('btnBuscarIngreso').addEventListener('click', () => self.consultarStock(p => { mostrarProducto(p); $('iCantidad').focus(); }));
+      const lineas = self._lineas(raiz, 'tablaLineasIng', false);
+      $('btnAgregarLineaIng').addEventListener('click', () => lineas.agregar().querySelector('.l-cod').focus());
       $('iRazon').addEventListener('change', function () {
         const p = self._datos.proveedores.find(x => x.razonSocial === this.value);
         $('iRuc').value = p ? p.ruc : '';
       });
-      function limpiarProducto() {
-        ['iCodigo', 'iProducto', 'iMarca', 'iCategoria', 'iUbicacion', 'iStock', 'iCantidad', 'iObs'].forEach(id => { $(id).value = ''; });
-        $('iHora').value = MT.ahora();
-      }
       function limpiarTodo() {
-        limpiarProducto();
-        $('iFecha').value = MT.hoy(); $('iDocumento').value = ''; $('iRazon').value = ''; $('iRuc').value = '';
+        lineas.limpiar();
+        ['iTipoDoc', 'iDocumento', 'iRazon', 'iRuc', 'iObs'].forEach(id => { $(id).value = ''; });
+        $('iFecha').value = MT.hoy(); $('iHora').value = MT.ahora();
         _refrescarSnapshotFormulario();
       }
       $('btnLimpiarIngreso').addEventListener('click', limpiarTodo);
@@ -474,24 +612,23 @@ const FormAlmacen = {
       protegerClic($('btnGrabarIngreso'), async function () {
         const usuario = $('iUsuario').value.trim();
         if (!usuario) { mostrarMensaje('Ingrese el usuario.', 'error'); return; }
-        if (!$('iProducto').value) { buscar(); if (!$('iProducto').value) return; }
+        if (!$('iTipoDoc').value) { mostrarMensaje('Elige si el documento es FACTURA o BOLETA.', 'error'); return; }
+        if (!$('iDocumento').value.trim()) { mostrarMensaje('Escribe el número de ' + $('iTipoDoc').value.toLowerCase() + '.', 'error'); return; }
+        if (!$('iRazon').value) { mostrarMensaje('Seleccione la razón social del proveedor.', 'error'); return; }
+        const err = lineas.validar();
+        if (err) { mostrarMensaje(err, 'error'); return; }
         MT.guardarUsuario(usuario);
-        const r = await MT.llamar('mtGrabarIngreso', {
-          tipo: 'NORMAL', fecha: $('iFecha').value, hora: $('iHora').value, usuario: usuario,
-          documento: $('iDocumento').value, codigo: $('iCodigo').value, cantidad: $('iCantidad').value,
-          razonSocial: $('iRazon').value, ruc: $('iRuc').value, observacion: $('iObs').value
+        const r = await MT.llamar('mtGrabarIngresoLote', {
+          fecha: $('iFecha').value, hora: $('iHora').value, usuario: usuario,
+          tipoDocumento: $('iTipoDoc').value, documento: $('iDocumento').value, razonSocial: $('iRazon').value, ruc: $('iRuc').value,
+          observacion: $('iObs').value, items: lineas.leer()
         });
         if (!r) return;
-        const p = self._producto($('iCodigo').value);
-        if (p) { p.stock = r.stockFinal; if ($('iRazon').value) p.proveedor = $('iRazon').value; }
-        if (confirmar(r.mensaje + '\nStock: ' + r.stockAntes + ' → ' + r.stockFinal +
-          '\n\n¿Desea registrar otro ingreso con el mismo documento y proveedor?')) {
-          limpiarProducto();
-          $('iCodigo').focus();
-          _refrescarSnapshotFormulario();
-        } else {
-          limpiarTodo();
-        }
+        self._aplicarStocks(r.items);
+        const prov = $('iRazon').value;
+        r.items.forEach(it => { const p = self._producto(it.codigo); if (p) p.proveedor = prov; });
+        mostrarMensaje(r.mensaje, 'exito');
+        limpiarTodo();
       });
 
       protegerClic($('btnIngresoReman'), async function () {
@@ -505,11 +642,13 @@ const FormAlmacen = {
         });
         if (!r) return;
         const p = self._producto($('rProducto').value);
-        if (p) p.stock = r.stockFinal;
+        if (p) { p.stock = r.stockFinal; p.vence = 'SÍ'; p.fechaVencimiento = $('rVence').value; }
+        FormAlmacen.actualizarAvisoAlertas();
         mostrarMensaje(r.mensaje, 'exito');
         ['rProducto', 'rCantidad', 'rVence'].forEach(id => { $(id).value = ''; });
         _refrescarSnapshotFormulario();
       });
+      raiz.querySelector('#tablaLineasIng .l-cod').focus();
     }, { clase: 'panel-servicio' });
   },
 
@@ -523,27 +662,25 @@ const FormAlmacen = {
 
     const html = MT_ESTILOS + `
       <div class="mt-form">
-        <div class="mt-seccion"><h3>Salida de productos</h3>
+        <div class="mt-seccion"><h3>Entrega</h3>
           <div class="fila-campos">
             <div class="campo"><label>Fecha</label><input type="date" id="sFecha" value="${MT.hoy()}"></div>
             <div class="campo"><label>Hora</label><input type="time" step="1" id="sHora" value="${MT.ahora()}"></div>
             ${self._campoUsuario('sUsuario')}
-            <div class="campo"></div>
-            <div class="campo ancho2"><label>Código del producto</label>
-              <div class="mt-buscar"><input type="text" id="sCodigo" autocomplete="off" style="text-transform:uppercase" placeholder="Escriba o escanee el código"><button type="button" id="btnBuscarSalida" title="Consultar stock">Buscar</button></div>
-            </div>
-            <div class="campo ancho2"><label>Producto</label><input type="text" id="sProducto" readonly></div>
-            <div class="campo"><label>Marca</label><input type="text" id="sMarca" readonly></div>
-            <div class="campo"><label>Categoría</label><input type="text" id="sCategoria" readonly></div>
-            <div class="campo"><label>Ubicación</label><input type="text" id="sUbicacion" readonly></div>
-            <div class="campo"><label>Stock actual</label><input type="text" id="sStock" readonly class="mt-stock"></div>
-            <div class="campo"><label>Cantidad entregada</label><input type="number" id="sCantidad" min="0" step="any"></div>
-            <div class="campo"><label>Entregado a</label><select id="sEntregado">${MT.opciones(d.personal, '')}</select></div>
-            <div class="campo"><label>Placa</label><select id="sPlaca">${MT.opciones(d.placas, '')}</select></div>
             <div class="campo"><label>Motivo de salida</label><select id="sMotivo">${MT.opciones(MT_MOTIVOS_SALIDA, '')}</select></div>
-            <div class="campo ancho4"><label>Observación</label><input type="text" id="sObs" autocomplete="off" style="text-transform:uppercase"></div>
+            <div class="campo ancho2"><label>Entregado a</label><select id="sEntregado">${MT.opciones(d.personal, '')}</select></div>
+            <div class="campo"><label>Placa</label><select id="sPlaca">${MT.opciones(d.placas, '')}</select></div>
+            <div class="campo"></div>
+            <div class="campo ancho4"><label>Observación (opcional)</label><input type="text" id="sObs" autocomplete="off" style="text-transform:uppercase"></div>
           </div>
           <div class="mt-ayuda">Las salidas con motivo MANTENIMIENTO quedan pendientes para asociarlas en "Registrar mantenimiento".</div>
+        </div>
+        <div class="mt-seccion"><h3>Productos</h3>
+          <table class="tabla-lista mt-lineas" id="tablaLineasSal">
+            <colgroup><col style="width:30%"><col><col style="width:80px"><col style="width:120px"><col style="width:40px"></colgroup>
+            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad entregada</th><th></th></tr></thead><tbody></tbody>
+          </table>
+          <button type="button" class="mt-agregar" id="btnAgregarLineaSal">+ Agregar producto</button>
           <div class="mt-botones">
             <button class="boton-secundario" id="btnInicioSalida">Inicio</button>
             <button class="boton-secundario" id="btnLimpiarSalida">Limpiar</button>
@@ -566,31 +703,12 @@ const FormAlmacen = {
 
     abrirPanel('Registrar salida', html, function (raiz) {
       const $ = id => raiz.querySelector('#' + id);
-      function mostrarProducto(p) {
-        $('sCodigo').value = p ? p.codigo : $('sCodigo').value;
-        $('sProducto').value = p ? p.producto : '';
-        $('sMarca').value = p ? p.marca : '';
-        $('sCategoria').value = p ? p.categoria : '';
-        $('sUbicacion').value = p ? p.ubicacion : '';
-        $('sStock').value = p ? p.stock : '';
-      }
-      function buscar() {
-        const c = $('sCodigo').value.trim();
-        if (!c) { mostrarProducto(null); return; }
-        const p = self._producto(c);
-        if (!p) { mostrarProducto(null); mostrarMensaje('Producto no encontrado. Verifique el código.', 'error'); return; }
-        mostrarProducto(p);
-      }
-      $('sCodigo').addEventListener('change', buscar);
-      $('btnBuscarSalida').addEventListener('click', () => self.consultarStock(p => { mostrarProducto(p); $('sCantidad').focus(); }));
-      function limpiarProducto() {
-        ['sCodigo', 'sProducto', 'sMarca', 'sCategoria', 'sUbicacion', 'sStock', 'sCantidad', 'sObs'].forEach(id => { $(id).value = ''; });
-        $('sHora').value = MT.ahora();
-      }
+      const lineas = self._lineas(raiz, 'tablaLineasSal', true);
+      $('btnAgregarLineaSal').addEventListener('click', () => lineas.agregar().querySelector('.l-cod').focus());
       function limpiarTodo() {
-        limpiarProducto();
-        ['sEntregado', 'sPlaca', 'sMotivo', 'cProducto', 'cPlaca', 'cCantidad'].forEach(id => { $(id).value = ''; });
-        $('sFecha').value = MT.hoy();
+        lineas.limpiar();
+        ['sEntregado', 'sPlaca', 'sMotivo', 'sObs', 'cProducto', 'cPlaca', 'cCantidad'].forEach(id => { $(id).value = ''; });
+        $('sFecha').value = MT.hoy(); $('sHora').value = MT.ahora();
         _refrescarSnapshotFormulario();
       }
       $('btnLimpiarSalida').addEventListener('click', limpiarTodo);
@@ -605,25 +723,20 @@ const FormAlmacen = {
       protegerClic($('btnGrabarSalida'), async function () {
         const usuario = usuarioOk();
         if (!usuario) return;
-        if (!$('sProducto').value) { buscar(); if (!$('sProducto').value) return; }
-        const p = self._producto($('sCodigo').value);
-        const cant = MT.num($('sCantidad').value);
-        if (p && !isNaN(cant) && cant > p.stock) { mostrarMensaje('No hay stock suficiente. Stock actual: ' + p.stock, 'error'); return; }
-        const r = await MT.llamar('mtGrabarSalida', {
-          tipo: 'NORMAL', fecha: $('sFecha').value, hora: $('sHora').value, usuario: usuario,
-          codigo: $('sCodigo').value, cantidad: $('sCantidad').value, entregadoA: $('sEntregado').value,
-          placa: $('sPlaca').value, motivo: $('sMotivo').value, observacion: $('sObs').value
+        if (!$('sMotivo').value) { mostrarMensaje('Seleccione el motivo de salida.', 'error'); return; }
+        if (!$('sEntregado').value) { mostrarMensaje('Seleccione a quién se entregó.', 'error'); return; }
+        if (!$('sPlaca').value) { mostrarMensaje('Seleccione la placa.', 'error'); return; }
+        const err = lineas.validar();
+        if (err) { mostrarMensaje(err, 'error'); return; }
+        const r = await MT.llamar('mtGrabarSalidaLote', {
+          fecha: $('sFecha').value, hora: $('sHora').value, usuario: usuario,
+          entregadoA: $('sEntregado').value, placa: $('sPlaca').value, motivo: $('sMotivo').value,
+          observacion: $('sObs').value, items: lineas.leer()
         });
         if (!r) return;
-        if (p) p.stock = r.stockFinal;
-        if (r.stockMinimo) mostrarMensaje('Salida registrada. Atención: el producto quedó en stock mínimo o por debajo (stock: ' + r.stockFinal + ').', 'error');
-        if (confirmar(r.mensaje + '\n\n¿Desea registrar otra salida para la misma persona y placa?')) {
-          limpiarProducto();
-          $('sCodigo').focus();
-          _refrescarSnapshotFormulario();
-        } else {
-          limpiarTodo();
-        }
+        self._aplicarStocks(r.items);
+        mostrarMensaje(r.mensaje + (r.stockMinimo && r.stockMinimo.length ? '\n\nAtención, quedaron en stock mínimo o por debajo:\n- ' + r.stockMinimo.join('\n- ') : ''), 'exito');
+        limpiarTodo();
       });
 
       async function core(tipo) {
@@ -638,6 +751,7 @@ const FormAlmacen = {
         if (!r) return;
         const p = self._producto($('cProducto').value);
         if (p) p.stock = r.stockFinal;
+        FormAlmacen.actualizarAvisoAlertas();
         mostrarMensaje(r.mensaje, 'exito');
         ['cProducto', 'cPlaca', 'cCantidad'].forEach(id => { $(id).value = ''; });
         _refrescarSnapshotFormulario();
@@ -645,6 +759,135 @@ const FormAlmacen = {
       protegerClic($('btnIngresoCore'), () => core('CORE_INGRESO'));
       protegerClic($('btnSalidaCore'), () => core('CORE_RECARGA'));
     }, { clase: 'panel-servicio' });
+  },
+
+  /* ============================ KARDEX POR PRODUCTO ============================ */
+
+  abrirKardex: async function (codigoInicial) {
+    if (!(await this._cargar())) return;
+    const self = this;
+    const html = MT_ESTILOS + `
+      <div class="mt-form">
+        <div class="fila-campos" style="grid-template-columns:minmax(0,1fr) auto;">
+          <div class="campo"><label>Producto</label>
+            <div class="mt-buscar"><input id="kProducto" list="dlKardexProd" autocomplete="off" placeholder="Escribe o escanea el código o el nombre" style="text-transform:uppercase">
+            <button type="button" id="kCam" title="Escanear con la cámara">Escanear</button><button type="button" id="kVer">Ver kardex</button></div>
+            ${'<datalist id="dlKardexProd">' + self._datos.productos.map(p => '<option value="' + esc(p.codigo) + '">' + esc(p.producto) + '</option>').join('') + '</datalist>'}
+          </div>
+        </div>
+        <div id="kResumen" class="mt-kres"></div>
+        <div class="mt-tabla-wrap">
+          <table class="tabla-lista" id="tablaKardex">
+            <thead><tr><th>Fecha</th><th>Hora</th><th>Movimiento</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th>Referencia / placa</th><th>Entregado a</th><th>Usuario</th><th>Observación</th></tr></thead>
+            <tbody><tr><td colspan="10" style="text-align:center;color:#8b95a1;padding:16px;">Elige un producto.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="mt-botones"><button class="boton-secundario" id="kCerrar">Cerrar</button></div>
+      </div>`;
+    abrirPanel('Kardex por producto', html, function (raiz) {
+      const $ = id => raiz.querySelector('#' + id);
+      async function ver() {
+        const p = self._producto($('kProducto').value);
+        if (!p) { mostrarMensaje('Producto no encontrado. Verifique el código.', 'error'); return; }
+        $('kProducto').value = p.codigo;
+        const r = await MT.llamar('mtKardexProducto', { codigo: p.codigo });
+        if (!r) return;
+        const m = r.movimientos || [];
+        const ent = m.reduce((a, x) => a + x.entrada, 0), sal = m.reduce((a, x) => a + x.salida, 0);
+        $('kResumen').innerHTML = '<div><span>Producto</span><b>' + esc(p.producto) + '</b><small>' + esc([p.codigo, p.marca, p.ubicacion].filter(Boolean).join(' · ')) + '</small></div>' +
+          '<div><span>Stock actual</span><b>' + esc(p.stock) + '</b>' + (p.stockMinimo ? '<small>mínimo ' + esc(p.stockMinimo) + '</small>' : '') + '</div>' +
+          '<div><span>Total ingresado</span><b>' + ent + '</b></div><div><span>Total entregado</span><b>' + sal + '</b></div><div><span>Movimientos</span><b>' + m.length + '</b></div>';
+        $('tablaKardex').querySelector('tbody').innerHTML = m.length ? m.map(x =>
+          '<tr><td>' + esc(MT.fechaVista(x.fecha)) + '</td><td>' + esc(String(x.hora || '').slice(0, 5)) + '</td><td>' + esc(x.tipo) + '</td>' +
+          '<td style="text-align:center;color:#166534;font-weight:700">' + (x.entrada || '') + '</td><td style="text-align:center;color:#b91c1c;font-weight:700">' + (x.salida || '') + '</td>' +
+          '<td style="text-align:center;font-weight:800">' + x.saldo + '</td><td>' + esc(x.referencia) + '</td><td>' + esc(x.entregadoA || '') + '</td>' +
+          '<td>' + esc(x.usuario) + '</td><td>' + esc(x.observacion) + '</td></tr>').join('')
+          : '<tr><td colspan="10" style="text-align:center;color:#8b95a1;padding:16px;">Sin movimientos.</td></tr>';
+      }
+      $('kVer').addEventListener('click', ver);
+      $('kProducto').addEventListener('change', function () { if (self._producto(this.value)) ver(); });
+      $('kProducto').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); ver(); } });
+      $('kCam').addEventListener('click', () => MT.escanear(c => { $('kProducto').value = c; ver(); }));
+      $('kCerrar').addEventListener('click', cerrarPanel);
+      if (codigoInicial) { $('kProducto').value = codigoInicial; ver(); } else $('kProducto').focus();
+    }, { ancho: true });
+  },
+
+  /* ============================ ALERTAS: STOCK MÍNIMO Y VENCIMIENTOS ============================ */
+
+  _alertas: function () {
+    const prods = this._datos ? this._datos.productos : [];
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const aFecha = function (v) {
+      const s = String(v || '').trim();
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+      const d = new Date(s);
+      return isNaN(d) ? null : d;
+    };
+    const stock = prods.filter(p => p.stockMinimo > 0 && p.stock <= p.stockMinimo)
+      .sort((a, b) => (a.stock - a.stockMinimo) - (b.stock - b.stockMinimo));
+    const venc = prods.map(p => {
+      const tiene = /^S/i.test(String(p.vence || '').trim());
+      const f = tiene ? aFecha(p.fechaVencimiento) : null;
+      if (!f) return null;
+      const dias = Math.round((f - hoy) / 86400000);
+      return dias <= MT_DIAS_AVISO_VENCIMIENTO ? Object.assign({ dias: dias, fecha: f }, p) : null;
+    }).filter(Boolean).sort((a, b) => a.dias - b.dias);
+    return { stock: stock, venc: venc, total: stock.length + venc.length };
+  },
+
+  actualizarAvisoAlertas: function () {
+    const b = document.getElementById('mtAlertasBadge');
+    if (!b || !this._datos) return;
+    const n = this._alertas().total;
+    b.textContent = n;
+    b.style.display = n ? '' : 'none';
+  },
+
+  abrirAlertas: async function () {
+    if (!(await this._cargar(true))) return;
+    const self = this;
+    const a = self._alertas();
+    const fecha = d => String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+    const html = MT_ESTILOS + `
+      <div class="mt-form">
+        <div class="mt-seccion"><h3>Stock mínimo o por debajo (${a.stock.length})</h3>
+          <div class="mt-tabla-wrap" style="max-height:32vh;margin-bottom:10px">
+            <table class="tabla-lista"><thead><tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Stock</th><th>Mínimo</th><th>Último proveedor</th><th></th></tr></thead><tbody>
+            ${a.stock.length ? a.stock.map(p => '<tr><td>' + esc(p.codigo) + '</td><td>' + esc(p.producto) + '</td><td>' + esc(p.ubicacion) + '</td>' +
+              '<td class="mt-bajo" style="text-align:center">' + esc(p.stock) + '</td><td style="text-align:center">' + esc(p.stockMinimo) + '</td><td>' + esc(p.proveedor) + '</td>' +
+              '<td><button type="button" class="mt-mini" data-kardex="' + esc(p.codigo) + '">Kardex</button></td></tr>').join('')
+              : '<tr><td colspan="7" style="text-align:center;color:#166534;padding:14px;">Ningún producto en stock mínimo.</td></tr>'}
+            </tbody></table>
+          </div>
+        </div>
+        <div class="mt-seccion"><h3>Vencidos o por vencer en ${MT_DIAS_AVISO_VENCIMIENTO} días (${a.venc.length})</h3>
+          <div class="mt-tabla-wrap" style="max-height:32vh;margin-bottom:10px">
+            <table class="tabla-lista"><thead><tr><th>Código</th><th>Producto</th><th>Ubicación</th><th>Stock</th><th>Vence</th><th>Estado</th></tr></thead><tbody>
+            ${a.venc.length ? a.venc.map(p => '<tr><td>' + esc(p.codigo) + '</td><td>' + esc(p.producto) + '</td><td>' + esc(p.ubicacion) + '</td>' +
+              '<td style="text-align:center">' + esc(p.stock) + '</td><td>' + fecha(p.fecha) + '</td>' +
+              '<td>' + (p.dias < 0 ? '<span class="mt-bajo">Vencido hace ' + (-p.dias) + ' día(s)</span>' : '<span style="color:#b45309;font-weight:700">Vence en ' + p.dias + ' día(s)</span>') + '</td></tr>').join('')
+              : '<tr><td colspan="6" style="text-align:center;color:#166534;padding:14px;">Nada vencido ni por vencer.</td></tr>'}
+            </tbody></table>
+          </div>
+        </div>
+        <div class="mt-botones"><button class="boton-secundario" id="aCerrar">Cerrar</button></div>
+      </div>`;
+    abrirPanel('Alertas del almacén', html, function (raiz) {
+      raiz.querySelector('#aCerrar').addEventListener('click', cerrarPanel);
+      raiz.querySelectorAll('[data-kardex]').forEach(b => b.addEventListener('click', () => self.abrirKardex(b.dataset.kardex)));
+    }, { ancho: true });
+  },
+
+  /** Carga en segundo plano al abrir el sistema (aviso de alertas y ventanas más rápidas). */
+  precargar: async function () {
+    try {
+      const r = await llamarBackend('mtDatosAlmacen', {});
+      if (r && Array.isArray(r.productos)) { this._datos = r; this._t = Date.now(); this.actualizarAvisoAlertas(); }
+    } catch (e) { /* sin aviso: se cargará al abrir */ }
   }
 };
 
@@ -658,4 +901,8 @@ document.addEventListener('DOMContentLoaded', function () {
   enlazar('btn-mt-ingreso', () => FormAlmacen.abrirIngreso());
   enlazar('btn-mt-salida', () => FormAlmacen.abrirSalida());
   enlazar('btn-mt-stock', () => FormAlmacen.abrirConsultaStock());
+  enlazar('btn-mt-kardex', () => FormAlmacen.abrirKardex());
+  enlazar('btn-mt-alertas', () => FormAlmacen.abrirAlertas());
+  // Carga los datos del almacén en segundo plano: aviso de alertas y ventanas más rápidas.
+  setTimeout(function () { FormAlmacen.precargar(); }, 2500);
 });
