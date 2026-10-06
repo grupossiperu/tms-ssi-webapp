@@ -29,6 +29,7 @@ const FormConsolidadoServicio = {
     }
 
     this._filaServicioOrigen = filaServicio;
+    this._filaConsolidado = null;
     this._estadoOrigen = estadoOrigen;
 
     const s = function (k, porDefecto) {
@@ -117,7 +118,7 @@ const FormConsolidadoServicio = {
         <span>Conductor: <b>${s('CONDUCTOR', '-')}</b></span>
         <span>Fecha: <b>${esc(fechaServicio || '-')}</b></span>
       </div>
-      ${yaRegistrado ? '<div class="aviso">Este servicio ya tiene un consolidado registrado. Si vuelves a grabar se creará otro registro.</div>' : ''}
+      <div class="aviso" id="avisoEdicionConsol" style="${yaRegistrado ? '' : 'display:none'}">Estás revisando un consolidado ya registrado: puedes corregir cualquier dato y al grabar se actualiza el mismo registro.</div>
 
       <div class="cols">
         <div>
@@ -165,7 +166,7 @@ const FormConsolidadoServicio = {
               ${c('Nombre de cliente de la guía (GRE)', 'txtClienteGuiaConsol', '', true, 'span2')}
               <div class="sub">Guías de remisión <span style="text-transform:none;font-weight:500">· por cada guía del cliente va una guía de transporte</span></div>
               <table class="tabla-mini" id="tablaGuiasConsol">
-                <thead><tr><th>G.R. Transporte (GRT)${req}</th><th>G.R. Cliente (GRE)${req}</th><th style="width:150px">Peso bruto (kg)</th><th style="width:28px"></th></tr></thead>
+                <thead><tr><th>G.R. Transporte (GRT)${req}</th><th>G.R. Cliente (GRE)${req}</th><th style="width:150px">Peso bruto (kg)${req}</th><th style="width:28px"></th></tr></thead>
                 <tbody></tbody>
               </table>
               <button type="button" class="btn-agregar" id="btnAgregarGuiaConsol" style="grid-column:span 2;align-self:center;">+ Agregar guía</button>
@@ -201,20 +202,20 @@ const FormConsolidadoServicio = {
               ${c('Peaje', 'txtPeajeConsol', s('PEAJE', 0), true)}
               ${k('Peaje base imponible', 'txtPeajeBIConsol')}
               <div></div>
-              ${c('Peaje S.D.C.F.', 'txtPeajeSDCFConsol', 0)}
-              ${c('Peaje adicional', 'txtPeajeAdicionalConsol', 0)}
+              ${c('Peaje S.D.C.F.', 'txtPeajeSDCFConsol', 0, true)}
+              ${c('Peaje adicional', 'txtPeajeAdicionalConsol', 0, true)}
               ${c('Cochera', 'txtCocheraConsol', s('COCHERA', 0), true)}
-              ${c('Llanta', 'txtLlantaConsol', 0)}
-              ${c('Lavado', 'txtLavadoConsol', 0)}
-              ${c('Balanza', 'txtBalanzaConsol', 0)}
-              ${c('Otros', 'txtOtrosConsol', 0)}
+              ${c('Llanta', 'txtLlantaConsol', 0, true)}
+              ${c('Lavado', 'txtLavadoConsol', 0, true)}
+              ${c('Balanza', 'txtBalanzaConsol', 0, true)}
+              ${c('Otros', 'txtOtrosConsol', 0, true)}
               <div></div>
               <div class="sub">Bonos del conductor</div>
               <div class="campo"><label for="cboDominicalConsol">¿Dominical?</label><select id="cboDominicalConsol"><option>NO</option><option>SI</option></select></div>
               <div class="campo calc"><label for="txtDominicalConsol">Dominical</label><input id="txtDominicalConsol" value="0" disabled></div>
               <div class="campo"><label for="cboFeriadoConsol">¿Feriado?</label><select id="cboFeriadoConsol"><option>NO</option><option>SI</option></select></div>
               <div class="campo calc"><label for="txtFeriadoConsol">Feriado</label><input id="txtFeriadoConsol" value="0" disabled></div>
-              ${c('Bono', 'txtBonoConsol', 0)}
+              ${c('Bono', 'txtBonoConsol', 0, true)}
               ${k('Bono + Dom. + Feriado', 'txtBonoTotalConsol')}
               ${k('Total por viaje', 'txtTotalViajeConsol')}
               ${k('Diferencia', 'txtDiferenciaConsol')}
@@ -240,7 +241,7 @@ const FormConsolidadoServicio = {
               <div class="sub">Recargas</div>
               <datalist id="dlGrifosConsol"></datalist>
               <table class="tabla-mini" id="tablaRecargasConsol" style="table-layout:fixed">
-                <colgroup><col><col style="width:16%"><col style="width:13%"><col style="width:15%"><col style="width:10%"><col style="width:10%"><col style="width:12%"><col style="width:26px"></colgroup><thead><tr><th>Grifo</th><th>N° nota de venta</th><th>Equipo</th><th>Pagó</th><th>Galones</th><th>S/ x gl</th><th>Total</th><th></th></tr></thead>
+                <colgroup><col><col style="width:16%"><col style="width:13%"><col style="width:15%"><col style="width:10%"><col style="width:10%"><col style="width:12%"><col style="width:26px"></colgroup><thead><tr><th>Grifo${req}</th><th>N° nota de venta${req}</th><th>Equipo</th><th>Pagó</th><th>Galones</th><th>S/ x gl</th><th>Total</th><th></th></tr></thead>
                 <tbody></tbody>
               </table>
               <button type="button" class="btn-agregar" id="btnAgregarRecargaConsol">+ Agregar recarga</button>
@@ -323,15 +324,18 @@ const FormConsolidadoServicio = {
       'txtNumeroTransferenciaConsol','txtNumeroViaticoConsol','txtClienteGuiaConsol','txtGRTransporte1Consol','txtGRCliente1Consol',
       'txtViaticoConsol','txtPeajeConsol','txtCocheraConsol','txtGLEstimadosTractoConsol','txtGLTractoRealConsol',
       'txtPrecioPetroleoConsol','txtKmInicialConsol','txtKmFinalConsol','txtNumeroGeneradorConsol',
-      'txtHrInicialConsol','txtHrFinalConsol','txtCostoViajeRealizadoConsol'
-    ];
-    const esCulminado = String(self._estadoOrigen || '').trim().toUpperCase() === 'CULMINADO';
+      'txtHrInicialConsol','txtHrFinalConsol','txtCostoViajeRealizadoConsol',
+      'txtPeajeSDCFConsol','txtPeajeAdicionalConsol','txtLlantaConsol','txtLavadoConsol','txtBalanzaConsol','txtOtrosConsol','txtBonoConsol'
+    ].concat(raiz.querySelector('#txtDestino2Consol').disabled ? [] : ['txtDestino2Consol', 'txtTarifa2Consol']);
+    // Todos los datos son obligatorios, sea cual sea el estado del servicio.
+    const esCulminado = true;
     let marcarFaltantes = false;
 
     function faltantes() {
       if (!esCulminado) return [];
       return OBLIGATORIOS.filter(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; })
         .concat(guiasIncompletas().length ? ['__guias'] : [])
+        .concat(recargasIncompletas().length ? ['__recargas'] : [])
         .concat(depositosSinConfirmar() ? ['__depositos'] : []);
     }
     function actualizarFaltantes() {
@@ -345,7 +349,15 @@ const FormConsolidadoServicio = {
         if (campo) campo.classList.toggle('falta', marcarFaltantes && lista.indexOf(id) !== -1);
       });
       raiz.querySelectorAll('#tablaGuiasConsol td.req-celda').forEach(function (td) {
-        td.classList.toggle('falta', marcarFaltantes && esCulminado && td.querySelector('input').value.trim() === '');
+        const inp = td.querySelector('input');
+        const vacio = inp.classList.contains('peso') ? !(self._n(inp.value) > 0) : inp.value.trim() === '';
+        td.classList.toggle('falta', marcarFaltantes && vacio);
+      });
+      raiz.querySelectorAll('#tablaRecargasConsol tr.rec-fila').forEach(function (tr) {
+        tr.querySelectorAll('td').forEach(function (td) { td.classList.remove('falta'); });
+        if (!marcarFaltantes) return;
+        ['lugar', 'nv'].forEach(function (cl) { const i = tr.querySelector('.' + cl); if (!i.value.trim()) i.parentNode.classList.add('falta'); });
+        ['gal', 'precio'].forEach(function (cl) { const i = tr.querySelector('.' + cl); if (!(self._n(i.value) > 0)) i.parentNode.classList.add('falta'); });
       });
       return lista;
     }
@@ -522,7 +534,7 @@ const FormConsolidadoServicio = {
       tr.innerHTML =
         '<td class="req-celda"><input class="grt"' + (primera ? ' id="txtGRTransporte1Consol"' : '') + ' autocomplete="off" placeholder="Ej. T001-000123"></td>' +
         '<td class="req-celda"><input class="grc"' + (primera ? ' id="txtGRCliente1Consol"' : '') + ' autocomplete="off" placeholder="Ej. EG07-000456"></td>' +
-        '<td><input class="peso" inputmode="decimal" autocomplete="off" placeholder="0"></td>' +
+        '<td class="req-celda"><input class="peso" inputmode="decimal" autocomplete="off" placeholder="0"></td>' +
         '<td><button type="button" class="btn-quitar" title="Quitar guía"' + (primera ? ' disabled' : '') + '>×</button></td>';
       tr.querySelector('.grt').value = grt || '';
       tr.querySelector('.grc').value = grc || '';
@@ -538,7 +550,7 @@ const FormConsolidadoServicio = {
       });
     }
     function guiasIncompletas() {
-      return leerGuias().filter(function (g) { return !g.grt || !g.grc; });
+      return leerGuias().filter(function (g) { return !g.grt || !g.grc || !(g.peso > 0); });
     }
     function calcularPeso() {
       const total = leerGuias().reduce(function (acc, g) { return acc + g.peso; }, 0);
@@ -586,6 +598,9 @@ const FormConsolidadoServicio = {
           gal: self._n(tr.querySelector('.gal').value), precio: self._n(tr.querySelector('.precio').value), tr: tr
         };
       });
+    }
+    function recargasIncompletas() {
+      return leerRecargas().filter(function (r) { return !r.lugar || !r.nv || !(r.gal > 0) || !(r.precio > 0); });
     }
     // Pasa la suma de recargas a los campos de "adicional" que ya usa el
     // cálculo: galones totales y precio promedio ponderado por equipo.
@@ -657,6 +672,48 @@ const FormConsolidadoServicio = {
     ['txtKmInicialConsol','txtKmFinalConsol'].forEach(function (id) { q(id).addEventListener('input', validarKm); });
 
     /* ------- Datos de apoyo: bono, KM anterior y depósitos adicionales ------- */
+    /* ---------------- Guardar / recuperar lo escrito (para "Revisar") ---------------- */
+    function serializarForm() {
+      const campos = {};
+      raiz.querySelectorAll('input[id], select[id], textarea[id]').forEach(function (el) {
+        if (el.type === 'checkbox') return;
+        campos[el.id] = el.value;
+      });
+      return {
+        v: 1, campos: campos,
+        guias: leerGuias().map(function (g) { return { grt: g.grt, grc: g.grc, peso: g.peso }; }),
+        recargas: leerRecargas().map(function (r) { return { lugar: r.lugar, nv: r.nv, equipo: r.equipo, pago: r.pago, gal: r.gal, precio: r.precio }; }),
+        depositos: Array.from(raiz.querySelectorAll('.chk-dep-adic')).filter(function (c) { return c.checked; })
+          .map(function (c) { return (depositosApoyo[Number(c.dataset.i)] || {}).id; }).filter(Boolean)
+      };
+    }
+    function restaurarForm(f) {
+      if (!f || !f.campos) return;
+      Object.keys(f.campos).forEach(function (id) {
+        const el = q(id);
+        if (el && !el.disabled && el.type !== 'hidden') el.value = f.campos[id];
+      });
+      if (f.campos.txtCodigoServicioConsol) { q('txtCodigoServicioConsol').value = f.campos.txtCodigoServicioConsol; codigoEditadoAMano = true; }
+      ['cboDominicalConsol', 'cboFeriadoConsol'].forEach(function (id) { q(id).dispatchEvent(new Event('change')); });
+      if (Array.isArray(f.guias) && f.guias.length) {
+        tbodyGuias.innerHTML = '';
+        f.guias.forEach(function (g) { agregarGuia(g.grt, g.grc, g.peso); });
+      }
+      if (Array.isArray(f.recargas)) {
+        tbodyRec.innerHTML = '';
+        f.recargas.forEach(function (r) {
+          const tr = agregarRecarga();
+          tr.querySelector('.lugar').value = r.lugar || '';
+          tr.querySelector('.nv').value = r.nv || '';
+          tr.querySelector('.equipo').value = r.equipo || 'TRACTO';
+          tr.querySelector('.pago').value = r.pago || 'CONDUCTOR';
+          tr.querySelector('.gal').value = r.gal || '';
+          tr.querySelector('.precio').value = r.precio || '';
+        });
+      }
+      calcularPeso();
+    }
+
     async function cargarApoyo() {
       const cuerpo = document.getElementById('cuerpo-panel');
       const r = await llamarBackend('datosParaConsolidado', {
@@ -675,6 +732,15 @@ const FormConsolidadoServicio = {
         notaKm.textContent = 'No se pudo consultar el viaje anterior.';
         listaDep.innerHTML = '<span style="color:#b91c1c">No se pudieron cargar los depósitos adicionales.</span>';
         return;
+      }
+      // Consolidado ya registrado: se cargan sus datos para revisarlos/corregirlos.
+      if (r.consolidado) {
+        self._filaConsolidado = r.consolidado.fila;
+        restaurarForm(r.consolidado.form);
+        q('avisoEdicionConsol').style.display = '';
+        q('avisoEdicionConsol').textContent = 'Estás revisando el consolidado ya registrado' + (r.consolidado.codigo ? ' (código ' + r.consolidado.codigo + ')' : '') +
+          '. Corrige lo que necesites: al grabar se actualiza el mismo registro.' + (r.consolidado.form ? '' : ' Este registro es antiguo y no guardó el detalle: revisa todos los campos.');
+        q('btnGrabarConsol').textContent = 'Guardar cambios';
       }
       // KM inicial = KM final del viaje anterior del mismo tracto
       if (r.kmAnterior !== null && r.kmAnterior !== undefined) {
@@ -712,6 +778,11 @@ const FormConsolidadoServicio = {
           }).join('') + '<div style="border:none;color:#64748b">Marca cada depósito para confirmarlo. Lo gastado con ellos regístralo en Llanta, Peaje adicional u Otros.</div>'
         : '<span style="color:#64748b">Este servicio no tiene depósitos adicionales.</span>';
       depositosApoyo = deps;
+      if (r.consolidado && r.consolidado.form && Array.isArray(r.consolidado.form.depositos)) {
+        listaDep.querySelectorAll('.chk-dep-adic').forEach(function (chk) {
+          chk.checked = r.consolidado.form.depositos.indexOf((deps[Number(chk.dataset.i)] || {}).id) !== -1;
+        });
+      }
       listaDep.querySelectorAll('.chk-dep-adic').forEach(function (chk) {
         chk.addEventListener('change', function () { recalcularDepAdic(); calcularTodo(); actualizarFaltantes(); });
       });
@@ -765,12 +836,13 @@ const FormConsolidadoServicio = {
       }
 
       // El botón "Culminado" de la pantalla anterior deja el ESTADO en 'CULMINADO'.
-      if (estado === 'CULMINADO') {
+      {
         marcarFaltantes = true;
         const lista = actualizarFaltantes();
         if (lista.length) {
           const primero = lista[0] === '__guias'
             ? (tbodyGuias.querySelector('td.falta input') || q('txtGRTransporte1Consol'))
+            : lista[0] === '__recargas' ? (q('tablaRecargasConsol').querySelector('td.falta input') || q('tablaRecargasConsol'))
             : lista[0] === '__depositos' ? raiz.querySelector('.chk-dep-adic:not(:checked)')
             : raiz.querySelector('#' + lista[0]);
           if (lista.indexOf('__depositos') !== -1 && lista.length === 1) {
@@ -849,6 +921,8 @@ const FormConsolidadoServicio = {
         fechaServicio: v('txtFechaServicioConsol'),
         codigoServicio: v('txtCodigoServicioConsol').trim().toUpperCase() || undefined,
         filaServicioOrigen: self._filaServicioOrigen, estadoOrigen: self._estadoOrigen,
+        filaConsolidado: self._filaConsolidado || undefined,
+        formDatos: JSON.stringify(serializarForm()),
         datos: mapaColumnas
       });
 

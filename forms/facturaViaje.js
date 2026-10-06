@@ -17,6 +17,10 @@ const FormFacturaViaje = {
 
     const fechaTxt = function (v) { return esc(formatoFecha(v, '')); };
 
+    const puntosHtml = (datos.puntosMtc || []).map(function (p) {
+      const etiqueta = p.p + ' — ' + (p.t === 'VIAJE' ? 'S/ ' + p.v.toFixed(2) + ' por viaje' : p.km.toFixed(0) + ' km · S/ ' + p.v.toFixed(2) + ' x TM');
+      return '<option value="' + esc(p.p) + '"' + (p.p === datos.puntoMtc ? ' selected' : '') + '>' + esc(etiqueta) + '</option>';
+    }).join('');
     const ruta = [datos.destino1, datos.destino2].filter(function (x) { return x && String(x).trim() !== '' && String(x).trim() !== '-'; }).map(esc).join(' → ');
     const html = `
       <style>
@@ -39,6 +43,7 @@ const FormFacturaViaje = {
         .panel-fact .campo input:disabled { background: #f1f5f9; color: #1c3a5e; font-weight: 700; border-color: #e2e8f0; }
         .panel-fact .chk-lbl { display: flex !important; align-items: center; gap: 6px; }
         .panel-fact .chk-lbl input { width: auto !important; margin: 0; }
+        .panel-fact .nota-mtc { font-size: .74rem; color: #64748b; margin-top: 3px; }
         .panel-fact .aviso-tc { grid-column: 1 / -1; background: #fef3c7; color: #92400e; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: .85rem; margin-bottom: 10px; }
         .panel-fact .facturas { padding: 12px 14px 4px; }
         .panel-fact .fila-fac { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -111,11 +116,23 @@ const FormFacturaViaje = {
         </div>
         <div>
           <div class="seg">
-            <div class="seg-tit"><span class="seg-num">3</span> Detracción</div>
+            <div class="seg-tit"><span class="seg-num">3</span> Detracción <span style="margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500;color:#64748b">DS 022-2025-MTC</span></div>
             <div class="g">
+              <div class="campo" style="grid-column:1 / -1"><label>Punto MTC para el destino <b>${esc(datos.destino1 || '-')}</b> *</label>
+                <select id="cboPuntoMtcFact"><option value="">— Elige el punto de la tabla del MTC —</option>${puntosHtml}</select>
+                <div class="nota-mtc" id="notaPuntoMtcFact">${datos.puntoMtcRecordado ? 'Elegido en una facturación anterior de este destino.' : (datos.puntoMtc ? 'Propuesto por el nombre del destino: revísalo. Se recordará al grabar.' : 'Elige el punto más cercano a tu destino. Se recordará para las próximas facturas.')}</div>
+              </div>
+              <div class="campo"><label>Km (desde Lima)</label><input id="txtKmMtcFact" disabled></div>
+              <div class="campo"><label id="lblValorMtcFact">S/ por TM (MTC)</label><input id="txtValorMtcFact" disabled></div>
+              <div class="campo"><label>Factor (1.4 si &gt; 200 km)</label><input id="txtFactorMtcFact" disabled></div>
+              <div class="campo"><label>Carga efectiva (TM) *</label><input id="txtCargaEfectivaFact" value="${datos.pesoBrutoTotal > 0 ? (datos.pesoBrutoTotal / 1000).toFixed(2) : ''}" disabled></div>
+              <div class="campo"><label>Carga útil nominal (TM)</label><input id="txtCargaNominalFact" value="${Number(datos.cargaNominal || 30).toFixed(2)}" disabled></div>
+              <div class="campo"><label>70% carga nominal (TM)</label><input id="txtCargaNominal70Fact" disabled></div>
+              <div class="campo"><label>V.R. carga efectiva (S/)</label><input id="txtVRCargaEfectivaFact" disabled></div>
+              <div class="campo"><label>V.R. carga útil nominal (S/)</label><input id="txtVRCargaUtilFact" disabled></div>
+              <div class="campo"><label>Valor referencial (el mayor)</label><input id="txtValorReferencialFact" disabled></div>
+              <div class="aviso-tc" id="avisoPesoFact" style="${datos.pesoBrutoTotal > 0 ? 'display:none;' : ''}">El consolidado no tiene el peso bruto de las guías. Complétalo en Consolidado de servicios (Revisar) antes de facturar.</div>
               <div class="campo"><label>Costo viaje realizado B.I. (S/)</label><input id="txtCostoViajeRealizadoFact" value="${(datos.costoViajeRealizado||0).toFixed(2)}" disabled></div>
-              <div class="campo"><label>V.R. carga efectiva (S/)</label><input id="txtVRCargaEfectivaFact" value="${(datos.vrCargaEfectiva||0).toFixed(2)}" disabled></div>
-              <div class="campo"><label>V.R. carga útil nominal (S/)</label><input id="txtVRCargaUtilFact" value="${(datos.vrCargaUtil||0).toFixed(2)}" disabled></div>
               <div class="campo"><label>% Detracción</label>
                 <select id="cboPorcentajeDetraccionFact"><option value="4.00%">4.00%</option><option value="5.40%">5.40%</option></select>
               </div>
@@ -130,7 +147,12 @@ const FormFacturaViaje = {
       </div>
 
       <div class="seg destacado">
-        <div class="seg-tit"><span class="seg-num">4</span> N° de factura</div>
+        <div class="seg-tit"><span class="seg-num">4</span> Cliente y N° de factura</div>
+        <div class="g" style="padding-bottom:0">
+          <div class="campo"><label>RUC del cliente</label><input id="txtRucClienteFact" value="${esc(datos.rucCliente || '')}" disabled></div>
+          <div class="campo" style="grid-column:span 2"><label>Razón social</label><input id="txtRazonSocialFact" value="${esc(datos.razonSocialCliente || '')}" disabled></div>
+          <div class="aviso-tc" id="avisoClienteFact" style="${datos.rucCliente ? 'display:none;' : ''}">El cliente ${esc(datos.cliente || '')} no está en el maestro de clientes. Regístralo en Maestros &gt; Clientes (código, razón social y RUC) y vuelve a abrir esta factura.</div>
+        </div>
         <div class="facturas">
           <div id="listaFacturasFact"></div>
           <button type="button" class="btn-agregar" id="btnAgregarFacturaFact">+ Agregar otra factura</button>
@@ -193,7 +215,7 @@ const FormFacturaViaje = {
         resp = await llamarBackend('calcularDetraccionFactura', {
           precioVenta: self._n(raiz.querySelector('#txtPrecioVentaFact').value),
           tipoCambio: self._n(raiz.querySelector('#txtTipoCambioFact').value),
-          vrCargaEfectiva: self._n(raiz.querySelector('#txtVRCargaEfectivaFact').value),
+          vrCargaEfectiva: mtc.vr,
           valorVenta: self._n(raiz.querySelector('#txtValorVentaFact').value),
           costoViaje: self._n(raiz.querySelector('#txtCostoViajeRealizadoFact').value),
           porcentaje: self._n(raiz.querySelector('#cboPorcentajeDetraccionFact').value.replace('%','')) / 100
@@ -222,6 +244,49 @@ const FormFacturaViaje = {
       raiz.querySelector('#totDetraccionFact').textContent = val('txtDetraccionDolarFact');
       raiz.querySelector('#totImporteFact').textContent = val('txtImporteFacturadoFact');
     }
+
+    /* ---- Valor referencial MTC (DS 022-2025-MTC) ---- */
+    // Peso = el mayor entre la carga efectiva y el 70% de la carga nominal;
+    // x S/ por TM del MTC; x 1.4 solo si el destino está a más de 200 km.
+    // Puntos del Callao (Anexo I): valor fijo por viaje (contenedor lleno).
+    const puntosMtc = datos.puntosMtc || [];
+    let mtc = { punto: '', km: 0, valor: 0, factor: 0, ce: 0, cn: 0, vrEf: 0, vrNom: 0, vr: 0 };
+    function calcularMtc() {
+      const p = puntosMtc.find(function (x) { return x.p === raiz.querySelector('#cboPuntoMtcFact').value; });
+      const ce = self._n(raiz.querySelector('#txtCargaEfectivaFact').value);
+      const cn = self._n(raiz.querySelector('#txtCargaNominalFact').value);
+      const f2 = function (n) { return n ? Number(n).toFixed(2) : ''; };
+      raiz.querySelector('#txtCargaNominal70Fact').value = f2(cn * 0.7);
+      if (!p) {
+        mtc = { punto: '', km: 0, valor: 0, factor: 0, ce: ce, cn: cn, vrEf: 0, vrNom: 0, vr: 0 };
+        ['#txtKmMtcFact', '#txtValorMtcFact', '#txtFactorMtcFact', '#txtVRCargaEfectivaFact', '#txtVRCargaUtilFact', '#txtValorReferencialFact']
+          .forEach(function (sel) { raiz.querySelector(sel).value = ''; });
+        return;
+      }
+      let factor, vrEf, vrNom;
+      if (p.t === 'VIAJE') {
+        factor = 1; vrEf = p.v; vrNom = p.v;
+        raiz.querySelector('#lblValorMtcFact').textContent = 'S/ por viaje (MTC)';
+      } else {
+        factor = p.km > 200 ? 1.4 : 1;
+        vrEf = ce * p.v * factor;
+        vrNom = cn * 0.7 * p.v * factor;
+        raiz.querySelector('#lblValorMtcFact').textContent = 'S/ por TM (MTC)';
+      }
+      const vr = Math.max(vrEf, vrNom);
+      mtc = { punto: p.p, km: p.km, valor: p.v, factor: factor, ce: ce, cn: cn, vrEf: vrEf, vrNom: vrNom, vr: vr };
+      raiz.querySelector('#txtKmMtcFact').value = p.km ? p.km.toFixed(2) + ' km' : '-';
+      raiz.querySelector('#txtValorMtcFact').value = 'S/ ' + p.v.toFixed(2);
+      raiz.querySelector('#txtFactorMtcFact').value = factor.toFixed(1);
+      raiz.querySelector('#txtVRCargaEfectivaFact').value = 'S/ ' + vrEf.toFixed(2);
+      raiz.querySelector('#txtVRCargaUtilFact').value = 'S/ ' + vrNom.toFixed(2);
+      raiz.querySelector('#txtValorReferencialFact').value = 'S/ ' + vr.toFixed(2);
+    }
+    raiz.querySelector('#cboPuntoMtcFact').addEventListener('change', function () {
+      raiz.querySelector('#notaPuntoMtcFact').textContent = this.value ? 'Se recordará para las próximas facturas de este destino.' : 'Elige el punto más cercano a tu destino.';
+      calcularMtc(); programarDetraccion();
+    });
+    calcularMtc();
 
     /* ---- N° de factura: una o varias ---- */
     const listaFacturas = raiz.querySelector('#listaFacturasFact');
@@ -327,6 +392,10 @@ const FormFacturaViaje = {
       if (new Set(facturas).size !== facturas.length) { mostrarMensaje('Hay un número de factura repetido.', 'error'); return; }
       // Varias facturas del mismo viaje se guardan juntas: "F001-1 / F001-2".
       const numeroFactura = facturas.join(' / ');
+      if (!raiz.querySelector('#txtRucClienteFact').value || !raiz.querySelector('#txtRazonSocialFact').value) { mostrarMensaje('Falta el RUC y la razón social del cliente. Regístralo en Maestros > Clientes.', 'error'); return; }
+      if (!mtc.punto) { raiz.querySelector('#cboPuntoMtcFact').focus(); mostrarMensaje('Elige el punto del MTC para el destino.', 'error'); return; }
+      if (!(mtc.ce > 0)) { mostrarMensaje('Falta la carga efectiva (peso bruto de las guías). Complétalo en el consolidado.', 'error'); return; }
+      if (!raiz.querySelector('#txtFechaFacturacionFact').value.trim()) { mostrarMensaje('Escribe la fecha de facturación.', 'error'); return; }
       if (self._n(raiz.querySelector('#txtVentaDolaresFact').value) <= 0) { mostrarMensaje('El servicio no tiene tarifa (venta en dólares). Revise la tarifa en el consolidado.', 'error'); return; }
       if (self._n(raiz.querySelector('#txtTipoCambioFact').value) <= 0) { mostrarMensaje('No hay tipo de cambio para la fecha de facturación. Regístrelo en Tipo de cambio antes de facturar.', 'error'); return; }
 
@@ -348,7 +417,10 @@ const FormFacturaViaje = {
         compraDolaresTercero: raiz.querySelector('#txtCompraDolaresTerceroFact').value, compraSolesTercero: raiz.querySelector('#txtCompraSolesTerceroFact').value,
         valorVenta: raiz.querySelector('#txtValorVentaFact').value, igv: raiz.querySelector('#txtIGVFact').value,
         precioVenta: raiz.querySelector('#txtPrecioVentaFact').value, costoViajeRealizado: raiz.querySelector('#txtCostoViajeRealizadoFact').value,
-        vrCargaEfectiva: raiz.querySelector('#txtVRCargaEfectivaFact').value, vrCargaUtil: raiz.querySelector('#txtVRCargaUtilFact').value,
+        vrCargaEfectiva: mtc.vrEf, vrCargaUtil: mtc.vrNom,
+        rucCliente: raiz.querySelector('#txtRucClienteFact').value, razonSocialCliente: raiz.querySelector('#txtRazonSocialFact').value,
+        puntoMtc: mtc.punto, kmMtc: mtc.km, valorMtc: mtc.valor, factor: mtc.factor,
+        cargaEfectiva: mtc.ce, cargaNominal: mtc.cn, valorReferencial: mtc.vr,
         porcentajeDetraccion: raiz.querySelector('#cboPorcentajeDetraccionFact').value, importeOperacion: raiz.querySelector('#txtImporteOperacionFact').value,
         detraccionSoles: raiz.querySelector('#txtDetraccionFact').value, estimacionResultante: raiz.querySelector('#txtEstimacionResultanteFact').value,
         detraccionDolares: raiz.querySelector('#txtDetraccionDolarFact').value, importeFacturado: raiz.querySelector('#txtImporteFacturadoFact').value,
