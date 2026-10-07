@@ -216,6 +216,18 @@ const MT_ESTILOS = `
     .mt-crear-g input, .mt-crear-g select{ padding:7px 9px; border:1.5px solid #c7ced8; border-radius:8px; font-size:.86rem; font-family:inherit; width:100%; }
     .mt-crear-b{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
     .mt-crear-b button{ padding:7px 14px; font-size:.82rem; }
+    .mt-crear-g.g4{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+    .mt-crear-g .s2{ grid-column: span 2; }
+    .mt-crear-b .mt-quitar{ margin-right:auto; background:#fff; color:#b91c1c; border:1.5px solid #fca5a5; border-radius:8px; font-weight:700; cursor:pointer; }
+    .mt-crear-b .mt-quitar:hover{ background:#fef2f2; }
+    .mt-sug{ position:fixed; z-index:4000; background:#fff; border:1.5px solid #94a3b8; border-radius:10px; box-shadow:0 10px 28px rgba(15,23,42,.18); max-height:300px; overflow:auto; font-size:.82rem; }
+    .mt-sug div{ padding:7px 10px; cursor:pointer; border-bottom:1px solid #eef2f6; }
+    .mt-sug div:last-child{ border-bottom:none; }
+    .mt-sug div.act, .mt-sug div:hover{ background:#e8f0fb; }
+    .mt-sug small{ display:block; color:#64748b; font-size:.72rem; }
+    .mt-sug .sug-nuevo{ color:#1d4ed8; font-weight:800; }
+    .mt-sug .sug-no{ color:#991b1b; cursor:default; }
+    .mt-sug .sug-no:hover{ background:#fff; }
     .mt-tabs{ display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
     .mt-tab{ border:1.5px solid #c7ced8; background:#fff; color:#1c3a5e; border-radius:9px; padding:7px 14px; font-weight:700; font-size:.84rem; cursor:pointer; font-family:inherit; }
     .mt-tab.activo{ background:#1c3a5e; border-color:#1c3a5e; color:#fff; }
@@ -464,13 +476,15 @@ const FormAlmacen = {
     const html = MT_ESTILOS + `
       <div class="mt-form">
         <div class="fila-campos" style="grid-template-columns:repeat(2,minmax(0,1fr));">
-          <div class="campo ancho4"><label>Razón social</label><input type="text" id="vRazon" autocomplete="off" style="text-transform:uppercase"></div>
-          <div class="campo"><label>RUC</label><input type="text" id="vRuc" maxlength="11" inputmode="numeric" autocomplete="off"></div>
-          <div class="campo"><label>Nombre de contacto</label><input type="text" id="vContacto" autocomplete="off" style="text-transform:uppercase"></div>
+          <div class="campo ancho4"><label>Razón social *</label><input type="text" id="vRazon" autocomplete="off" style="text-transform:uppercase"></div>
+          <div class="campo"><label>RUC *</label><input type="text" id="vRuc" maxlength="11" inputmode="numeric" autocomplete="off"></div>
+          <div class="campo"><label>Nombre del vendedor</label><input type="text" id="vContacto" autocomplete="off" style="text-transform:uppercase"></div>
           <div class="campo"><label>Teléfono</label><input type="text" id="vTelefono" inputmode="numeric" autocomplete="off"></div>
           <div class="campo"><label>Correo</label><input type="email" id="vCorreo" autocomplete="off"></div>
           <div class="campo ancho4"><label>Dirección</label><input type="text" id="vDireccion" autocomplete="off" style="text-transform:uppercase"></div>
+          <div class="campo ancho4"><label>Ubicación (enlace de Google Maps)</label><input type="text" id="vMapa" autocomplete="off" placeholder="https://maps.app.goo.gl/..."></div>
         </div>
+        <div class="mt-ayuda">Obligatorio: razón social y RUC.</div>
         <div class="mt-botones">
           <button class="boton-secundario" id="btnInicioProveedor">Inicio</button>
           <button class="boton-secundario" id="btnLimpiarProveedor">Limpiar</button>
@@ -480,14 +494,14 @@ const FormAlmacen = {
 
     abrirPanel('Registrar proveedor', html, function (raiz) {
       const $ = id => raiz.querySelector('#' + id);
-      const ids = ['vRazon', 'vRuc', 'vContacto', 'vTelefono', 'vCorreo', 'vDireccion'];
+      const ids = ['vRazon', 'vRuc', 'vContacto', 'vTelefono', 'vCorreo', 'vDireccion', 'vMapa'];
       const limpiar = function () { ids.forEach(id => { $(id).value = ''; }); _refrescarSnapshotFormulario(); };
       $('btnLimpiarProveedor').addEventListener('click', limpiar);
       $('btnInicioProveedor').addEventListener('click', solicitarCierrePanel);
       protegerClic($('btnGrabarProveedor'), async function () {
         const r = await MT.llamar('mtGrabarProveedor', {
           razonSocial: $('vRazon').value, ruc: $('vRuc').value, contacto: $('vContacto').value,
-          telefono: $('vTelefono').value, correo: $('vCorreo').value, direccion: $('vDireccion').value
+          telefono: $('vTelefono').value, correo: $('vCorreo').value, direccion: $('vDireccion').value, ubicacion: $('vMapa').value.trim()
         });
         if (!r) return;
         mostrarMensaje(r.mensaje, 'exito');
@@ -537,6 +551,70 @@ const FormAlmacen = {
     const tbody = raiz.querySelector('#' + idTabla + ' tbody');
     const avisar = function () { if (typeof alCambiar === 'function') alCambiar(); };
     const camara = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
+    // ---- Buscador: código, nombre, marca, tipo o categoría ----
+    let sug = null, sugTr = null, sugItems = [], sugAct = 0;
+    const normal = function (t) { return String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+    function buscar(texto) {
+      const palabras = normal(texto).split(/\s+/).filter(Boolean);
+      if (!palabras.length) return [];
+      return (self._datos ? self._datos.productos : []).filter(function (p) {
+        const h = normal([p.codigo, p.producto, p.marca, p.tipo, p.categoria].join(' '));
+        return palabras.every(function (w) { return h.indexOf(w) !== -1; });
+      }).sort(function (a, b) { return (b.stock > 0) - (a.stock > 0) || a.producto.localeCompare(b.producto); }).slice(0, 12);
+    }
+    function cerrarSug() { if (sug) { sug.remove(); sug = null; } sugTr = null; sugItems = []; }
+    function pareceCodigo(t) { return /^[A-Z0-9\-]+$/.test(t) && /\d/.test(t); }
+    function mostrarSug(tr) {
+      const cod = tr.querySelector('.l-cod');
+      const texto = cod.value.trim();
+      if (!texto || self._producto(texto)) { cerrarSug(); return; }
+      const lista = buscar(texto);
+      if (!sug) {
+        sug = document.createElement('div');
+        sug.className = 'mt-sug';
+        document.body.appendChild(sug);
+        sug.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        sug.addEventListener('click', function (ev) {
+          const d = ev.target.closest('[data-i]'); if (!d || !sugTr) return;
+          elegirSug(sugTr, Number(d.dataset.i));
+        });
+      }
+      sugTr = tr;
+      sugItems = lista.map(function (p) { return { p: p }; });
+      if (!esSalida) sugItems.push({ nuevo: true });
+      sugAct = 0;
+      sug.innerHTML = (lista.length ? '' : '<div class="sug-no">Sin coincidencias' + (esSalida ? '. Si es nuevo, regístralo desde Ingreso.' : '') + '</div>') +
+        sugItems.map(function (it, i) {
+          if (it.nuevo) return '<div data-i="' + i + '" class="sug-nuevo">+ Agregar producto nuevo' + (pareceCodigo(texto.toUpperCase()) ? ' con código ' + esc(texto.toUpperCase()) : ': ' + esc(texto.toUpperCase())) + '</div>';
+          const p = it.p;
+          return '<div data-i="' + i + '"><b>' + esc(p.producto) + '</b> <span style="color:#64748b">(' + esc(p.codigo) + ')</span><small>' +
+            esc([p.marca, p.tipo, p.categoria].filter(Boolean).join(' · ')) + ' · stock ' + esc(p.stock) + '</small></div>';
+        }).join('');
+      const r = cod.getBoundingClientRect();
+      sug.style.left = r.left + 'px';
+      sug.style.top = (r.bottom + 2) + 'px';
+      sug.style.width = Math.max(r.width + 120, 380) + 'px';
+      pintarAct();
+    }
+    function pintarAct() {
+      if (!sug) return;
+      sug.querySelectorAll('[data-i]').forEach(function (d) { d.classList.toggle('act', Number(d.dataset.i) === sugAct); });
+      const a = sug.querySelector('[data-i="' + sugAct + '"]'); if (a) a.scrollIntoView({ block: 'nearest' });
+    }
+    function elegirSug(tr, i) {
+      const it = sugItems[i]; if (!it) return;
+      const cod = tr.querySelector('.l-cod');
+      cerrarSug();
+      if (it.nuevo) {
+        const t = cod.value.trim().toUpperCase();
+        if (pareceCodigo(t)) abrirCreacion(tr);
+        else { cod.value = ''; pintarFila(tr); abrirCreacion(tr, t); }
+      } else {
+        cod.value = it.p.codigo; tr._nuevo = null; pintarFila(tr); tr.querySelector('.l-cant').focus();
+      }
+      avisar();
+    }
+    raiz.addEventListener('scroll', cerrarSug, true);
     const codigosNuevos = function (salvo) {
       return Array.from(tbody.querySelectorAll('tr.l-fila')).filter(t => t !== salvo && t._nuevo).map(t => t._nuevo.codigo);
     };
@@ -549,44 +627,84 @@ const FormAlmacen = {
       let html = '';
       if (p) html = '<b>' + esc(p.producto) + '</b><div class="mt-ayuda">' + esc([p.marca, p.categoria, p.ubicacion].filter(Boolean).join(' · ')) + '</div>';
       else if (tr._nuevo) html = '<b>' + esc(tr._nuevo.producto) + '</b> <span class="mt-nuevo">NUEVO</span> <button type="button" class="mt-mini l-editar">Editar</button><div class="mt-ayuda">' + esc([tr._nuevo.marca, tr._nuevo.tipo, tr._nuevo.unidad].join(' · ')) + '</div>';
-      else if (codigo) html = esSalida ? '<span class="mt-bajo">Código no encontrado</span>'
-        : '<span class="mt-bajo">No existe</span> <button type="button" class="mt-mini l-crear">Crear aquí</button>';
+      else if (codigo) html = esSalida ? '<span class="mt-bajo">No existe.</span><div class="mt-ayuda">Regístralo primero desde Ingreso.</div>'
+        : '<span class="mt-bajo">No existe</span> <button type="button" class="mt-mini l-crear">Agregar producto nuevo</button>';
       tr.querySelector('.l-prod').innerHTML = html;
       tr.classList.toggle('l-ok-nuevo', !!tr._nuevo);
       tr.querySelector('.l-stock').textContent = p ? p.stock : (tr._nuevo ? '0' : '');
       const mal = esSalida && p && !isNaN(cant) && cant > p.stock;
       tr.querySelector('.l-stock').classList.toggle('mt-bajo', !!mal);
       tr.querySelector('.l-cant').classList.toggle('falta', !!mal);
-      const crear = tr.querySelector('.l-crear') || tr.querySelector('.l-editar');
-      if (crear) crear.addEventListener('click', function () { abrirCreacion(tr); });
+      const ed = tr.querySelector('.l-editar');
+      if (ed) ed.addEventListener('click', function () { abrirCreacion(tr); });
+      const crear = tr.querySelector('.l-crear');
+      if (crear) crear.addEventListener('click', function () { crearDesdeTexto(tr); });
+    }
+    // Abre la ficha del producto nuevo: si lo escrito parece código lo usa como código; si no, como nombre.
+    function crearDesdeTexto(tr) {
+      const cod = tr.querySelector('.l-cod');
+      const t = cod.value.trim().toUpperCase();
+      if (t && !pareceCodigo(t)) { cod.value = ''; tr._nuevo = null; pintarFila(tr); abrirCreacion(tr, t); }
+      else abrirCreacion(tr);
     }
     // Datos mínimos del producto nuevo, en una sub-fila debajo de la línea.
-    function abrirCreacion(tr) {
+    // Ficha del producto nuevo, en una sub-fila debajo de la línea.
+    // nombreInicial: lo que se escribió en el buscador (si no era un código).
+    function abrirCreacion(tr, nombreInicial) {
       if (tr.nextSibling && tr.nextSibling.classList && tr.nextSibling.classList.contains('l-sub')) return;
-      const n = tr._nuevo || {};
+      cerrarSug();
+      const n = tr._nuevo || { producto: nombreInicial || '' };
+      const editando = !!tr._nuevo;
       const sub = document.createElement('tr');
       sub.className = 'l-sub';
       const dl = 'dlTiposNuevo' + Math.random().toString(36).slice(2, 7);
+      const codTxt = tr.querySelector('.l-cod').value.trim().toUpperCase();
       sub.innerHTML = '<td colspan="5"><div class="mt-crear">' +
-        '<div class="mt-crear-tit">Producto nuevo ' + (tr.querySelector('.l-cod').value.trim() ? '(código ' + esc(tr.querySelector('.l-cod').value.trim().toUpperCase()) + ')' : '(sin código: se generará uno)') + '</div>' +
-        '<div class="mt-crear-g">' +
-        '<label>Nombre *<input class="n-prod" style="text-transform:uppercase" value="' + esc(n.producto || '') + '"></label>' +
+        '<div class="mt-crear-tit">Producto nuevo ' + (codTxt ? '(código ' + esc(codTxt) + ')' : '(sin código de barras: se generará uno)') + '</div>' +
+        '<div class="mt-crear-g g4">' +
+        '<label class="s2">Nombre del producto *<input class="n-prod" style="text-transform:uppercase" value="' + esc(n.producto || '') + '"></label>' +
         '<label>Marca *<input class="n-marca" style="text-transform:uppercase" placeholder="GENERICO si no tiene" value="' + esc(n.marca || '') + '"></label>' +
-        '<label>Tipo *<input class="n-tipo" list="' + dl + '" style="text-transform:uppercase" value="' + esc(n.tipo || '') + '">' + MT.datalist(dl, self._tiposProducto()) + '</label>' +
+        '<label>Tipo de producto *<input class="n-tipo" list="' + dl + '" style="text-transform:uppercase" value="' + esc(n.tipo || '') + '">' + MT.datalist(dl, self._tiposProducto()) + '</label>' +
+        '<label>Categoría *<select class="n-cat">' + MT.opciones(MT_CATEGORIAS) + '</select></label>' +
         '<label>Unidad *<select class="n-unidad">' + MT.opciones(MT_UNIDADES, '') + '</select></label>' +
+        '<label>Ubicación<input class="n-ubic" style="text-transform:uppercase" placeholder="Ej. A1" value="' + esc(n.ubicacion || '') + '"></label>' +
+        '<label>Stock mínimo<input class="n-min" type="number" min="0" step="any" value="' + esc(n.stockMinimo === undefined ? '' : n.stockMinimo) + '"></label>' +
+        '<label>Moneda<select class="n-mon"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select></label>' +
+        '<label>Precio con IGV<input class="n-total" type="number" min="0" step="any" value="' + esc(n.total || '') + '"></label>' +
         '<label class="chk"><input type="checkbox" class="n-rep"' + (n.reparable ? ' checked' : '') + '> Reparable</label>' +
         '<label class="chk"><input type="checkbox" class="n-vence"' + (n.vence ? ' checked' : '') + '> Vence</label>' +
-        '</div><div class="mt-crear-b"><button type="button" class="boton-secundario n-cancelar">Cancelar</button><button type="button" class="boton-primario n-ok">Guardar y seguir</button></div>' +
-        '<div class="mt-ayuda">Ubicación, stock mínimo y precio se completan después en Catálogo.</div></div></td>';
+        '<label class="n-campo-fv" style="display:none">Fecha de vencimiento<input class="n-fv" type="date" value="' + esc(n.fechaVencimiento || '') + '"></label>' +
+        '</div><div class="mt-crear-b">' +
+        '<button type="button" class="mt-quitar n-quitar">✕ Quitar y volver a buscar</button>' +
+        (editando ? '<button type="button" class="boton-secundario n-cerrar">Cerrar sin cambios</button>' : '') +
+        '<button type="button" class="boton-primario n-ok">Guardar y seguir</button></div>' +
+        '<div class="mt-ayuda">Obligatorio: nombre, marca, tipo, categoría y unidad. Lo que dejes en blanco se completa después en Catálogo.</div></div></td>';
       tr.after(sub);
+      sub.querySelector('.n-cat').value = n.categoria || 'NUEVO';
       if (n.unidad) sub.querySelector('.n-unidad').value = n.unidad;
-      sub.querySelector('.n-prod').focus();
-      sub.querySelector('.n-cancelar').addEventListener('click', function () { sub.remove(); });
+      if (n.moneda) sub.querySelector('.n-mon').value = n.moneda;
+      const verFv = function () { sub.querySelector('.n-campo-fv').style.display = sub.querySelector('.n-vence').checked ? '' : 'none'; };
+      sub.querySelector('.n-vence').addEventListener('change', verFv);
+      verFv();
+      sub.querySelector(n.producto ? '.n-marca' : '.n-prod').focus();
+      sub.querySelector('.n-quitar').addEventListener('click', function () {
+        sub.remove();
+        tr._nuevo = null;
+        tr.querySelector('.l-cod').value = '';
+        pintarFila(tr);
+        tr.querySelector('.l-cod').focus();
+        avisar();
+      });
+      if (editando) sub.querySelector('.n-cerrar').addEventListener('click', function () { sub.remove(); });
       sub.querySelector('.n-ok').addEventListener('click', function () {
         const v = function (c) { return sub.querySelector(c).value.trim().toUpperCase(); };
-        const datos = { producto: v('.n-prod'), marca: v('.n-marca'), tipo: v('.n-tipo'), unidad: sub.querySelector('.n-unidad').value,
-          reparable: sub.querySelector('.n-rep').checked, vence: sub.querySelector('.n-vence').checked };
-        if (!datos.producto || !datos.marca || !datos.tipo || !datos.unidad) { mostrarMensaje('Completa nombre, marca, tipo y unidad del producto nuevo.', 'error'); return; }
+        const datos = { producto: v('.n-prod'), marca: v('.n-marca'), tipo: v('.n-tipo'), categoria: sub.querySelector('.n-cat').value,
+          unidad: sub.querySelector('.n-unidad').value, ubicacion: v('.n-ubic'), stockMinimo: sub.querySelector('.n-min').value.trim(),
+          moneda: sub.querySelector('.n-mon').value, total: sub.querySelector('.n-total').value.trim(),
+          reparable: sub.querySelector('.n-rep').checked, vence: sub.querySelector('.n-vence').checked,
+          fechaVencimiento: sub.querySelector('.n-vence').checked ? sub.querySelector('.n-fv').value : '' };
+        if (!datos.producto || !datos.marca || !datos.tipo || !datos.categoria || !datos.unidad) { mostrarMensaje('Completa nombre, marca, tipo, categoría y unidad del producto nuevo.', 'error'); return; }
+        if (datos.total && !datos.moneda) { mostrarMensaje('Elige la moneda del precio.', 'error'); return; }
         let codigo = tr.querySelector('.l-cod').value.trim().toUpperCase();
         if (!codigo) codigo = self._generarCodigo(datos.producto, datos.marca, codigosNuevos(tr));
         if (self._producto(codigo)) { mostrarMensaje('El código ' + codigo + ' ya existe.', 'error'); return; }
@@ -604,7 +722,7 @@ const FormAlmacen = {
       const tr = document.createElement('tr');
       tr.className = 'l-fila';
       tr.innerHTML =
-        '<td><div class="mt-buscar"><input class="l-cod" autocomplete="off" placeholder="Código o escanear" style="text-transform:uppercase">' +
+        '<td><div class="mt-buscar"><input class="l-cod" autocomplete="off" placeholder="Código, nombre, marca, tipo o categoría" style="text-transform:uppercase">' +
         '<button type="button" class="l-lupa" title="Buscar en el stock">Buscar</button><button type="button" class="l-cam" title="Escanear con la cámara">' + camara + '</button>' +
         (esSalida ? '' : '<button type="button" class="l-nuevo" title="Producto nuevo sin código de barras">Nuevo</button>') + '</div></td>' +
         '<td class="l-prod"></td><td class="l-stock mt-stock" style="text-align:center"></td>' +
@@ -613,11 +731,25 @@ const FormAlmacen = {
       const cod = tr.querySelector('.l-cod'), cant = tr.querySelector('.l-cant');
       const elegir = function (p) { if (p) { cod.value = p.codigo; pintarFila(tr); cant.focus(); avisar(); } };
       cod.addEventListener('change', function () { pintarFila(tr); avisar(); });
+      cod.addEventListener('input', function () { if (tr._nuevo) { tr._nuevo = null; } mostrarSug(tr); });
+      cod.addEventListener('focus', function () { if (cod.value.trim() && !self._producto(cod.value)) mostrarSug(tr); });
+      cod.addEventListener('blur', function () { setTimeout(function () { if (sugTr === tr) cerrarSug(); }, 150); });
       cod.addEventListener('keydown', function (ev) {
+        const abierta = sug && sugTr === tr && sugItems.length;
+        if (abierta && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp')) {
+          ev.preventDefault();
+          sugAct = (sugAct + (ev.key === 'ArrowDown' ? 1 : -1) + sugItems.length) % sugItems.length;
+          pintarAct(); return;
+        }
+        if (ev.key === 'Escape') { cerrarSug(); return; }
         if (ev.key !== 'Enter') return;
-        ev.preventDefault(); pintarFila(tr);
-        if (self._producto(cod.value) || tr._nuevo) cant.focus();
-        else if (!esSalida && cod.value.trim()) abrirCreacion(tr);
+        ev.preventDefault();
+        // Código exacto (lector de código de barras) → directo a cantidad
+        if (self._producto(cod.value) || tr._nuevo) { cerrarSug(); pintarFila(tr); cant.focus(); avisar(); return; }
+        if (!cod.value.trim()) return;
+        if (abierta) { elegirSug(tr, sugAct); return; }
+        pintarFila(tr);
+        if (!esSalida) crearDesdeTexto(tr);
       });
       cant.addEventListener('input', function () { pintarFila(tr); avisar(); });
       cant.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); agregar().querySelector('.l-cod').focus(); } });
@@ -716,11 +848,15 @@ const FormAlmacen = {
             <div class="campo"><label>RUC</label><input type="text" id="iRuc" readonly></div>
             <div class="campo ancho4" id="iProvNuevo" style="display:none">
               <div class="mt-crear"><div class="mt-crear-tit">Proveedor nuevo</div>
-                <div class="mt-crear-g" style="grid-template-columns:2fr 1fr auto">
-                  <label>Razón social *<input id="iProvRazon" style="text-transform:uppercase"></label>
+                <div class="mt-crear-g g4">
+                  <label class="s2">Razón social *<input id="iProvRazon" style="text-transform:uppercase"></label>
                   <label>RUC *<input id="iProvRuc" maxlength="11" inputmode="numeric"></label>
-                  <label>&nbsp;<button type="button" class="boton-secundario" id="iProvCancelar">Usar uno de la lista</button></label>
-                </div><div class="mt-ayuda">Contacto, teléfono, correo y dirección se completan después en Catálogo.</div></div>
+                  <label>Nombre del vendedor<input id="iProvVendedor" style="text-transform:uppercase"></label>
+                  <label class="s2">Dirección<input id="iProvDireccion" style="text-transform:uppercase"></label>
+                  <label class="s2">Ubicación (enlace de Google Maps)<input id="iProvMapa" placeholder="https://maps.app.goo.gl/..."></label>
+                </div>
+                <div class="mt-crear-b"><button type="button" class="mt-quitar" id="iProvCancelar">✕ Quitar y volver a la lista</button></div>
+                <div class="mt-ayuda">Obligatorio: razón social y RUC. Teléfono y correo se completan después en Catálogo.</div></div>
             </div>
             <div class="campo ancho4"><label>Observación (opcional)</label><input type="text" id="iObs" autocomplete="off" style="text-transform:uppercase"></div>
           </div>
@@ -731,7 +867,7 @@ const FormAlmacen = {
             <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad ingresada</th><th></th></tr></thead><tbody></tbody>
           </table>
           <button type="button" class="mt-agregar" id="btnAgregarLineaIng">+ Agregar producto</button>
-          <div class="mt-ayuda">Escanea el código, escribe la cantidad y presiona Enter para pasar al siguiente. Si el producto no existe aparece "Crear aquí"; si no tiene código de barras usa "Nuevo". Lo escrito se guarda solo en este navegador hasta que grabes.</div>
+          <div class="mt-ayuda">Escanea el código o escribe el nombre, marca, tipo o categoría y elige de la lista. Si no está, elige "+ Agregar producto nuevo" (o "Nuevo" si no tiene código de barras). Lo escrito se guarda solo en este navegador hasta que grabes.</div>
           <div class="mt-botones">
             <button class="boton-secundario" id="btnInicioIngreso">Inicio</button>
             <button class="boton-secundario" id="btnLimpiarIngreso">Limpiar</button>
@@ -749,7 +885,8 @@ const FormAlmacen = {
           if (!lineas.length && !$('iDocumento').value.trim()) { localStorage.removeItem(CLAVE_BORRADOR); return; }
           localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
             fecha: $('iFecha').value, tipoDoc: $('iTipoDoc').value, documento: $('iDocumento').value.trim().toUpperCase(),
-            razon: $('iRazon').value, provNuevo: provNuevo ? { razonSocial: $('iProvRazon').value, ruc: $('iProvRuc').value } : null,
+            razon: $('iRazon').value, provNuevo: provNuevo ? { razonSocial: $('iProvRazon').value, ruc: $('iProvRuc').value, vendedor: $('iProvVendedor').value,
+              direccion: $('iProvDireccion').value, ubicacion: $('iProvMapa').value } : null,
             obs: $('iObs').value, lineas: lineas
           }));
         } catch (e) { /* sin almacenamiento */ }
@@ -761,7 +898,9 @@ const FormAlmacen = {
         provNuevo = si;
         $('iProvNuevo').style.display = si ? '' : 'none';
         $('iRazon').disabled = si;
+        $('btnNuevoProv').style.display = si ? 'none' : '';
         if (si) { $('iRazon').value = ''; $('iRuc').value = ''; $('iProvRazon').focus(); }
+        else ['iProvRazon', 'iProvRuc', 'iProvVendedor', 'iProvDireccion', 'iProvMapa'].forEach(id => { $(id).value = ''; });
         programarBorrador();
       };
       $('btnNuevoProv').addEventListener('click', () => mostrarProvNuevo(true));
@@ -771,7 +910,7 @@ const FormAlmacen = {
         const p = self._datos.proveedores.find(x => x.razonSocial === this.value);
         $('iRuc').value = p ? p.ruc : '';
       });
-      ['iFecha', 'iTipoDoc', 'iDocumento', 'iRazon', 'iObs', 'iProvRazon', 'iProvRuc'].forEach(id => {
+      ['iFecha', 'iTipoDoc', 'iDocumento', 'iRazon', 'iObs', 'iProvRazon', 'iProvRuc', 'iProvVendedor', 'iProvDireccion', 'iProvMapa'].forEach(id => {
         $(id).addEventListener('input', programarBorrador); $(id).addEventListener('change', programarBorrador);
       });
       // Recuperar el borrador
@@ -780,13 +919,18 @@ const FormAlmacen = {
         $('iTipoDoc').value = borrador.tipoDoc || '';
         $('iDocumento').value = borrador.documento || '';
         $('iObs').value = borrador.obs || '';
-        if (borrador.provNuevo) { mostrarProvNuevo(true); $('iProvRazon').value = borrador.provNuevo.razonSocial || ''; $('iProvRuc').value = borrador.provNuevo.ruc || ''; }
+        if (borrador.provNuevo) {
+          mostrarProvNuevo(true);
+          const pn = borrador.provNuevo;
+          $('iProvRazon').value = pn.razonSocial || ''; $('iProvRuc').value = pn.ruc || ''; $('iProvVendedor').value = pn.vendedor || '';
+          $('iProvDireccion').value = pn.direccion || ''; $('iProvMapa').value = pn.ubicacion || '';
+        }
         else if (borrador.razon) { $('iRazon').value = borrador.razon; $('iRazon').dispatchEvent(new Event('change')); }
         lineasObj.cargar(borrador.lineas);
       }
       function limpiarTodo() {
         lineasObj.limpiar();
-        ['iTipoDoc', 'iDocumento', 'iRazon', 'iRuc', 'iObs', 'iProvRazon', 'iProvRuc'].forEach(id => { $(id).value = ''; });
+        ['iTipoDoc', 'iDocumento', 'iRazon', 'iRuc', 'iObs'].forEach(id => { $(id).value = ''; });
         mostrarProvNuevo(false);
         $('iFecha').value = MT.hoy(); $('iHora').value = MT.ahora();
         try { localStorage.removeItem(CLAVE_BORRADOR); } catch (e) { /* no-op */ }
@@ -805,7 +949,10 @@ const FormAlmacen = {
           razon = $('iProvRazon').value.trim().toUpperCase();
           if (!razon) { mostrarMensaje('Escribe la razón social del proveedor nuevo.', 'error'); return; }
           if (!/^\d{11}$/.test($('iProvRuc').value.trim())) { mostrarMensaje('El RUC del proveedor nuevo debe tener 11 dígitos.', 'error'); return; }
-          proveedorNuevo = { razonSocial: razon, ruc: $('iProvRuc').value.trim() };
+          const mapa = $('iProvMapa').value.trim();
+          if (mapa && !/^https?:\/\//i.test(mapa)) { mostrarMensaje('La ubicación debe ser un enlace de Google Maps (empieza con https://).', 'error'); return; }
+          proveedorNuevo = { razonSocial: razon, ruc: $('iProvRuc').value.trim(), vendedor: $('iProvVendedor').value.trim().toUpperCase(),
+            direccion: $('iProvDireccion').value.trim().toUpperCase(), ubicacion: mapa };
         }
         if (!razon) { mostrarMensaje('Seleccione la razón social del proveedor.', 'error'); return; }
         // Productos nuevos que quedaron con "Crear aquí" abierto sin guardar
@@ -825,15 +972,19 @@ const FormAlmacen = {
         if (!r) return;
         // Productos y proveedor nuevos entran a la lista local
         nuevos.forEach(n => {
-          if (!self._producto(n.codigo)) self._datos.productos.push({ codigo: n.codigo, producto: n.producto, marca: n.marca, tipo: n.tipo, categoria: 'NUEVO', unidad: n.unidad,
-            ubicacion: '', stockMinimo: 0, moneda: '', total: 0, vence: n.vence ? 'SÍ' : 'NO', fechaVencimiento: '', stock: 0, proveedor: razon,
-            reparable: !!n.reparable, incompleto: true, danado: 0, enReparacion: 0 });
+          if (!self._producto(n.codigo)) self._datos.productos.push({ codigo: n.codigo, producto: n.producto, marca: n.marca, tipo: n.tipo, categoria: n.categoria || 'NUEVO', unidad: n.unidad,
+            ubicacion: n.ubicacion || '', stockMinimo: MT.num(n.stockMinimo) || 0, moneda: n.moneda || '', total: MT.num(n.total) || 0, vence: n.vence ? 'SÍ' : 'NO',
+            fechaVencimiento: n.fechaVencimiento || '', stock: 0, proveedor: razon, reparable: !!n.reparable,
+            incompleto: !(n.ubicacion && n.moneda && n.total !== '' && n.stockMinimo !== ''), danado: 0, enReparacion: 0 });
         });
-        if (proveedorNuevo && !self._datos.proveedores.find(p => p.razonSocial === razon)) self._datos.proveedores.push(proveedorNuevo);
+        if (proveedorNuevo && !self._datos.proveedores.find(p => p.razonSocial === razon)) self._datos.proveedores.push({ razonSocial: razon, ruc: proveedorNuevo.ruc,
+          contacto: proveedorNuevo.vendedor, direccion: proveedorNuevo.direccion, ubicacion: proveedorNuevo.ubicacion, telefono: '', correo: '' });
         self._aplicarStocks(r.items);
         r.items.forEach(it => { const p = self._producto(it.codigo); if (p) p.proveedor = razon; });
         try { localStorage.removeItem(CLAVE_BORRADOR); } catch (e) { /* no-op */ }
-        mostrarMensaje(r.mensaje + (nuevos.length ? '\n\nSe crearon ' + nuevos.length + ' producto(s) nuevo(s): completa su ubicación, stock mínimo y precio en Catálogo.' : ''), 'exito');
+        const incompletos = nuevos.filter(n => !(n.ubicacion && n.moneda && n.total !== '' && n.stockMinimo !== '')).length;
+        mostrarMensaje(r.mensaje + (nuevos.length ? '\n\nSe crearon ' + nuevos.length + ' producto(s) nuevo(s).' +
+          (incompletos ? ' ' + incompletos + ' quedaron con datos por completar en Catálogo.' : '') : ''), 'exito');
         cerrarPanel();
       });
       raiz.querySelector('#tablaLineasIng .l-cod').focus();
@@ -1177,10 +1328,11 @@ const FormAlmacen = {
           <div class="fila-campos">
             <div class="campo ancho2"><label>Razón social</label><input id="cvRazon" readonly></div>
             <div class="campo"><label>RUC *</label><input id="cvRuc" maxlength="11" inputmode="numeric"></div>
-            <div class="campo"><label>Contacto</label><input id="cvContacto" style="text-transform:uppercase"></div>
+            <div class="campo"><label>Nombre del vendedor</label><input id="cvContacto" style="text-transform:uppercase"></div>
             <div class="campo"><label>Teléfono</label><input id="cvTelefono" inputmode="numeric"></div>
             <div class="campo"><label>Correo</label><input id="cvCorreo" type="email"></div>
             <div class="campo ancho2"><label>Dirección</label><input id="cvDireccion" style="text-transform:uppercase"></div>
+            <div class="campo ancho2"><label>Ubicación (enlace de Google Maps)</label><input id="cvMapa" placeholder="https://maps.app.goo.gl/..."></div>
           </div>
           <div class="mt-botones"><button class="boton-secundario" id="ceCancelar">Cancelar</button><button class="boton-primario" id="ceGuardar">Guardar cambios</button></div>
         </div>
@@ -1189,7 +1341,7 @@ const FormAlmacen = {
           <div class="campo"><label>&nbsp;</label><button class="boton-primario" id="cNuevo" type="button">+ Nuevo proveedor</button></div>
         </div>
         <div class="mt-tabla-wrap" style="max-height:50vh"><table class="tabla-lista" id="tablaCat">
-          <thead><tr><th>Razón social</th><th>RUC</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Dirección</th></tr></thead><tbody></tbody>
+          <thead><tr><th>Razón social</th><th>RUC</th><th>Vendedor</th><th>Teléfono</th><th>Correo</th><th>Dirección</th><th style="width:70px">Mapa</th></tr></thead><tbody></tbody>
         </table></div>`;
     }
     const html = MT_ESTILOS + tabs + '<div class="mt-form">' + cuerpo + '<div class="mt-botones"><button class="boton-secundario" id="cCerrar">Cerrar</button></div></div>';
@@ -1255,23 +1407,26 @@ const FormAlmacen = {
           const q = $('cBuscar').value.trim().toUpperCase();
           $('tablaCat').querySelector('tbody').innerHTML = provs.filter(p => !q || (p.razonSocial + ' ' + p.ruc).toUpperCase().indexOf(q) !== -1)
             .map(p => '<tr data-r="' + esc(p.razonSocial) + '"><td><b>' + esc(p.razonSocial) + '</b>' + (!p.contacto || !p.telefono ? ' <span class="mt-incompleto">incompleto</span>' : '') + '</td><td>' + esc(p.ruc) +
-              '</td><td>' + esc(p.contacto || '') + '</td><td>' + esc(p.telefono || '') + '</td><td>' + esc(p.correo || '') + '</td><td>' + esc(p.direccion || '') + '</td></tr>').join('')
-            || '<tr><td colspan="6" style="text-align:center;color:#8b95a1;padding:16px;">Sin proveedores.</td></tr>';
+              '</td><td>' + esc(p.contacto || '') + '</td><td>' + esc(p.telefono || '') + '</td><td>' + esc(p.correo || '') + '</td><td>' + esc(p.direccion || '') + '</td><td>' +
+              (/^https?:\/\//i.test(p.ubicacion || '') ? '<a href="' + esc(p.ubicacion) + '" target="_blank" rel="noopener" class="mt-mini" onclick="event.stopPropagation()">Ver mapa</a>' : '') + '</td></tr>').join('')
+            || '<tr><td colspan="7"style="text-align:center;color:#8b95a1;padding:16px;">Sin proveedores.</td></tr>';
         };
         $('tablaCat').querySelector('tbody').addEventListener('click', function (ev) {
           const tr = ev.target.closest('tr[data-r]'); if (!tr) return;
           actual = provs.find(p => p.razonSocial === tr.dataset.r); if (!actual) return;
           $('cvRazon').value = actual.razonSocial; $('cvRuc').value = actual.ruc || ''; $('cvContacto').value = actual.contacto || '';
           $('cvTelefono').value = actual.telefono || ''; $('cvCorreo').value = actual.correo || ''; $('cvDireccion').value = actual.direccion || '';
+          $('cvMapa').value = actual.ubicacion || '';
           $('cEditor').style.display = '';
           _refrescarSnapshotFormulario();
         });
         protegerClic($('ceGuardar'), async function () {
           if (!actual) return;
-          const d = { razonSocial: actual.razonSocial, ruc: $('cvRuc').value, contacto: $('cvContacto').value, telefono: $('cvTelefono').value, correo: $('cvCorreo').value, direccion: $('cvDireccion').value };
+          const d = { razonSocial: actual.razonSocial, ruc: $('cvRuc').value, contacto: $('cvContacto').value, telefono: $('cvTelefono').value, correo: $('cvCorreo').value, direccion: $('cvDireccion').value, ubicacion: $('cvMapa').value.trim() };
+          if (d.ubicacion && !/^https?:\/\//i.test(d.ubicacion)) { mostrarMensaje('La ubicación debe ser un enlace de Google Maps (empieza con https://).', 'error'); return; }
           const r = await MT.llamar('mtActualizarProveedor', d);
           if (!r) return;
-          Object.assign(actual, { ruc: d.ruc.trim(), contacto: d.contacto.toUpperCase(), telefono: d.telefono.trim(), correo: d.correo.trim().toLowerCase(), direccion: d.direccion.toUpperCase() });
+          Object.assign(actual, { ruc: d.ruc.trim(), contacto: d.contacto.toUpperCase(), telefono: d.telefono.trim(), correo: d.correo.trim().toLowerCase(), direccion: d.direccion.toUpperCase(), ubicacion: d.ubicacion });
           mostrarMensaje(r.mensaje, 'exito');
           $('cEditor').style.display = 'none';
           pintar();
