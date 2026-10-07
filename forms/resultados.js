@@ -146,8 +146,10 @@ const FormResultados = {
       <div class="res-tabs">
         <button type="button" class="res-tab activo" data-vista="dash">Indicadores</button>
         <button type="button" class="res-tab" data-vista="er">Estado de resultados</button>
+        <button type="button" class="res-tab" data-vista="alm">Almacén y mantenimiento</button>
       </div>
       <div id="resVistaER" style="display:none"></div>
+      <div id="resVistaAlm" style="display:none"></div>
       <div id="resVistaDash">
       <div class="res-barra">
         <div class="campo"><label>Período</label>
@@ -224,10 +226,12 @@ const FormResultados = {
     raiz.querySelectorAll('.res-tab').forEach(function (b) {
       b.addEventListener('click', function () {
         raiz.querySelectorAll('.res-tab').forEach(function (x) { x.classList.toggle('activo', x === b); });
-        const er = b.dataset.vista === 'er';
-        raiz.querySelector('#resVistaDash').style.display = er ? 'none' : '';
-        raiz.querySelector('#resVistaER').style.display = er ? '' : 'none';
-        if (er) FormEstadoResultados.mostrar(raiz.querySelector('#resVistaER'), self._token);
+        const vista = b.dataset.vista;
+        raiz.querySelector('#resVistaDash').style.display = vista === 'dash' ? '' : 'none';
+        raiz.querySelector('#resVistaER').style.display = vista === 'er' ? '' : 'none';
+        raiz.querySelector('#resVistaAlm').style.display = vista === 'alm' ? '' : 'none';
+        if (vista === 'er') FormEstadoResultados.mostrar(raiz.querySelector('#resVistaER'), self._token);
+        if (vista === 'alm') FormResultadosAlmacen.mostrar(raiz.querySelector('#resVistaAlm'), self._token);
       });
     });
 
@@ -561,7 +565,13 @@ const FormResultados = {
     horizontal('gDestinos', top(agrupar(validos, 'DESTINO 1'), 10), azul);
     horizontal('gConductores', top(agrupar(validos, 'CONDUCTOR'), 10), '#2c6bd6');
     horizontal('gUnidades', top(agrupar(validos, 'PLACA TRACTO'), 10), '#0891b2');
-    horizontal('gPlantas', top(agrupar(validos, 'PACKING'), 10), '#e8890c');
+    // Si el viaje no tiene planta registrada, se usa el exportador (cliente de la guía del consolidado).
+    horizontal('gPlantas', top(agrupar(validos, function (f) {
+      const p = String(f['PACKING'] || '').trim();
+      if (p) return p;
+      const ex = String(f['EXPORTADOR'] || '').trim();
+      return ex ? ex + ' (exportador)' : '';
+    }), 10), '#e8890c');
 
     const conGl = validos.filter(f => self._num(f['GL TRACTO']) + self._num(f['GL GENERADOR']) > 0);
     const glDest = agrupar(conGl, 'DESTINO 1', f => self._num(f['GL TRACTO']) + self._num(f['GL GENERADOR']));
