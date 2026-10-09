@@ -36,11 +36,29 @@
       </div>
     </div>
     <div class="home-top-der">
+      <div class="home-usuario">
+        <div class="home-usuario-txt"><strong id="homeUsuarioNombre"></strong><small id="homeUsuarioRol"></small></div>
+        <button class="mini-boton mini-usuarios" id="btn-usuarios" data-modulo="ADMIN" title="Usuarios y permisos">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="7" r="4"></circle><path d="M2 21v-1a7 7 0 0 1 7-7h0a7 7 0 0 1 7 7v1"></path><path d="M19 8v6"></path><path d="M22 11h-6"></path>
+          </svg>
+        </button>
+        <button class="mini-boton mini-clave" id="btn-mi-clave" title="Cambiar mi contraseña">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3L21 2"></path><path d="M16 7l3 3"></path><path d="M19 4l2 2"></path>
+          </svg>
+        </button>
+        <button class="mini-boton mini-salir" id="btn-cerrar-sesion" title="Cerrar sesión">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
       <div class="home-reloj">
         <span id="homeFecha"></span>
         <strong id="homeHora"></strong>
       </div>
-      <div class="home-ver-ocultar">
+      <div class="home-ver-ocultar" data-modulo="ADMIN">
         <button class="mini-boton mini-ver" id="btn-ver" title="Ver hojas de servicios">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
@@ -64,7 +82,7 @@
   <main class="home-grid">
 
     <!-- ===================== OPERACIONES ===================== -->
-    <section class="home-grupo">
+    <section class="home-grupo" data-modulo="OPER">
       <h2 class="home-grupo-tit"><span class="punto punto-azul"></span>Operaciones</h2>
       <div class="home-tiles">
 
@@ -145,11 +163,11 @@
     </section>
 
     <!-- ===================== FINANZAS ===================== -->
-    <section class="home-grupo">
+    <section class="home-grupo" data-modulo="FIN">
       <h2 class="home-grupo-tit"><span class="punto punto-verde"></span>Finanzas</h2>
       <div class="home-tiles">
 
-        <button class="tile tile-resultados" id="btn-resultados">
+        <button class="tile tile-resultados" id="btn-resultados" data-modulo="RES">
           <span class="tile-icono">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 3v18h18"></path>
@@ -231,7 +249,7 @@
     </section>
 
     <!-- ===================== MAESTROS ===================== -->
-    <section class="home-grupo">
+    <section class="home-grupo" data-modulo="MAE">
       <h2 class="home-grupo-tit"><span class="punto punto-naranja"></span>Maestros</h2>
       <div class="home-tiles">
 
@@ -289,7 +307,7 @@
 
 
     <!-- ===================== ALMACÉN ===================== -->
-    <section class="home-grupo">
+    <section class="home-grupo" data-modulo="ALM">
       <h2 class="home-grupo-tit"><span class="punto" style="background:#7c3aed"></span>Almacén</h2>
       <div class="home-tiles">
 
@@ -343,7 +361,7 @@
     </section>
 
     <!-- ===================== MANTENIMIENTO ===================== -->
-    <section class="home-grupo">
+    <section class="home-grupo" data-modulo="MANT">
       <h2 class="home-grupo-tit"><span class="punto" style="background:#d33a3a"></span>Mantenimiento</h2>
       <div class="home-tiles">
 
@@ -415,7 +433,8 @@
     'forms/reporteFacturacion.js',
     'forms/clientes.js',
     'forms/almacen.js',
-    'forms/mantenimiento.js'
+    'forms/mantenimiento.js',
+    'forms/usuarios.js'
   ].forEach(function (src) {
     document.write('<script src="' + src + '?v=' + window.__VERSION_APP + '"><\/script>');
   });

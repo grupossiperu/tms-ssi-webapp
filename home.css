@@ -284,3 +284,44 @@
 .res-tabs{ display:flex; gap:6px; margin-bottom:12px; }
 .res-tab{ border:1.5px solid #c7ced8; background:#fff; color:#1c3a5e; border-radius:9px; padding:8px 16px; font-weight:700; font-size:.86rem; cursor:pointer; font-family:inherit; }
 .res-tab.activo{ background:#1c3a5e; border-color:#1c3a5e; color:#fff; }
+
+/* ------------------------- Inicio de sesión (v73) ------------------------- */
+body.sin-sesion .home, body.sin-sesion #franjaAvisosVencimiento { visibility: hidden; }
+.login-overlay{
+  position: fixed; inset: 0; z-index: 3000;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: linear-gradient(135deg, var(--azul-marino-oscuro), var(--azul-marino) 60%, var(--azul-marino-claro));
+}
+.login-caja{
+  width: 100%; max-width: 380px; background: #fff; border-radius: 18px;
+  padding: 28px 26px 22px; box-shadow: 0 18px 50px rgba(0,0,0,.28); text-align: center;
+}
+.login-logo{
+  width: 58px; height: 58px; border-radius: 14px; margin: 0 auto 12px;
+  background: linear-gradient(135deg, var(--azul-marino), var(--azul-marino-claro));
+  display: flex; align-items: center; justify-content: center;
+}
+.login-logo svg{ width: 34px; height: 34px; }
+.login-caja h2{ margin: 0 0 4px; font-size: 1.15rem; letter-spacing: .5px; color: var(--azul-marino-oscuro); }
+.login-ayuda{ margin: 0 0 16px; font-size: .84rem; color: #64748b; line-height: 1.45; }
+.login-caja .campo{ text-align: left; }
+.login-btn{ width: 100%; margin-top: 8px; }
+.login-error{ min-height: 18px; margin-top: 10px; color: var(--rojo-oscuro); font-size: .84rem; font-weight: 600; }
+
+.home-usuario{ display: flex; align-items: center; gap: 8px; }
+.home-usuario-txt{ display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; margin-right: 4px; }
+.home-usuario-txt strong{ font-size: .9rem; }
+.home-usuario-txt small{ font-size: .72rem; opacity: .8; }
+.mini-usuarios svg, .mini-clave svg, .mini-salir svg{ stroke: #fff; }
+.mini-salir svg{ stroke: #ffc4c4; }
+
+/* Gestión de usuarios */
+.usr-form{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: end; }
+.usr-form .campo{ margin: 0; }
+.usr-checks{ display: flex; gap: 16px; align-items: center; font-size: .85rem; }
+.usr-tabla{ width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .84rem; margin-top: 14px; }
+.usr-tabla th, .usr-tabla td{ padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.usr-tabla th{ background: #f1f5f9; color: var(--azul-marino-oscuro); font-size: .78rem; }
+.usr-badge{ display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.usr-ok{ background: #dcfce7; color: #166534; } .usr-no{ background: #fee2e2; color: #991b1b; } .usr-warn{ background: #fef3c7; color: #92400e; }
+@media (max-width: 800px){ .usr-form{ grid-template-columns: 1fr 1fr; } }

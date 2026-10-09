@@ -34,7 +34,7 @@ async function llamarBackend(accion, datos) {
     // text/plain evita que el navegador dispare un preflight OPTIONS,
     // que los Web Apps de Apps Script no responden.
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ accion: accion, datos: datos || {} })
+    body: JSON.stringify({ accion: accion, datos: datos || {}, token: Sesion.token() })
   });
 
   if (!respuesta.ok) {
@@ -43,17 +43,28 @@ async function llamarBackend(accion, datos) {
 
   // Si Apps Script responde una página HTML de error (cuota, timeout), json() falla sin explicar nada.
   const texto = await respuesta.text();
+  let r;
   try {
-    return JSON.parse(texto);
+    r = JSON.parse(texto);
   } catch (e) {
     throw new Error('El servidor no respondió correctamente (' + accion + '). Intente de nuevo en unos segundos.');
   }
+  // v73: sesión vencida o contraseña por cambiar -> pantalla de ingreso.
+  if (r && r.sesion === false && accion !== 'login') {
+    Sesion.vencida();
+    throw new Error(MSG_SESION);
+  }
+  if (r && r.debeCambiar === true && r.ok === false) {
+    Sesion.pedirCambio();
+    throw new Error(MSG_SESION);
+  }
+  return r;
 }
 
 // Cualquier error de red o del servidor que un formulario no capture se avisa al usuario.
 window.addEventListener('unhandledrejection', function (ev) {
   const msg = ev.reason && ev.reason.message ? ev.reason.message : 'Ocurrió un error inesperado.';
-  if (msg === 'API_URL no configurada') return;
+  if (msg === 'API_URL no configurada' || msg === MSG_SESION) { ev.preventDefault(); return; }
   ev.preventDefault();
   mostrarMensaje(msg, 'error');
 });
@@ -216,6 +227,186 @@ function respuestaValida(r) {
   return !!r && r.ok !== false;
 }
 
+/* ============================ Sesión (v73) ============================ */
+
+const MSG_SESION = 'Su sesión venció. Ingrese nuevamente.';
+
+/**
+ * Inicio de sesión con usuario y contraseña (validados en el backend; aquí
+ * nunca se guarda la contraseña, solo el token de la sesión de 12 horas).
+ * Cada rol ve solo sus módulos: los elementos con data-modulo="OPER|FIN|MAE|
+ * ALM|MANT|RES|ADMIN" se ocultan si el usuario no tiene ese módulo.
+ */
+const Sesion = {
+  CLAVE: 'tms_sesion',
+  _d: null,
+  _listo: false,
+  _cola: [],
+  _claveIngresada: '',
+
+  token: function () { return this._d ? this._d.token : ''; },
+  datos: function () { return this._d; },
+  puede: function (modulo) { return !!this._d && (this._d.modulos || []).indexOf(modulo) !== -1; },
+  /** Ejecuta fn cuando ya hay una sesión válida (o de inmediato si ya la hay). */
+  alListo: function (fn) { if (this._listo) fn(); else this._cola.push(fn); },
+
+  _guardar: function (d) {
+    this._d = d;
+    try { localStorage.setItem(this.CLAVE, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ }
+  },
+  _borrar: function () {
+    this._d = null; this._listo = false;
+    try { localStorage.removeItem(this.CLAVE); } catch (e) { /* no-op */ }
+  },
+
+  iniciar: async function () {
+    document.body.classList.add('sin-sesion');
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(this.CLAVE) || 'null'); } catch (e) { d = null; }
+    if (!d || !d.token || !(d.vence > Date.now())) { this._borrar(); this.mostrarLogin(); return; }
+    this._d = d;
+    this.mostrarLogin('Verificando sesión…', true);
+    try {
+      const r = await llamarBackend('sesionInfo', {});
+      if (!r || !r.ok) { this._borrar(); this.mostrarLogin(); return; }
+      this._entrar(r);
+    } catch (e) {
+      if (e.message !== MSG_SESION) this.mostrarLogin('No se pudo verificar la sesión: ' + e.message);
+    }
+  },
+
+  _entrar: function (r) {
+    this._guardar({ token: r.token, usuario: r.usuario, nombre: r.nombre, rol: r.rol, modulos: r.modulos || [], vence: r.vence });
+    if (r.debeCambiar) { this.pedirCambio(); return; }
+    const ov = document.getElementById('loginOverlay');
+    if (ov) ov.remove();
+    document.body.classList.remove('sin-sesion');
+    this.aplicarPermisos();
+    if (!this._listo) {
+      this._listo = true;
+      const cola = this._cola; this._cola = [];
+      cola.forEach(function (fn) { try { fn(); } catch (e) { /* no-op */ } });
+    }
+  },
+
+  aplicarPermisos: function () {
+    const self = this;
+    document.querySelectorAll('[data-modulo]').forEach(function (el) {
+      const mods = el.dataset.modulo.split(/\s+/);
+      el.style.display = mods.some(function (m) { return self.puede(m); }) ? '' : 'none';
+    });
+    const d = this._d || {};
+    const n = document.getElementById('homeUsuarioNombre');
+    const r = document.getElementById('homeUsuarioRol');
+    if (n) n.textContent = d.nombre || d.usuario || '';
+    if (r) r.textContent = d.rol ? d.rol.charAt(0) + d.rol.slice(1).toLowerCase() : '';
+  },
+
+  vencida: function () {
+    this._borrar();
+    if (typeof cerrarPanel === 'function') cerrarPanel();
+    this.mostrarLogin('Su sesión venció. Ingrese nuevamente.');
+  },
+
+  cerrar: async function () {
+    if (!confirmar('¿Cerrar sesión?')) return;
+    try { await llamarBackend('cerrarSesion', {}); } catch (e) { /* igual se cierra aquí */ }
+    this._borrar();
+    location.reload();
+  },
+
+  _caja: function (contenido) {
+    let ov = document.getElementById('loginOverlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'loginOverlay';
+      ov.className = 'login-overlay';
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = '<div class="login-caja">' +
+      '<div class="login-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="1" y="7" width="14" height="10" rx="1"></rect><path d="M15 10h4l4 4v3h-8z"></path><circle cx="6" cy="18.5" r="2"></circle><circle cx="18" cy="18.5" r="2"></circle></svg></div>' +
+      '<h2>TRANSPORTES SSI S.A.C.</h2>' + contenido + '<div class="login-error" id="loginError"></div></div>';
+    return ov;
+  },
+
+  mostrarLogin: function (aviso, soloAviso) {
+    const self = this;
+    document.body.classList.add('sin-sesion');
+    if (soloAviso) { self._caja('<p class="login-ayuda">' + esc(aviso) + '</p>'); return; }
+    const ov = self._caja(
+      '<p class="login-ayuda">Sistema de Servicios de Transporte</p>' +
+      '<div class="campo"><label>Usuario</label><input type="text" id="loginUsuario" autocomplete="username" autocapitalize="none" spellcheck="false"></div>' +
+      '<div class="campo"><label>Contraseña</label><input type="password" id="loginClave" autocomplete="current-password"></div>' +
+      '<button class="boton-primario login-btn" id="loginBtn" type="button">Ingresar</button>');
+    const err = ov.querySelector('#loginError');
+    if (aviso) err.textContent = aviso;
+    const btn = ov.querySelector('#loginBtn');
+    const ingresar = async function () {
+      const usuario = ov.querySelector('#loginUsuario').value.trim();
+      const clave = ov.querySelector('#loginClave').value;
+      if (!usuario || !clave) { err.textContent = 'Ingrese usuario y contraseña.'; return; }
+      err.textContent = '';
+      btn.disabled = true; btn.textContent = 'Ingresando…';
+      try {
+        const r = await llamarBackend('login', { usuario: usuario, clave: clave });
+        if (!r || !r.ok) { err.textContent = (r && r.mensaje) || 'No se pudo ingresar.'; ov.querySelector('#loginClave').value = ''; return; }
+        self._claveIngresada = clave;
+        self._entrar(r);
+      } catch (e) {
+        err.textContent = 'Error de conexión: ' + e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Ingresar';
+      }
+    };
+    btn.addEventListener('click', ingresar);
+    ov.querySelector('#loginUsuario').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ov.querySelector('#loginClave').focus(); });
+    ov.querySelector('#loginClave').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ingresar(); });
+    setTimeout(function () { const u = ov.querySelector('#loginUsuario'); if (u) u.focus(); }, 50);
+  },
+
+  /** Primer ingreso o clave temporal: obliga a crear una contraseña propia. */
+  pedirCambio: function () {
+    const self = this;
+    document.body.classList.add('sin-sesion');
+    if (typeof cerrarPanel === 'function') cerrarPanel();
+    const conocida = !!self._claveIngresada;
+    const d = self._d || {};
+    const ov = self._caja(
+      '<p class="login-ayuda"><strong>' + esc(d.nombre || d.usuario || '') + '</strong>, cree su contraseña personal para continuar.<br>' +
+      'Mínimo 8 caracteres, con letras y números, sin su nombre de usuario.</p>' +
+      (conocida ? '' : '<div class="campo"><label>Contraseña actual</label><input type="password" id="cambioActual" autocomplete="current-password"></div>') +
+      '<div class="campo"><label>Contraseña nueva</label><input type="password" id="cambioNueva" autocomplete="new-password"></div>' +
+      '<div class="campo"><label>Repita la contraseña nueva</label><input type="password" id="cambioRepite" autocomplete="new-password"></div>' +
+      '<button class="boton-primario login-btn" id="cambioBtn" type="button">Guardar y entrar</button>' +
+      '<button class="boton-secundario login-btn" id="cambioSalir" type="button">Salir</button>');
+    const err = ov.querySelector('#loginError');
+    const btn = ov.querySelector('#cambioBtn');
+    const guardar = async function () {
+      const actual = conocida ? self._claveIngresada : ov.querySelector('#cambioActual').value;
+      const nueva = ov.querySelector('#cambioNueva').value;
+      if (nueva !== ov.querySelector('#cambioRepite').value) { err.textContent = 'Las contraseñas nuevas no coinciden.'; return; }
+      err.textContent = '';
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      try {
+        const r = await llamarBackend('cambiarMiClave', { actual: actual, nueva: nueva });
+        if (!r || !r.ok) { err.textContent = (r && r.mensaje) || 'No se pudo cambiar la contraseña.'; return; }
+        self._claveIngresada = '';
+        self._entrar(r);
+        mostrarMensaje('Contraseña creada. Úsela desde ahora para ingresar.', 'exito');
+      } catch (e) {
+        if (e.message !== MSG_SESION) err.textContent = 'Error de conexión: ' + e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar y entrar';
+      }
+    };
+    btn.addEventListener('click', guardar);
+    ov.querySelector('#cambioRepite').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') guardar(); });
+    ov.querySelector('#cambioSalir').addEventListener('click', function () { self._claveIngresada = ''; self._borrar(); self.mostrarLogin(); });
+    setTimeout(function () { const f = ov.querySelector(conocida ? '#cambioNueva' : '#cambioActual'); if (f) f.focus(); }, 50);
+  }
+};
+
 /* ============================ Router HOME ============================ */
 
 
@@ -255,7 +446,8 @@ async function verificarAvisosVencimiento() {
   }
 }
 document.addEventListener('DOMContentLoaded', function () {
-  verificarAvisosVencimiento();
+  Sesion.iniciar();
+  Sesion.alListo(function () { if (Sesion.puede('OPER')) verificarAvisosVencimiento(); });
 
   const franjaAvisos = document.getElementById('franjaAvisosVencimiento');
   if (franjaAvisos) {
@@ -268,6 +460,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+
+  document.getElementById('btn-cerrar-sesion').addEventListener('click', function () { Sesion.cerrar(); });
+  document.getElementById('btn-mi-clave').addEventListener('click', function () { FormUsuarios.cambiarMiClave(); });
+  document.getElementById('btn-usuarios').addEventListener('click', function () { FormUsuarios.abrir(); });
 
   document.getElementById('btn-registrar-servicio').addEventListener('click', function () {
     FormServicio.abrir();
