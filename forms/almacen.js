@@ -12,8 +12,8 @@
  *  - Salida: a una persona y placa; motivo MANTENIMIENTO queda PENDIENTE
  *    para asociarlo luego en "Registrar mantenimiento". También "Ingreso
  *    CORE" y "Salida CORE a recarga" para extintores.
- *  - Sin inicio de sesión por ahora: el usuario se escribe y se recuerda
- *    en este navegador.
+ *  - Usuario: el de la sesión iniciada (v73). Antes se escribía a mano
+ *    y se recordaba en este navegador.
  *
  * Backend (Code.gs -> ACCIONES): mtDatosAlmacen, mtGrabarProducto,
  * mtGrabarProveedor, mtGrabarIngreso, mtGrabarSalida.
@@ -23,6 +23,9 @@
 /* ---------------- Ayudantes compartidos con forms/mantenimiento.js ---------------- */
 const MT = {
   usuario: function () {
+    // v73: el usuario es el de la sesión iniciada.
+    const d = (typeof Sesion !== 'undefined') ? Sesion.datos() : null;
+    if (d && d.nombre) return d.nombre;
     try { return localStorage.getItem('tms_mt_usuario') || ''; } catch (e) { return ''; }
   },
   guardarUsuario: function (u) {
@@ -1683,5 +1686,5 @@ document.addEventListener('DOMContentLoaded', function () {
   enlazar('btn-mt-stock', () => FormAlmacen.abrirStock());
   enlazar('btn-mt-catalogo', () => FormAlmacen.abrirCatalogo());
   // Carga los datos del almacén en segundo plano: aviso de alertas y ventanas más rápidas.
-  setTimeout(function () { FormAlmacen.precargar(); }, 2500);
+  Sesion.alListo(function () { if (Sesion.puede('ALM')) setTimeout(function () { FormAlmacen.precargar(); }, 1500); });
 });

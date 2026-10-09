@@ -43,6 +43,12 @@ const FormResultados = {
     Object.keys(self._graficos).forEach(function (k) { try { self._graficos[k].destroy(); } catch (e) { /* no-op */ } });
     self._graficos = {};
 
+    // v73: el acceso es con el usuario del sistema (solo rol MAESTRO); ya no se pide clave ni código.
+    self._token = Sesion.token();
+    abrirPanel('Resultados', '<div class="res-cargando">Cargando…</div>', null, { clase: 'panel-res' });
+    self._mostrarDashboard();
+    return;
+
     const html = `
       <div class="res-login">
         <div class="res-login-caja">
@@ -260,8 +266,8 @@ const FormResultados = {
       const res = await Promise.all(promesas);
       if (!res[0] || !res[0].ok) {
         if (self._intervalo) { clearInterval(self._intervalo); self._intervalo = null; }
-        mostrarMensaje((res[0] && res[0].mensaje) || 'La sesión de Resultados venció. Vuelva a ingresar.', 'error');
-        if (document.body.contains(raiz)) self.abrir();
+        if (!silencioso) mostrarMensaje((res[0] && res[0].mensaje) || 'No se pudieron cargar los resultados.', 'error');
+        if (document.body.contains(raiz)) cerrarPanel();
         return;
       }
       self._filas = Array.isArray(res[0].filas) ? res[0].filas : [];
