@@ -98,6 +98,9 @@ const FormConsolidadoServicio = {
         .panel-cons .tabla-mini td { padding: 0 6px 6px 0; vertical-align: middle; }
         .panel-cons .tabla-mini input, .panel-cons .tabla-mini select { width: 100%; padding: 7px 9px; border: 1.5px solid #c7ced8; border-radius: 8px; font-size: .86rem; font-family: inherit; background: #fff; }
         .panel-cons .tabla-mini .falta input { border-color: #dc2626; background: #fef2f2; }
+        .panel-cons .tabla-mini input.calc-in { background: #f1f5f9; color: #1c3a5e; font-weight: 700; border-color: #e2e8f0; }
+        .panel-cons .tabla-ini td b { color: #1c3a5e; font-size: .84rem; }
+        .panel-cons .seg-comb .tabla-mini { max-width: 1100px; }
         .panel-cons .tabla-mini .tot-celda { font-weight: 700; color: #1c3a5e; white-space: nowrap; }
         .panel-cons .btn-quitar { border: none; background: transparent; color: #b91c1c; font-size: 1.1rem; cursor: pointer; padding: 0 4px; }
         .panel-cons .btn-quitar:disabled { visibility: hidden; }
@@ -225,45 +228,52 @@ const FormConsolidadoServicio = {
             </div>
           </div>
 
-          <div class="seg">
-            <div class="seg-tit"><span class="seg-num">6</span> Combustible <span class="nota">Abastecimiento: ${s('TIPO DE ABASTECIMIENTO', '-')}</span></div>
-            <div class="g">
-              <div class="sub">Estimado del servicio <span style="text-transform:none;font-weight:500">· viene del registro del servicio</span></div>
-              ${k('GL estimados tracto', 'txtGLEstimadosTractoConsol')}
-              ${k('GL estimados generador', 'txtGLEstimadosGeneradorConsol')}
-              ${c('Precio petróleo (S/ x gl)', 'txtPrecioPetroleoConsol', s('COSTO DEL PETRÓLEO X GALÓN', 0), false, 'span2', true)}
-              <div class="sub">Tracto</div>
-              ${k('Petróleo inicial', 'txtPetroleoTractoConsol', 'span2')}
-              ${k('Petróleo B.I.', 'txtPetroleoTractoBIConsol', 'span2')}
-              <div class="sub">Generador (genset)</div>
-              ${k('Petróleo inicial', 'txtPetroleoGeneradorConsol', 'span2')}
-              ${k('Petróleo B.I.', 'txtPetroleoGeneradorBIConsol', 'span2')}
-              <div class="sub">Recargas</div>
-              <datalist id="dlGrifosConsol"></datalist>
-              <table class="tabla-mini" id="tablaRecargasConsol" style="table-layout:fixed">
-                <colgroup><col><col style="width:16%"><col style="width:13%"><col style="width:15%"><col style="width:10%"><col style="width:10%"><col style="width:12%"><col style="width:26px"></colgroup><thead><tr><th>Grifo${req}</th><th>N° nota de venta${req}</th><th>Equipo</th><th>Pagó</th><th>Galones</th><th>S/ x gl</th><th>Total</th><th></th></tr></thead>
-                <tbody></tbody>
-              </table>
-              <button type="button" class="btn-agregar" id="btnAgregarRecargaConsol">+ Agregar recarga</button>
-              <div class="nota-campo" id="resumenRecargasConsol">Sin recargas.</div>
-              <!-- Campos internos: se siguen guardando en la hoja CONSOLIDADO. -->
-              <input type="hidden" id="txtGLTractoRealConsol">
-              <input type="hidden" id="txtGLGeneradorRealConsol">
-              <input type="hidden" id="txtGLRecargaTractoVista">
-              <input type="hidden" id="txtGLRecargaGensetVista">
-              <input type="hidden" id="txtDiferenciaTractoConsol">
-              <input type="hidden" id="txtDiferenciaGeneradorConsol">
-              <input type="hidden" id="txtTotalAdicionalTracto">
-              <input type="hidden" id="txtTotalAdicionalBITracto">
-              <input type="hidden" id="txtTotalAdicionalGenerador">
-              <input type="hidden" id="txtTotalAdicionalBIGenerador">
-              <input type="hidden" id="txtPrecioGalonTractoConsol" value="0">
-              <input type="hidden" id="txtGLAdicionalTractoConsol" value="0">
-              <input type="hidden" id="txtPrecioGalonGensetConsol" value="0">
-              <input type="hidden" id="txtGLAdicionalGensetConsol" value="0">
-            </div>
-          </div>
+        </div>
+      </div>
 
+      <div class="seg seg-comb">
+        <div class="seg-tit"><span class="seg-num">6</span> Combustible <span class="nota">Abastecimiento: ${s('TIPO DE ABASTECIMIENTO', '-')} · las notas de venta de Repsol pasan a "Notas de venta combustible"</span></div>
+        <div class="g c6">
+          <div class="sub">Estimado del servicio <span style="text-transform:none;font-weight:500">· viene del registro del servicio</span></div>
+          ${k('GL estimados tracto', 'txtGLEstimadosTractoConsol')}
+          ${k('GL estimados generador', 'txtGLEstimadosGeneradorConsol')}
+          ${c('Precio petróleo (S/ x gl)', 'txtPrecioPetroleoConsol', s('COSTO DEL PETRÓLEO X GALÓN', 0), false, '', true)}
+          <div class="span2"></div><div></div>
+          <div class="sub">Abastecimiento inicial (proveedor)</div>
+          <table class="tabla-mini tabla-ini" id="tablaInicialConsol" style="table-layout:fixed">
+            <colgroup><col style="width:11%"><col style="width:11%"><col style="width:14%"><col style="width:14%"><col style="width:26%"><col style="width:24%"></colgroup>
+            <thead><tr><th>Equipo</th><th>Galones</th><th>Petróleo inicial</th><th>Petróleo B.I.</th><th>N° nota de venta${req}</th><th>Fecha de abastecimiento${req}</th></tr></thead>
+            <tbody>
+              <tr data-eq="TRACTO"><td><b>Tracto</b></td><td><input id="txtGLIniTractoVista" class="calc-in" disabled></td><td><input id="txtPetroleoTractoConsol" class="calc-in" disabled></td><td><input id="txtPetroleoTractoBIConsol" class="calc-in" disabled></td>
+                <td class="req-ini"><input id="txtNvTractoConsol" autocomplete="off" placeholder="Ej. N501-189226" style="text-transform:uppercase"></td><td class="req-ini"><input type="date" id="txtFechaNvTractoConsol"></td></tr>
+              <tr data-eq="GENSET"><td><b>Generador</b></td><td><input id="txtGLIniGeneradorVista" class="calc-in" disabled></td><td><input id="txtPetroleoGeneradorConsol" class="calc-in" disabled></td><td><input id="txtPetroleoGeneradorBIConsol" class="calc-in" disabled></td>
+                <td class="req-ini"><input id="txtNvGeneradorConsol" autocomplete="off" placeholder="Ej. N501-189227" style="text-transform:uppercase"></td><td class="req-ini"><input type="date" id="txtFechaNvGeneradorConsol"></td></tr>
+            </tbody>
+          </table>
+          <div class="sub">Recargas en ruta</div>
+          <datalist id="dlGrifosConsol"></datalist>
+          <table class="tabla-mini" id="tablaRecargasConsol" style="table-layout:fixed">
+            <colgroup><col style="width:13%"><col><col style="width:14%"><col style="width:10%"><col style="width:11%"><col style="width:8%"><col style="width:8%"><col style="width:10%"><col style="width:30px"></colgroup>
+            <thead><tr><th>Fecha de recarga${req}</th><th>Grifo${req}</th><th>N° nota de venta${req}</th><th>Equipo</th><th>Pagó</th><th>Galones</th><th>S/ x gl</th><th>Total</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <button type="button" class="btn-agregar" id="btnAgregarRecargaConsol">+ Agregar recarga</button>
+          <div class="nota-campo" id="resumenRecargasConsol">Sin recargas.</div>
+          <!-- Campos internos: se siguen guardando en la hoja CONSOLIDADO. -->
+          <input type="hidden" id="txtGLTractoRealConsol">
+          <input type="hidden" id="txtGLGeneradorRealConsol">
+          <input type="hidden" id="txtGLRecargaTractoVista">
+          <input type="hidden" id="txtGLRecargaGensetVista">
+          <input type="hidden" id="txtDiferenciaTractoConsol">
+          <input type="hidden" id="txtDiferenciaGeneradorConsol">
+          <input type="hidden" id="txtTotalAdicionalTracto">
+          <input type="hidden" id="txtTotalAdicionalBITracto">
+          <input type="hidden" id="txtTotalAdicionalGenerador">
+          <input type="hidden" id="txtTotalAdicionalBIGenerador">
+          <input type="hidden" id="txtPrecioGalonTractoConsol" value="0">
+          <input type="hidden" id="txtGLAdicionalTractoConsol" value="0">
+          <input type="hidden" id="txtPrecioGalonGensetConsol" value="0">
+          <input type="hidden" id="txtGLAdicionalGensetConsol" value="0">
         </div>
       </div>
 
@@ -313,6 +323,18 @@ const FormConsolidadoServicio = {
     // que se cargue de más va como recarga.
     raiz.querySelector('#txtGLTractoRealConsol').value = servicio['GL TRACTO'] || 0;
     raiz.querySelector('#txtGLGeneradorRealConsol').value = servicio['GL GENERADOR'] || 0;
+    raiz.querySelector('#txtGLIniTractoVista').value = servicio['GL TRACTO'] || 0;
+    raiz.querySelector('#txtGLIniGeneradorVista').value = servicio['GL GENERADOR'] || 0;
+    // Nota de venta del abastecimiento inicial: obligatoria si ese equipo cargó galones.
+    function inicialIncompleto() {
+      const falta = [];
+      [['TRACTO', 'txtGLTractoRealConsol', 'txtNvTractoConsol', 'txtFechaNvTractoConsol'],
+       ['GENSET', 'txtGLGeneradorRealConsol', 'txtNvGeneradorConsol', 'txtFechaNvGeneradorConsol']].forEach(function (x) {
+        if (!(self._n(raiz.querySelector('#' + x[1]).value) > 0)) return;
+        [x[2], x[3]].forEach(function (id) { if (!raiz.querySelector('#' + id).value.trim()) falta.push(id); });
+      });
+      return falta;
+    }
 
     // Campos obligatorios para un servicio CULMINADO.
     const OBLIGATORIOS = [
@@ -335,6 +357,7 @@ const FormConsolidadoServicio = {
       if (!esCulminado) return [];
       return OBLIGATORIOS.filter(function (id) { return raiz.querySelector('#' + id).value.trim() === ''; })
         .concat(guiasIncompletas().length ? ['__guias'] : [])
+        .concat(inicialIncompleto().length ? ['__inicial'] : [])
         .concat(recargasIncompletas().length ? ['__recargas'] : [])
         .concat(depositosSinConfirmar() ? ['__depositos'] : []);
     }
@@ -353,10 +376,14 @@ const FormConsolidadoServicio = {
         const vacio = inp.classList.contains('peso') ? !(self._n(inp.value) > 0) : inp.value.trim() === '';
         td.classList.toggle('falta', marcarFaltantes && vacio);
       });
+      const faltaIni = marcarFaltantes ? inicialIncompleto() : [];
+      raiz.querySelectorAll('#tablaInicialConsol td.req-ini').forEach(function (td) {
+        td.classList.toggle('falta', faltaIni.indexOf(td.querySelector('input').id) !== -1);
+      });
       raiz.querySelectorAll('#tablaRecargasConsol tr.rec-fila').forEach(function (tr) {
         tr.querySelectorAll('td').forEach(function (td) { td.classList.remove('falta'); });
         if (!marcarFaltantes) return;
-        ['lugar', 'nv'].forEach(function (cl) { const i = tr.querySelector('.' + cl); if (!i.value.trim()) i.parentNode.classList.add('falta'); });
+        ['fecha', 'lugar', 'nv'].forEach(function (cl) { const i = tr.querySelector('.' + cl); if (!i.value.trim()) i.parentNode.classList.add('falta'); });
         ['gal', 'precio'].forEach(function (cl) { const i = tr.querySelector('.' + cl); if (!(self._n(i.value) > 0)) i.parentNode.classList.add('falta'); });
       });
       return lista;
@@ -571,6 +598,7 @@ const FormConsolidadoServicio = {
       const tr = document.createElement('tr');
       tr.className = 'rec-fila';
       tr.innerHTML =
+        '<td><input type="date" class="fecha"></td>' +
         '<td><input class="lugar" list="dlGrifosConsol" autocomplete="off" placeholder="Elija o escriba el grifo" style="text-transform:uppercase"></td>' +
         '<td><input class="nv" autocomplete="off" placeholder="N° NV" style="text-transform:uppercase"></td>' +
         '<td><select class="equipo"><option value="TRACTO">Tracto</option><option value="GENSET">Genset</option></select></td>' +
@@ -594,13 +622,13 @@ const FormConsolidadoServicio = {
     function leerRecargas() {
       return Array.from(tbodyRec.querySelectorAll('tr.rec-fila')).map(function (tr) {
         return {
-          lugar: tr.querySelector('.lugar').value.trim().toUpperCase(), nv: tr.querySelector('.nv').value.trim().toUpperCase(), equipo: tr.querySelector('.equipo').value, pago: tr.querySelector('.pago').value,
+          fecha: tr.querySelector('.fecha').value, lugar: tr.querySelector('.lugar').value.trim().toUpperCase(), nv: tr.querySelector('.nv').value.trim().toUpperCase(), equipo: tr.querySelector('.equipo').value, pago: tr.querySelector('.pago').value,
           gal: self._n(tr.querySelector('.gal').value), precio: self._n(tr.querySelector('.precio').value), tr: tr
         };
       });
     }
     function recargasIncompletas() {
-      return leerRecargas().filter(function (r) { return !r.lugar || !r.nv || !(r.gal > 0) || !(r.precio > 0); });
+      return leerRecargas().filter(function (r) { return !r.fecha || !r.lugar || !r.nv || !(r.gal > 0) || !(r.precio > 0); });
     }
     // Pasa la suma de recargas a los campos de "adicional" que ya usa el
     // cálculo: galones totales y precio promedio ponderado por equipo.
@@ -626,7 +654,7 @@ const FormConsolidadoServicio = {
       q('txtPrecioGalonGensetConsol').value = acc.GENSET.gal ? (acc.GENSET.soles / acc.GENSET.gal) : 0;
     }
     q('btnAgregarRecargaConsol').addEventListener('click', function () {
-      agregarRecarga().querySelector('.lugar').focus();
+      agregarRecarga().querySelector('.fecha').focus();
       calcularTodo();
     });
 
@@ -682,7 +710,7 @@ const FormConsolidadoServicio = {
       return {
         v: 1, campos: campos,
         guias: leerGuias().map(function (g) { return { grt: g.grt, grc: g.grc, peso: g.peso }; }),
-        recargas: leerRecargas().map(function (r) { return { lugar: r.lugar, nv: r.nv, equipo: r.equipo, pago: r.pago, gal: r.gal, precio: r.precio }; }),
+        recargas: leerRecargas().map(function (r) { return { fecha: r.fecha, lugar: r.lugar, nv: r.nv, equipo: r.equipo, pago: r.pago, gal: r.gal, precio: r.precio }; }),
         depositos: Array.from(raiz.querySelectorAll('.chk-dep-adic')).filter(function (c) { return c.checked; })
           .map(function (c) { return (depositosApoyo[Number(c.dataset.i)] || {}).id; }).filter(Boolean)
       };
@@ -705,6 +733,7 @@ const FormConsolidadoServicio = {
           const tr = agregarRecarga();
           tr.querySelector('.lugar').value = r.lugar || '';
           tr.querySelector('.nv').value = r.nv || '';
+          tr.querySelector('.fecha').value = r.fecha || '';
           tr.querySelector('.equipo').value = r.equipo || 'TRACTO';
           tr.querySelector('.pago').value = r.pago || 'CONDUCTOR';
           tr.querySelector('.gal').value = r.gal || '';
@@ -842,6 +871,7 @@ const FormConsolidadoServicio = {
         if (lista.length) {
           const primero = lista[0] === '__guias'
             ? (tbodyGuias.querySelector('td.falta input') || q('txtGRTransporte1Consol'))
+            : lista[0] === '__inicial' ? q(inicialIncompleto()[0])
             : lista[0] === '__recargas' ? (q('tablaRecargasConsol').querySelector('td.falta input') || q('tablaRecargasConsol'))
             : lista[0] === '__depositos' ? raiz.querySelector('.chk-dep-adic:not(:checked)')
             : raiz.querySelector('#' + lista[0]);
@@ -890,7 +920,7 @@ const FormConsolidadoServicio = {
         'PESO BRUTO TOTAL': pesoTotal,
         'CLIENTE GUIA': v('txtClienteGuiaConsol').trim().toUpperCase(),
         'DEPOSITOS ADICIONALES': depAdicionales,
-        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · NV ' + (r.nv || '-') + ' · ' + r.equipo + ' · pagó ' + r.pago + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2); }).join(' ; '),
+        'RECARGAS DETALLE': recargas.map(function (r) { return (r.lugar || 'SIN LUGAR') + ' · NV ' + (r.nv || '-') + ' · ' + r.equipo + ' · pagó ' + r.pago + ' · ' + r.gal + ' gl x S/ ' + r.precio.toFixed(2) + ' = S/ ' + (r.gal * r.precio).toFixed(2) + (r.fecha ? ' · fecha ' + r.fecha.split('-').reverse().join('/') : ''); }).join(' ; '),
         'P. PETRÓLEO ADIC. TRACTO': self._n(v('txtPrecioGalonTractoConsol')).toFixed(2),
         'P. PETRÓLEO ADIC. GENSED': self._n(v('txtPrecioGalonGensetConsol')).toFixed(2),
         'KM RECORRIDO': kmRec > 0 ? kmRec : '',
