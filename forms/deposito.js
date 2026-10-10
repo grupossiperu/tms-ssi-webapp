@@ -48,7 +48,10 @@ const FormDeposito = {
         .dep-badge.rechazado { background: #fee2e2; color: #991b1b; }
         .dep-badge.anulado { background: #e5e7eb; color: #4b5563; text-decoration: line-through; }
         .dep-nuevo { background: #fff; border: 1px solid #dde4ec; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
-        .dep-nuevo .fila1 { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 10px; margin-bottom: 8px; }
+        .dep-nuevo .fila1 { display: grid; grid-template-columns: 1fr 3fr; gap: 10px; margin-bottom: 8px; }
+        .dep-nuevo .bloque-tit { font-size: .72rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin: 8px 0 2px; }
+        .dep-nuevo .cuadre { font-weight: 700; font-size: .84rem; }
+        .dep-nuevo .cuadre.ok { color: #166534; } .dep-nuevo .cuadre.mal { color: #b91c1c; }
         .dep-nuevo .campo { margin: 0; }
         .dep-nuevo table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
         .dep-nuevo th { text-align: left; font-size: .74rem; color: #1c3a5e; padding: 0 8px 4px 0; }
@@ -480,7 +483,10 @@ const FormDeposito = {
       const b4 = tr.querySelector('.ac-anular');
       if (b4) b4.addEventListener('click', async function (ev) {
         ev.stopPropagation();
-        const motivo = window.prompt('¿Por qué se anula este adicional de ' + soles(numero(a['MONTO'])) + '? (deja de sumar en el servicio)', '');
+        const enGrupo = a['LOTE'] && adicionales.filter(x => x['LOTE'] === a['LOTE'] && estadoAdic(x) !== 'ANULADO').length > 1;
+        const motivo = window.prompt(enGrupo
+          ? 'Este depósito es parte de un adicional con varios depósitos: se anulará el grupo completo. ¿Por qué se anula?'
+          : '¿Por qué se anula este adicional de ' + soles(numero(a['MONTO'])) + '? (deja de sumar en el servicio)', '');
         if (motivo === null) return;
         if (!motivo.trim()) { mostrarMensaje('Indique por qué se anula.', 'error'); return; }
         b4.disabled = true;
@@ -498,6 +504,21 @@ const FormDeposito = {
       }
       if (e === 'RECHAZADO' || e === 'ANULADO') return '<span class="sub">' + (e === 'ANULADO' ? 'Anulado: ' : '') + esc(a['MOTIVO RECHAZO']) + '</span>';
       return '';
+    };
+
+    /* Varios motivos por adicional (v75): MOTIVOS DETALLE = [{motivo, monto, observacion}] del grupo (LOTE). */
+    const motivosDe = function (a) {
+      try { const d = JSON.parse(a['MOTIVOS DETALLE'] || ''); if (Array.isArray(d) && d.length) return d; } catch (e) { /* registro antiguo */ }
+      return null;
+    };
+    const nombresMotivo = function (a) {
+      const d = motivosDe(a);
+      return d ? d.map(m => mayus(m.motivo)) : [mayus(a['MOTIVO']) || 'SIN MOTIVO'];
+    };
+    const repartoHtml = function (a) {
+      const d = motivosDe(a);
+      if (!d || d.length < 2) return '';
+      return '<div class="sub">' + d.map(m => esc(m.motivo.charAt(0) + m.motivo.slice(1).toLowerCase()) + ' ' + soles(m.monto)).join(' · ') + '</div>';
     };
 
     /* ================== Detalle de adicionales de un servicio ================== */
@@ -528,16 +549,22 @@ const FormDeposito = {
         '</div>' +
         '<div class="dep-nuevo">' +
           '<div class="fila1">' +
-            '<div class="campo"><label>Motivo</label><select id="nvMotivo"><option value="">Seleccione…</option>' +
-              self.MOTIVOS.map(m => '<option value="' + m + '">' + m.charAt(0) + m.slice(1).toLowerCase() + '</option>').join('') + '</select></div>' +
             '<div class="campo"><label>Depositado por</label><select id="nvPersona"><option value="">Seleccione…</option>' +
               self.DEPOSITANTES.map(p => '<option value="' + p + '">' + p.split(' ').map(x => x.charAt(0) + x.slice(1).toLowerCase()).join(' ') + '</option>').join('') + '</select></div>' +
-            '<div class="campo"><label>Observación</label><input type="text" id="nvObs" placeholder="Obligatoria si el motivo es Otros" autocomplete="off"></div>' +
+            '<div></div>' +
           '</div>' +
+          '<div class="bloque-tit">Motivos</div>' +
+          '<table><thead><tr><th style="width:230px">Motivo</th><th style="width:150px">Monto (S/)</th><th>Observación (obligatoria si es Otros)</th><th style="width:30px"></th></tr></thead><tbody id="nvMotivos"></tbody></table>' +
+          '<div class="pie-nuevo" style="margin-bottom:6px">' +
+            '<button type="button" class="btn-mas-dep" id="nvMasMotivo">+ Agregar motivo</button>' +
+            '<span class="total-nuevo" id="nvTotalMot">Total motivos: S/ 0.00</span>' +
+          '</div>' +
+          '<div class="bloque-tit">Depósitos</div>' +
           '<table><thead><tr><th style="width:170px">Medio</th><th>N° de operación / transferencia</th><th style="width:150px">Monto (S/)</th><th style="width:30px"></th></tr></thead><tbody id="nvDepositos"></tbody></table>' +
           '<div class="pie-nuevo">' +
             '<button type="button" class="btn-mas-dep" id="nvMasDeposito">+ Agregar depósito</button>' +
-            '<span class="total-nuevo" id="nvTotal">Total: S/ 0.00</span>' +
+            '<span class="total-nuevo" id="nvTotal">Total depósitos: S/ 0.00</span>' +
+            '<span class="cuadre" id="nvCuadre"></span>' +
             '<button type="button" class="boton-primario" id="nvRegistrar">Guardar adicional</button>' +
           '</div>' +
         '</div>' +
@@ -555,7 +582,7 @@ const FormDeposito = {
         const tr = document.createElement('tr');
         tr.innerHTML =
           '<td>' + ddmm(a['FECHA SOLICITUD'] || a['FECHA']) + '</td>' +
-          '<td>' + esc(a['MOTIVO'] || 'SIN MOTIVO (registro anterior)') + '</td>' +
+          '<td>' + esc(a['MOTIVO'] || 'SIN MOTIVO (registro anterior)') + repartoHtml(a) + '</td>' +
           '<td>' + soles(numero(a['MONTO'])) + '</td>' +
           '<td>' + esc(a['PERSONA'] || a['SOLICITADO POR']) + '</td>' +
           '<td><span class="dep-badge ' + e.toLowerCase() + '">' + e + '</span></td>' +
@@ -573,11 +600,39 @@ const FormDeposito = {
       });
       // Filas de depósitos del adicional (puede pagarse con varios depósitos).
       const tbDep = cont.querySelector('#nvDepositos');
+      const tbMot = cont.querySelector('#nvMotivos');
+      const totalMotivos = function () {
+        return Array.from(tbMot.querySelectorAll('tr')).reduce((acc, tr) => acc + numero(tr.querySelector('.nm-monto').value), 0);
+      };
       const totalNuevo = function () {
         const t = Array.from(tbDep.querySelectorAll('tr')).reduce((acc, tr) => acc + numero(tr.querySelector('.nd-monto').value), 0);
-        cont.querySelector('#nvTotal').textContent = 'Total: ' + soles(t);
+        const tm = totalMotivos();
+        cont.querySelector('#nvTotal').textContent = 'Total depósitos: ' + soles(t);
+        cont.querySelector('#nvTotalMot').textContent = 'Total motivos: ' + soles(tm);
+        const c = cont.querySelector('#nvCuadre');
+        const cuadra = t > 0 && Math.abs(t - tm) < 0.009;
+        c.textContent = !(t > 0 || tm > 0) ? '' : cuadra ? '✓ Cuadra' : 'Diferencia: ' + soles(Math.abs(t - tm));
+        c.className = 'cuadre ' + (cuadra ? 'ok' : 'mal');
         return t;
       };
+      const agregarFilaMotivo = function () {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><select class="nm-motivo"><option value="">Seleccione…</option>' +
+            self.MOTIVOS.map(m => '<option value="' + m + '">' + m.charAt(0) + m.slice(1).toLowerCase() + '</option>').join('') + '</select></td>' +
+          '<td><input type="number" min="0" step="0.01" class="nm-monto" placeholder="0.00"></td>' +
+          '<td><input type="text" class="nm-obs" autocomplete="off"></td>' +
+          '<td><button type="button" class="quitar-dep" title="Quitar motivo">×</button></td>';
+        tr.querySelector('.nm-monto').addEventListener('input', totalNuevo);
+        tr.querySelector('.quitar-dep').addEventListener('click', function () {
+          if (tbMot.querySelectorAll('tr').length > 1) { tr.remove(); totalNuevo(); }
+        });
+        tbMot.appendChild(tr);
+        return tr;
+      };
+      agregarFilaMotivo();
+      cont.querySelector('#nvMasMotivo').addEventListener('click', function () {
+        agregarFilaMotivo().querySelector('.nm-motivo').focus();
+      });
       const agregarFilaDeposito = function () {
         const tr = document.createElement('tr');
         tr.innerHTML = '<td><select class="nd-medio">' + self.MEDIOS_NUEVOS.map(m => '<option value="' + m + '">' + (m === 'YAPE' ? 'Yape' : 'Transferencia') + '</option>').join('') + '</select></td>' +
@@ -599,22 +654,30 @@ const FormDeposito = {
         agregarFilaDeposito().querySelector('.nd-op').focus();
       });
       protegerClic(cont.querySelector('#nvRegistrar'), async function () {
-        const motivo = cont.querySelector('#nvMotivo').value;
         const persona = cont.querySelector('#nvPersona').value;
-        const obs = cont.querySelector('#nvObs').value.trim();
+        const motivos = Array.from(tbMot.querySelectorAll('tr')).map(function (tr) {
+          return { motivo: tr.querySelector('.nm-motivo').value, monto: numero(tr.querySelector('.nm-monto').value), observacion: tr.querySelector('.nm-obs').value.trim() };
+        });
         const depositos = Array.from(tbDep.querySelectorAll('tr')).map(function (tr) {
           return { medio: tr.querySelector('.nd-medio').value, operacion: tr.querySelector('.nd-op').value.trim(), monto: numero(tr.querySelector('.nd-monto').value) };
         });
-        if (!motivo) { mostrarMensaje('Seleccione el motivo.', 'error'); return; }
         if (!persona) { mostrarMensaje('Seleccione quién realizó el depósito.', 'error'); return; }
-        if (motivo === 'OTROS' && !obs) { mostrarMensaje('Para "Otros" describa el motivo en la observación.', 'error'); return; }
+        for (let i = 0; i < motivos.length; i++) {
+          const m = motivos[i];
+          const n = motivos.length > 1 ? ' (motivo ' + (i + 1) + ')' : '';
+          if (!m.motivo) { mostrarMensaje('Seleccione el motivo' + n + '.', 'error'); return; }
+          if (!(m.monto > 0)) { mostrarMensaje('Ingrese el monto del motivo' + n + '.', 'error'); return; }
+          if (m.motivo === 'OTROS' && !m.observacion) { mostrarMensaje('Para "Otros" describa el motivo en la observación' + n + '.', 'error'); return; }
+        }
         for (let i = 0; i < depositos.length; i++) {
           const d = depositos[i];
           const n = depositos.length > 1 ? ' (depósito ' + (i + 1) + ')' : '';
           if (!d.operacion) { mostrarMensaje('Indique el N° de ' + (d.medio === 'YAPE' ? 'operación' : 'transferencia') + n + '.', 'error'); return; }
           if (!(d.monto > 0)) { mostrarMensaje('Ingrese un monto mayor a 0' + n + '.', 'error'); return; }
         }
-        const r = await llamarBackend('agregarAdicionales', { fila: fila, motivo: motivo, depositadoPor: persona, observacion: obs, depositos: depositos });
+        const tDep = depositos.reduce((acc, d) => acc + d.monto, 0), tMot = motivos.reduce((acc, m) => acc + m.monto, 0);
+        if (Math.abs(tDep - tMot) > 0.009) { mostrarMensaje('No cuadra: los motivos suman ' + soles(tMot) + ' y los depósitos ' + soles(tDep) + '.', 'error'); return; }
+        const r = await llamarBackend('agregarAdicionales', { fila: fila, depositadoPor: persona, motivos: motivos, depositos: depositos });
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
         mostrarMensaje(r.mensaje, 'exito');
         await cargarTodo();
@@ -630,7 +693,7 @@ const FormDeposito = {
     adMsEstado.setOpciones(self.ESTADOS_ADICIONAL);
 
     const pintarAdicionales = function () {
-      adMsMotivo.setOpciones(unicos(adicionales, a => mayus(a['MOTIVO']) || 'SIN MOTIVO'));
+      adMsMotivo.setOpciones(Array.from(new Set([].concat.apply([], adicionales.map(nombresMotivo)))).sort());
       adMsConductor.setOpciones(unicos(adicionales, a => mayus(a['CONDUCTOR'])));
       adMsCliente.setOpciones(unicos(adicionales, a => mayus(a['CLIENTE'])));
       const desde = raiz.querySelector('#adDesde').value;
@@ -641,7 +704,7 @@ const FormDeposito = {
 
       const lista = adicionales.filter(function (a) {
         if (!adMsEstado.cumple(estadoAdic(a))) return false;
-        if (!adMsMotivo.cumple(mayus(a['MOTIVO']) || 'SIN MOTIVO')) return false;
+        if (!nombresMotivo(a).some(m => adMsMotivo.cumple(m))) return false;
         if (!adMsConductor.cumple(mayus(a['CONDUCTOR']))) return false;
         if (!adMsCliente.cumple(mayus(a['CLIENTE']))) return false;
         if (bk && mayus(a['BOOKING']).indexOf(bk) === -1) return false;
@@ -657,11 +720,20 @@ const FormDeposito = {
       });
 
       // Resumen por estado y por motivo.
-      const porEstado = {}, porMotivo = {};
+      const porEstado = {}, porMotivo = {}, lotesVistos = {};
       lista.forEach(function (a) {
         const e = estadoAdic(a), m = mayus(a['MOTIVO']) || 'SIN MOTIVO', monto = numero(a['MONTO']);
         porEstado[e] = porEstado[e] || { n: 0, s: 0 }; porEstado[e].n++; porEstado[e].s += monto;
-        if (e === 'DEPOSITADO') { porMotivo[m] = (porMotivo[m] || 0) + monto; }
+        if (e !== 'DEPOSITADO') return;
+        const d = motivosDe(a);
+        if (d && a['LOTE']) {
+          // El reparto por motivo es del grupo: se cuenta una sola vez.
+          if (lotesVistos[a['LOTE']]) return;
+          lotesVistos[a['LOTE']] = true;
+          d.forEach(function (x) { const k = mayus(x.motivo); porMotivo[k] = (porMotivo[k] || 0) + numero(x.monto); });
+        } else {
+          porMotivo[m] = (porMotivo[m] || 0) + monto;
+        }
       });
       raiz.querySelector('#adResumen').innerHTML =
         self.ESTADOS_ADICIONAL.filter(e => e === 'DEPOSITADO' || porEstado[e]).map(function (e) {
@@ -685,7 +757,7 @@ const FormDeposito = {
           '<td>' + ddmm(a['FECHA SOLICITUD'] || a['FECHA']) + '</td>' +
           '<td>' + esc(a['CLIENTE']) + ' · ' + esc(a['BOOKING']) + '<div class="sub">Servicio ' + ddmm(a['FECHA SERVICIO']) + ' · ' + esc(a['DESTINO']) + '</div></td>' +
           '<td>' + esc(a['CONDUCTOR']) + '<div class="sub">' + esc(a['PLACA']) + '</div></td>' +
-          '<td>' + esc(a['MOTIVO'] || 'SIN MOTIVO') + (a['OBSERVACION'] ? '<div class="sub">' + esc(a['OBSERVACION']) + '</div>' : '') + '</td>' +
+          '<td>' + esc(a['MOTIVO'] || 'SIN MOTIVO') + repartoHtml(a) + (a['OBSERVACION'] ? '<div class="sub">' + esc(a['OBSERVACION']) + '</div>' : '') + '</td>' +
           '<td><b>' + soles(numero(a['MONTO'])) + '</b></td>' +
           '<td>' + esc(a['PERSONA'] || a['SOLICITADO POR']) + '</td>' +
           '<td><span class="dep-badge ' + e.toLowerCase() + '">' + e + '</span></td>' +
