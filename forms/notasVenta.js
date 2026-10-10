@@ -198,7 +198,7 @@ const FormFacturasRepsol = {
       <div class="nv-resumen" id="rpResumen">Cargando…</div>
       <div class="nv-scroll">
         <table class="tabla-lista nv-tabla">
-          <colgroup><col style="width:12%"><col style="width:14%"><col style="width:6%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:11%"><col style="width:10%"><col style="width:14%"></colgroup>
+          <colgroup><col style="width:12%"><col style="width:11%"><col style="width:5%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:19%"></colgroup>
           <thead><tr><th>Factura Repsol</th><th>Clientes</th><th>NV</th><th>Total</th><th>Estado</th><th>Monto pagado</th><th>Fecha de pago</th><th>Saldo</th><th>Observación</th></tr></thead>
           <tbody id="rpCuerpo"><tr><td colspan="9">Cargando…</td></tr></tbody>
         </table>
@@ -233,7 +233,7 @@ const FormFacturasRepsol = {
           '<td><input class="rp-monto" inputmode="decimal" value="' + (parcial ? f.montoPagado : '') + '"' + (parcial ? '' : ' disabled') + ' style="text-transform:none"></td>' +
           '<td><input type="date" class="rp-fecha" value="' + NV_UTIL.iso(f.fechaPago) + '"' + (f.estado === 'PENDIENTE' ? ' disabled' : '') + '></td>' +
           '<td class="num">' + NV_UTIL.dinero(f.saldo) + '</td>' +
-          '<td><div style="display:flex;gap:4px"><input class="rp-obs" value="' + esc(f.observacion) + '" style="text-transform:none"><button class="boton-primario rp-guardar" type="button" style="padding:4px 8px;font-size:.74rem">Guardar</button></div></td></tr>';
+          '<td><div style="display:flex;gap:4px"><input class="rp-obs" value="' + esc(f.observacion) + '" style="text-transform:none"><button class="boton-primario rp-guardar" type="button" style="padding:4px 8px;font-size:.74rem;white-space:nowrap">Guardar</button></div></td></tr>';
       }).join('') : '<tr><td colspan="9" style="color:#64748b">No hay facturas Repsol. Escriba el N° de factura en "Notas de venta combustible".</td></tr>';
       $('rpCuerpo').querySelectorAll('tr[data-i]').forEach(function (tr) {
         const f = lista[Number(tr.dataset.i)];
