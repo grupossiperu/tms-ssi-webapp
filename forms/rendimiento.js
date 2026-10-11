@@ -41,10 +41,12 @@ const FormRendimiento = {
         <div class="campo"><label>Desde</label><input type="date" id="rdDesde"></div>
         <div class="campo"><label>Hasta</label><input type="date" id="rdHasta"></div>
         <button class="boton-secundario" id="rdActualizar" type="button">Actualizar</button>
+        <button class="boton-primario" id="rdGrafico" type="button">📊 Gráfico: estimado vs abastecido vs real</button>
         <span style="font-size:.76rem;color:#64748b">Fuente: Cierre de combustible del viaje. Semáforos según la Tabla 118.</span>
       </div>
       <div id="rdCuerpo">Cargando…</div>`;
     cont.querySelector('#rdActualizar').addEventListener('click', function () { self._datos = null; self._cargar(cont, token); });
+    cont.querySelector('#rdGrafico').addEventListener('click', function () { FormGraficoCombustible.abrir(); });
     ['rdDesde', 'rdHasta'].forEach(id => cont.querySelector('#' + id).addEventListener('change', function () { self._render(cont); }));
     if (!self._datos) await self._cargar(cont, token); else self._render(cont);
   },

@@ -46,7 +46,7 @@ const FormCierreCombustible = {
       .cc-ab input:disabled { background:#f1f5f9; color:#1c3a5e; font-weight:700; }
       .cc-ab .quitar { border:none; background:transparent; color:#b91c1c; font-size:1.05rem; cursor:pointer; }
       .cc-mas { border:1.5px dashed #94a3b8; background:#f8fafc; color:#1c3a5e; border-radius:8px; font-size:.78rem; font-weight:700; padding:5px 11px; cursor:pointer; margin:0 12px 10px; }
-      .cc-res { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:8px; padding:10px 12px; }
+      .cc-res { display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:8px; padding:10px 12px; }
       .cc-res div { background:#f1f5f9; border-radius:8px; padding:6px 10px; }
       .cc-res span { display:block; font-size:.66rem; text-transform:uppercase; color:#64748b; font-weight:700; letter-spacing:.3px; }
       .cc-res b { font-size:1rem; color:#1c3a5e; }
@@ -67,7 +67,8 @@ const FormCierreCombustible = {
           <select id="ccMostrar"><option value="P">Pendientes de cierre</option><option value="C">Cerrados</option><option value="">Todos</option></select></div>
         <div class="campo"><label>Buscar (booking, contenedor…)</label><input type="text" id="ccBuscar" autocomplete="off"></div>
       </div>
-      <div id="ccResumen" style="font-size:.8rem;color:#475569;margin:0 0 6px;">Cargando…</div>
+      <div style="display:flex;align-items:center;gap:10px;margin:0 0 6px;"><div id="ccResumen" style="font-size:.8rem;color:#475569;flex:1">Cargando…</div>
+        <button type="button" class="boton-primario" id="ccGrafico" style="padding:6px 12px;font-size:.8rem">📊 Gráfico: estimado vs abastecido vs real</button></div>
       <div class="cc-scroll">
         <table class="tabla-lista cc-tabla">
           <colgroup><col style="width:8%"><col style="width:8%"><col style="width:15%"><col style="width:15%"><col style="width:11%"><col style="width:10%"><col style="width:7%"><col style="width:16%"><col style="width:10%"></colgroup>
@@ -130,6 +131,7 @@ const FormCierreCombustible = {
     const msEstado = crearMultiSelect($('msCcEstado'), { onChange: pintar });
     ['ccDesde', 'ccHasta', 'ccMostrar'].forEach(id => $(id).addEventListener('change', pintar));
     $('ccBuscar').addEventListener('input', pintar);
+    $('ccGrafico').addEventListener('click', function () { FormGraficoCombustible.abrir(); });
     self._pintarLista = pintar;
     (async function () {
       const r = await Promise.all([llamarBackend('listarServiciosPendientes', {}), llamarBackend('cierreListar', {})]);
@@ -197,7 +199,8 @@ const FormCierreCombustible = {
           <div class="campo"><label>KM inicial</label><input id="ccKmI" inputmode="decimal" value="${val(c['KM INICIAL'] !== undefined && c['KM INICIAL'] !== '' ? c['KM INICIAL'] : (r.kmAnterior || ''))}"></div>
           <div class="campo"><label>KM final</label><input id="ccKmF" inputmode="decimal" value="${val(c['KM FINAL'])}"></div>
           <div class="campo calc"><label>KM recorrido</label><input id="ccKm" disabled></div>
-          <div class="campo span2" style="display:flex;align-items:end;gap:8px;padding-bottom:8px"><label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="ccLleno" ${c['TANQUE LLENO'] === 'SI' ? 'checked' : ''}> Se abasteció a tanque lleno</label></div>
+          <div class="campo"><label>Consumo según Navisat (gal)</label><input id="ccNavisat" inputmode="decimal" placeholder="Opcional" value="${val(c['CONSUMO NAVISAT'])}"></div>
+          <div class="campo" style="display:flex;align-items:end;gap:8px;padding-bottom:8px"><label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" id="ccLleno" ${c['TANQUE LLENO'] === 'SI' ? 'checked' : ''}> Se abasteció a tanque lleno</label></div>
           <div class="campo"><label>&nbsp;</label><div style="font-size:.72rem;color:#64748b">${r.kmAnterior ? 'KM final del viaje anterior: ' + Number(r.kmAnterior).toLocaleString('es-PE') + (r.fechaKmAnterior ? ' (' + esc(r.fechaKmAnterior) + ')' : '') : 'Sin viaje anterior registrado'}</div></div>
         </div>
       </div>
@@ -304,6 +307,7 @@ const FormCierreCombustible = {
       });
       $('ccJustReq').style.display = fuera ? '' : 'none';
       const consumo = fuente !== 'SIN LECTURA' && lA !== null && lF !== null ? lA + abT - lF : null;
+      const nav = n($('ccNavisat').value);
       const rend = consumo && km ? km / consumo : null;
       const exceso = consumo !== null ? Math.max(0, consumo - glT) : null;
       const difAb = abT - glT;
@@ -316,9 +320,10 @@ const FormCierreCombustible = {
         caja('Consumo real (sonda)', consumo === null ? '—' : consumo.toFixed(2) + ' gal', consumo !== null && consumo < 0 ? 'rojo' : '') +
         caja('Rendimiento', rend ? rend.toFixed(2) + ' km/gal' : '—', rend ? (rend >= 10 ? 'verde' : rend >= 9.66 ? 'ambar' : 'rojo') : '') +
         caja('Exceso sobre lo establecido', exceso === null ? '—' : exceso.toFixed(2) + ' gal', semaf) +
-        caja('Generador: abastecido / estimado', abG.toFixed(2) + ' / ' + glG.toFixed(2) + ' gal');
+        caja('Generador: abastecido / estimado', abG.toFixed(2) + ' / ' + glG.toFixed(2) + ' gal') +
+        (nav !== null && consumo ? caja('Navisat vs. sonda', nav.toFixed(2) + ' gal · ' + ((nav - consumo) / consumo * 100 >= 0 ? '+' : '') + ((nav - consumo) / consumo * 100).toFixed(1) + ' %', Math.abs((nav - consumo) / consumo * 100) <= 5 ? 'verde' : Math.abs((nav - consumo) / consumo * 100) <= 10 ? 'ambar' : 'rojo') : '');
     };
-    ['ccFuente', 'ccLAntes', 'ccLDesp', 'ccLFin', 'ccKmI', 'ccKmF'].forEach(id => { $(id).addEventListener('input', calcular); $(id).addEventListener('change', calcular); });
+    ['ccFuente', 'ccLAntes', 'ccLDesp', 'ccLFin', 'ccKmI', 'ccKmF', 'ccNavisat'].forEach(id => { $(id).addEventListener('input', calcular); $(id).addEventListener('change', calcular); });
     calcular();
     _refrescarSnapshotFormulario();
 
@@ -342,7 +347,7 @@ const FormCierreCombustible = {
         glEstTracto: glT, glEstGenerador: glG, fuente: $('ccFuente').value,
         lecturaAntes: $('ccLAntes').value, fechaLecturaAntes: $('ccFAntes').value, lecturaDespues: $('ccFuente').value === 'SONDA' ? $('ccLDesp').value : '',
         lecturaFinal: $('ccLFin').value, fechaLecturaFinal: $('ccFFin').value, tanqueLleno: $('ccLleno').checked,
-        kmInicial: $('ccKmI').value, kmFinal: $('ccKmF').value, justificacion: $('ccJust').value, abastecimientos: ab
+        kmInicial: $('ccKmI').value, kmFinal: $('ccKmF').value, justificacion: $('ccJust').value, consumoNavisat: $('ccNavisat').value, abastecimientos: ab
       });
       if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo grabar el cierre.', 'error'); return; }
       mostrarMensaje(r.mensaje, 'exito');
