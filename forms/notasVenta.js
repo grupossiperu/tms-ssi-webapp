@@ -112,11 +112,12 @@ const FormNotasVenta = {
         const val = cambios[f.clave] !== undefined ? cambios[f.clave] : f.facturaRepsol;
         return '<tr><td>' + esc(f.fecha || '—') + '</td><td>' + esc(f.cliente) + '</td>' +
           '<td>' + esc(f.booking) + '<small>' + esc(f.contenedor) + '</small></td>' +
-          '<td>' + esc(f.codigo) + '<small>' + esc(f.placa) + '</small></td>' +
+          '<td>' + esc(f.codigo || 'Sin consolidado') + '<small>' + esc(f.placa) + '</small></td>' +
           '<td>' + esc(f.facturaViaje || '—') + '<small>' + esc(f.fechaFacturaViaje || '') + '</small></td>' +
           '<td>' + (f.origen === 'INICIAL' ? 'Inicial' : 'Recarga') + '<small>' + (f.equipo === 'GENERADOR' ? 'Generador' : 'Tracto') + '</small></td>' +
           '<td>' + esc(f.nv) + (f.origen === 'RECARGA' ? '<small>' + esc(f.grifo) + '</small>' : '') + '</td>' +
-          '<td class="num">' + (Number(f.galones) || 0).toFixed(2) + '</td>' +
+          '<td class="num">' + (Number(f.galones) || 0).toFixed(2) +
+            (f.galSonda !== null && f.galSonda !== undefined ? '<small style="color:' + (Math.abs(f.difPct || 0) > 1 ? '#b91c1c' : '#166534') + '">sonda ' + Number(f.galSonda).toFixed(2) + ' · ' + (f.difPct || 0).toFixed(1) + ' %</small>' : '') + '</td>' +
           '<td class="num">' + NV_UTIL.dinero(f.monto) + '</td>' +
           '<td><input data-clave="' + esc(f.clave) + '" value="' + esc(val) + '" placeholder="N° factura" class="' + (cambios[f.clave] !== undefined ? 'cambiado' : '') + '"></td>' +
           '<td>' + NV_UTIL.badge(f.estadoPago) + '</td></tr>';

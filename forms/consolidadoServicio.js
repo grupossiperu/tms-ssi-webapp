@@ -815,12 +815,49 @@ const FormConsolidadoServicio = {
       listaDep.querySelectorAll('.chk-dep-adic').forEach(function (chk) {
         chk.addEventListener('change', function () { recalcularDepAdic(); calcularTodo(); actualizarFaltantes(); });
       });
+      // v76: el combustible y el KM vienen del Cierre de combustible del viaje (no se digitan dos veces).
+      try {
+        const rc = await llamarBackend('cierreDatos', { fila: self._filaServicioOrigen });
+        if (rc && rc.ok && rc.cierre) aplicarCierre(rc.cierre);
+      } catch (e) { /* sin cierre: se llena a mano como antes */ }
       recalcularDepAdic();
       calcularRecorridos();
       validarKm();
       calcularTodo();
       actualizarFaltantes();
       if (sinCambios) _refrescarSnapshotFormulario();
+    }
+
+    function aplicarCierre(cc) {
+      const ab = Array.isArray(cc.abastecimientos) ? cc.abastecimientos : [];
+      const ini = function (eq) { return ab.filter(function (a) { return a.tipo === 'INICIAL' && a.equipo === eq; })[0]; };
+      const fijar = function (id, v) { const el = q(id); if (el) { el.value = v === undefined || v === null ? '' : v; el.disabled = true; } };
+      const t = ini('TRACTO'), g = ini('GENERADOR');
+      if (t) {
+        fijar('txtNvTractoConsol', t.nv); fijar('txtFechaNvTractoConsol', String(t.fecha || '').slice(0, 10));
+        q('txtGLTractoRealConsol').value = t.galones; q('txtGLIniTractoVista').value = t.galones;
+      }
+      if (g) {
+        fijar('txtNvGeneradorConsol', g.nv); fijar('txtFechaNvGeneradorConsol', String(g.fecha || '').slice(0, 10));
+        q('txtGLGeneradorRealConsol').value = g.galones; q('txtGLIniGeneradorVista').value = g.galones;
+      }
+      tbodyRec.innerHTML = '';
+      ab.filter(function (a) { return a.tipo === 'RECARGA'; }).forEach(function (a) {
+        const tr = agregarRecarga();
+        tr.querySelector('.fecha').value = String(a.fecha || '').slice(0, 10);
+        tr.querySelector('.lugar').value = a.grifo || '';
+        tr.querySelector('.nv').value = a.nv || '';
+        tr.querySelector('.equipo').value = a.equipo === 'GENERADOR' ? 'GENSET' : 'TRACTO';
+        tr.querySelector('.pago').value = a.pago === 'REPSOL' ? 'REPSOL' : 'CONDUCTOR';
+        tr.querySelector('.gal').value = a.galones || '';
+        tr.querySelector('.precio').value = a.galones ? (Number(a.monto) / Number(a.galones)).toFixed(4) : '';
+        tr.querySelectorAll('input, select, button').forEach(function (el) { el.disabled = true; });
+      });
+      q('btnAgregarRecargaConsol').style.display = 'none';
+      if (cc['KM INICIAL'] !== '' && cc['KM INICIAL'] !== undefined) fijar('txtKmInicialConsol', cc['KM INICIAL']);
+      if (cc['KM FINAL'] !== '' && cc['KM FINAL'] !== undefined) fijar('txtKmFinalConsol', cc['KM FINAL']);
+      const nota = raiz.querySelector('.seg-comb .seg-tit .nota');
+      if (nota) { nota.textContent = 'Viene del Cierre de combustible (' + (cc['CERRADO POR'] || '') + ' · ' + (cc['FECHA CIERRE'] || '') + '). Para corregir, edite el cierre.'; nota.style.color = '#166534'; nota.style.fontWeight = '700'; }
     }
 
     function calcularMesSemana() {
