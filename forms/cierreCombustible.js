@@ -250,7 +250,7 @@ const FormCierreCombustible = {
       }
       // Monto propuesto = galones × precio de referencia (se corrige con el comprobante).
       tr.querySelector('.ga').addEventListener('change', function () { const g = n(this.value); const m = tr.querySelector('.mo'); if (g && !m.value && precio) m.value = (g * precio).toFixed(2); });
-      tr.querySelectorAll('input, select').forEach(el => { el.addEventListener('input', calcular); el.addEventListener('change', calcular); });
+      tr.querySelectorAll('input, select').forEach(el => { el.addEventListener('input', () => calcular()); el.addEventListener('change', () => calcular()); });
       tb.appendChild(tr);
       return tr;
     };
