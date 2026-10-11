@@ -482,7 +482,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('btn-control-combustible').addEventListener('click', function () {
-    FormControlCombustible.abrir();
+    FormCierreCombustible.abrir();   // v76: reemplaza a Control de combustible
   });
 
   document.getElementById('btn-datos-viaje').addEventListener('click', function () {
