@@ -74,7 +74,7 @@ const FormGraficoCombustible = {
         const k = por === 'viaje' ? v.iso + '|' + v.fila : por === 'mes' ? v.iso.slice(0, 7) : v[por] || '—';
         let g = idx[k];
         if (!g) {
-          g = idx[k] = { etiqueta: por === 'viaje' ? (formatoFecha(v.iso) + ' · ' + v.placa + ' · ' + v.destino) : por === 'mes' ? mesTxt(v.iso) : k,
+          g = idx[k] = { etiqueta: por === 'viaje' ? (v.iso.split('-').reverse().join('/') + ' · ' + v.placa + ' · ' + v.destino) : por === 'mes' ? mesTxt(v.iso) : k,
             n: 0, est: 0, ab: 0, real: 0, nReal: 0, nav: 0, nNav: 0, km: 0, kmReal: 0 };
           grupos.push(g);
         }
