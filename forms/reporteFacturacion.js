@@ -5,7 +5,7 @@
  * correo (cliente para facturación, empresa, conductor, placa, almacenes,
  * destino, booking, contenedor, cliente de la guía, fecha de facturación,
  * N° de factura y venta en dólares), con filtros por cliente, fecha de
- * facturación y booking. "Copiar para correo" deja la tabla lista para
+ * facturación, booking y estado de pago (v79: columna ESTADO desde Cobranzas). "Copiar para correo" deja la tabla lista para
  * pegar en Gmail/Outlook. Backend: reporteFacturacion.
  * -------------------------------------------------------------------------
  */
@@ -34,17 +34,18 @@ const FormReporteFacturacion = {
         <div class="campo"><label>Facturado desde</label><input type="date" id="rfDesde"></div>
         <div class="campo"><label>Hasta</label><input type="date" id="rfHasta"></div>
         <div class="campo"><label>Booking</label><input type="text" id="rfBooking" placeholder="Escriba el booking" autocomplete="off"></div>
+        <div class="campo"><label>Estado de pago</label><select id="rfEstado"><option value="">Todos</option><option value="PEND">Pendientes (facturado o parcial)</option><option value="VENC">Vencidos</option><option value="PAGO PARCIAL">Pago parcial</option><option value="PAGADO">Pagados</option></select></div>
         <button class="boton-secundario" id="rfBorrar">Borrar filtro</button>
       </div>
       <div class="rf-cuenta" id="rfCuenta"></div>
       <div class="rf-wrap">
         <table id="tablaRF">
-          <colgroup><col style="width:7%"><col style="width:9%"><col style="width:12%"><col style="width:6%"><col style="width:7%"><col style="width:7%">
-            <col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:5%"></colgroup>
+          <colgroup><col style="width:6%"><col style="width:7%"><col style="width:10%"><col style="width:6%"><col style="width:7%"><col style="width:7%">
+            <col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:5%"><col style="width:8%"></colgroup>
           <thead><tr>
             <th>CLIENTE PARA FACTURACIÓN</th><th>EMPRESA QUE DIO EL SERVICIO</th><th>CONDUCTOR</th><th>PLACA</th><th>ALMACEN DE SALIDA</th>
             <th>ALMACEN DE LLEGADA</th><th>DESTINO</th><th class="negro">BOOKING</th><th class="negro">CONTENEDOR</th><th>CLIENTE</th>
-            <th>FECHA DE FACTURACIÓN</th><th>NÚMERO DE FACTURA</th><th>VENTA DOLARES</th>
+            <th>FECHA DE FACTURACIÓN</th><th>NÚMERO DE FACTURA</th><th>VENTA DOLARES</th><th>ESTADO</th>
           </tr></thead>
           <tbody></tbody>
           <tfoot></tfoot>
@@ -61,13 +62,28 @@ const FormReporteFacturacion = {
       const fechaVista = function (v) { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Number(m[3]) + '/' + Number(m[2]) + '/' + m[1] : ''; };
       const usd = function (n) { return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
       let visibles = [];
+      const estadoTxt = function (f) {
+        if (!f.estadoPago) return '';
+        return f.estadoPago + (f.vencido ? ' · VENCIDO' : '');
+      };
+      const estadoHtml = function (f) {
+        if (!f.estadoPago) return '';
+        const col = f.estadoPago === 'PAGADO' ? '#166534' : f.vencido ? '#b91c1c' : f.estadoPago === 'PAGO PARCIAL' ? '#92400e' : '#3730a3';
+        return '<b style="color:' + col + '">' + esc(f.estadoPago) + '</b>' + (f.vencido ? '<br><small style="color:#b91c1c">vencida ' + f.diasVencido + ' d</small>' :
+          (f.estadoPago !== 'PAGADO' && f.vencimiento ? '<br><small>vence ' + fechaVista(f.vencimiento) + '</small>' : '')) +
+          (f.estadoPago === 'PAGO PARCIAL' ? '<br><small>saldo ' + usd(f.saldo) + '</small>' : '');
+      };
       const msCliente = crearMultiSelect($('msRFCliente'), { onChange: pintar });
       msCliente.setOpciones(Array.from(new Set(filas.map(f => f.clienteFacturacion).filter(Boolean))).sort());
 
       function pintar() {
         const desde = $('rfDesde').value, hasta = $('rfHasta').value;
         const bk = $('rfBooking').value.trim().toUpperCase();
+        const est = $('rfEstado').value;
         visibles = filas.filter(function (f) {
+          if (est === 'PEND' && !(f.estadoPago === 'FACTURADO' || f.estadoPago === 'PAGO PARCIAL')) return false;
+          if (est === 'VENC' && !f.vencido) return false;
+          if ((est === 'PAGADO' || est === 'PAGO PARCIAL') && f.estadoPago !== est) return false;
           if (!msCliente.cumple(f.clienteFacturacion)) return false;
           if (desde && f.fechaFacturacion < desde) return false;
           if (hasta && f.fechaFacturacion > hasta) return false;
@@ -78,10 +94,10 @@ const FormReporteFacturacion = {
           return '<tr><td>' + esc(f.clienteFacturacion) + '</td><td>' + esc(f.empresa) + '</td><td>' + esc(f.conductor) + '</td><td>' + esc(f.placa) +
             '</td><td>' + esc(f.almacenSalida) + '</td><td>' + esc(f.almacenLlegada) + '</td><td>' + esc(f.destino) + '</td><td>' + esc(f.booking) +
             '</td><td>' + esc(f.contenedor) + '</td><td>' + esc(f.clienteGuia) + '</td><td>' + esc(fechaVista(f.fechaFacturacion)) + '</td><td>' + esc(f.factura) +
-            '</td><td>' + usd(f.ventaDolares) + '</td></tr>';
-        }).join('') : '<tr><td colspan="13" style="color:#8b95a1;padding:16px;">No hay facturas con estos filtros.</td></tr>';
+            '</td><td>' + usd(f.ventaDolares) + '</td><td>' + estadoHtml(f) + '</td></tr>';
+        }).join('') : '<tr><td colspan="14" style="color:#8b95a1;padding:16px;">No hay facturas con estos filtros.</td></tr>';
         const total = visibles.reduce(function (a, f) { return a + (Number(f.ventaDolares) || 0); }, 0);
-        $('tablaRF').querySelector('tfoot').innerHTML = visibles.length ? '<tr><td colspan="12" style="text-align:right">TOTAL (' + visibles.length + ' servicio' + (visibles.length === 1 ? '' : 's') + ')</td><td>' + usd(total) + '</td></tr>' : '';
+        $('tablaRF').querySelector('tfoot').innerHTML = visibles.length ? '<tr><td colspan="12" style="text-align:right">TOTAL (' + visibles.length + ' servicio' + (visibles.length === 1 ? '' : 's') + ')</td><td>' + usd(total) + '</td><td></td></tr>' : '';
         $('rfCuenta').textContent = visibles.length + ' factura(s) · total ' + usd(total);
         if (typeof _refrescarSnapshotFormulario === 'function') _refrescarSnapshotFormulario();
       }
@@ -91,17 +107,17 @@ const FormReporteFacturacion = {
         const th = 'style="background:#808080;color:#fff;border:1px solid #000;padding:4px 6px;font-family:Calibri,Arial;font-size:11pt;font-weight:bold;text-align:center"';
         const thN = th.replace('#808080', '#000000');
         const td = function (par) { return 'style="background:' + (par ? '#dbe8f5' : '#c5d9f1') + ';border:1px solid #000;padding:3px 6px;font-family:Calibri,Arial;font-size:11pt;text-align:center"'; };
-        const cab = ['CLIENTE PARA FACTURACION', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR', 'PLACA', 'ALMACEN DE SALIDA', 'ALMACEN DE LLEGADA', 'DESTINO', 'BOOKING', 'CONTENEDOR', 'CLIENTE', 'FECHA DE FACTURACIÓN', 'NÚMERO DE FACTURA', 'VENTA DOLARES'];
+        const cab = ['CLIENTE PARA FACTURACION', 'EMPRESA QUE DIO EL SERVICIO', 'CONDUCTOR', 'PLACA', 'ALMACEN DE SALIDA', 'ALMACEN DE LLEGADA', 'DESTINO', 'BOOKING', 'CONTENEDOR', 'CLIENTE', 'FECHA DE FACTURACIÓN', 'NÚMERO DE FACTURA', 'VENTA DOLARES', 'ESTADO'];
         let h = '<table style="border-collapse:collapse"><tr>' + cab.map(function (c) { return '<th ' + (c === 'BOOKING' || c === 'CONTENEDOR' ? thN : th) + '>' + c + '</th>'; }).join('') + '</tr>';
         visibles.forEach(function (f, i) {
           h += '<tr>' + [f.clienteFacturacion, f.empresa, f.conductor, f.placa, f.almacenSalida, f.almacenLlegada, f.destino, f.booking, f.contenedor, f.clienteGuia,
-            fechaVista(f.fechaFacturacion), f.factura, usd(f.ventaDolares)].map(function (v) { return '<td ' + td(i % 2) + '>' + esc(v) + '</td>'; }).join('') + '</tr>';
+            fechaVista(f.fechaFacturacion), f.factura, usd(f.ventaDolares), estadoTxt(f)].map(function (v) { return '<td ' + td(i % 2) + '>' + esc(v) + '</td>'; }).join('') + '</tr>';
         });
         return h + '</table>';
       }
       function textoPlano() {
         return visibles.map(function (f) {
-          return [f.clienteFacturacion, f.empresa, f.conductor, f.placa, f.almacenSalida, f.almacenLlegada, f.destino, f.booking, f.contenedor, f.clienteGuia, fechaVista(f.fechaFacturacion), f.factura, usd(f.ventaDolares)].join('\t');
+          return [f.clienteFacturacion, f.empresa, f.conductor, f.placa, f.almacenSalida, f.almacenLlegada, f.destino, f.booking, f.contenedor, f.clienteGuia, fechaVista(f.fechaFacturacion), f.factura, usd(f.ventaDolares), estadoTxt(f)].join('\t');
         }).join('\n');
       }
 
@@ -117,11 +133,11 @@ const FormReporteFacturacion = {
           mostrarMensaje('No se pudo copiar automáticamente. Selecciona la tabla con el mouse y cópiala con Ctrl+C.', 'error');
         }
       });
-      ['rfDesde', 'rfHasta'].forEach(function (id) { $(id).addEventListener('change', pintar); });
+      ['rfDesde', 'rfHasta', 'rfEstado'].forEach(function (id) { $(id).addEventListener('change', pintar); });
       let espera = null;
       $('rfBooking').addEventListener('input', function () { clearTimeout(espera); espera = setTimeout(pintar, 250); });
       $('rfBorrar').addEventListener('click', function () {
-        msCliente.limpiar(); ['rfDesde', 'rfHasta', 'rfBooking'].forEach(function (id) { $(id).value = ''; }); pintar();
+        msCliente.limpiar(); ['rfDesde', 'rfHasta', 'rfBooking', 'rfEstado'].forEach(function (id) { $(id).value = ''; }); pintar();
       });
       $('rfCerrar').addEventListener('click', cerrarPanel);
       pintar();
