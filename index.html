@@ -211,6 +211,15 @@
           <span class="tile-texto"><strong>Reporte de facturación</strong><small>Tabla para el correo</small></span>
         </button>
 
+        <button class="tile" id="btn-cobranzas">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01"></path><path d="M18 12h.01"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Cobranzas</strong><small>Deuda por cliente, abonos y vencidos</small></span>
+        </button>
+
         <button class="tile" id="btn-deposito">
           <span class="tile-icono">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -457,7 +466,8 @@
     'forms/notasVenta.js',
     'forms/cierreCombustible.js',
     'forms/rendimiento.js',
-    'forms/graficoCombustible.js'
+    'forms/graficoCombustible.js',
+    'forms/cobranzas.js'
   ].forEach(function (src) {
     document.write('<script src="' + src + '?v=' + window.__VERSION_APP + '"><\/script>');
   });
