@@ -34,7 +34,7 @@ async function llamarBackend(accion, datos) {
     // text/plain evita que el navegador dispare un preflight OPTIONS,
     // que los Web Apps de Apps Script no responden.
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ accion: accion, datos: datos || {}, token: Sesion.token() })
+    body: JSON.stringify({ accion: accion, datos: datos || {}, token: Sesion.token(), amVer: window.__amVer || '' })
   });
 
   if (!respuesta.ok) {
@@ -49,6 +49,8 @@ async function llamarBackend(accion, datos) {
   } catch (e) {
     throw new Error('El servidor no respondió correctamente (' + accion + '). Intente de nuevo en unos segundos.');
   }
+  // v78: versión del orden de SERVICIOS (para que el servidor corrija N° de fila si alguien ordenó la hoja).
+  if (Array.isArray(r) && r.length && r[0] && r[0]._amVer) window.__amVer = r[0]._amVer;
   // v73: sesión vencida o contraseña por cambiar -> pantalla de ingreso.
   if (r && r.sesion === false && accion !== 'login') {
     Sesion.vencida();
