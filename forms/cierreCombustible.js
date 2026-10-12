@@ -115,7 +115,7 @@ const FormCierreCombustible = {
             (c.exceso > 0 ? ' · exceso ' + c.exceso.toFixed(1) + ' gal' : '') + (malDif ? ' · comprobante vs sonda ' + c.difPct.toFixed(1) + ' %' : '') + '</small>';
         }
         return '<tr><td>' + esc(formatoFecha(s['FECHA DE PROGRAMACION'])) + '</td><td>' + esc(s['CLIENTE PARA FACTURACIÓN']) + '</td>' +
-          '<td>' + esc(s['BOOKING']) + '<small>' + esc(s['N° CONTENEDOR']) + '</small></td>' +
+          '<td>' + esc(s['BOOKING']) + '<small>' + esc(s['N° CONTENEDOR']) + (s['CODIGO SERVICIO'] ? ' · ' + esc(s['CODIGO SERVICIO']) : '') + '</small></td>' +
           '<td>' + esc(s['PLACA TRACTO']) + '<small>' + esc(s['CONDUCTOR']) + '</small></td>' +
           '<td>' + esc(s['DESTINO 1']) + '</td><td>' + esc(s['ESTADO'] || 'PROGRAMADO') + '</td>' +
           '<td class="num">' + (Number(s['GL TRACTO']) || 0).toFixed(1) + '</td><td>' + est + '</td>' +

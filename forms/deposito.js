@@ -362,7 +362,7 @@ const FormDeposito = {
         if (depositado) tr.classList.add('dep-hecho');
         tr.innerHTML = `
           <td>${ddmm(f['FECHA DE PROGRAMACION'])}</td>
-          <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}${f['BOOKING'] ? '<div class="dep-bk">BK ' + esc(f['BOOKING']) + '</div>' : ''}</td>
+          <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}${f['BOOKING'] ? '<div class="dep-bk">BK ' + esc(f['BOOKING']) + (f['CODIGO SERVICIO'] ? ' · ' + esc(f['CODIGO SERVICIO']) : '') + '</div>' : ''}</td>
           <td>${esc(f['CONDUCTOR'])}<div class="sub">${esc(f['PLACA TRACTO'])}</div></td>
           <td>${ruta}<div class="sub">Devolución: ${esc(f['CIUDAD DE DEVOLUCION'])}</div></td>
           <td>${ddmm(f['FECHA DE RETIRO'])}<div class="sub">${hora(f['HORA DE RETIRO'])}</div></td>
@@ -540,7 +540,7 @@ const FormDeposito = {
         '<div class="dep-cab">' +
           '<span>Servicio: <b>' + ddmm(f['FECHA DE PROGRAMACION']) + '</b></span>' +
           '<span>Cliente: <b>' + esc(f['CLIENTE PARA FACTURACIÓN']) + '</b></span>' +
-          '<span>Booking: <b>' + esc(f['BOOKING']) + '</b></span>' +
+          '<span>Booking: <b>' + esc(f['BOOKING']) + '</b></span>' + (f['CODIGO SERVICIO'] ? '<span>Código: <b>' + esc(f['CODIGO SERVICIO']) + '</b></span>' : '') +
           '<span>Conductor: <b>' + esc(f['CONDUCTOR']) + '</b> (' + esc(f['PLACA TRACTO']) + ')</span>' +
           '<span>Destino: <b>' + esc(f['DESTINO 1']) + '</b></span>' +
           '<span>A depositar: <b>' + soles(montoBase(f)) + '</b></span>' +

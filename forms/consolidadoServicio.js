@@ -672,7 +672,17 @@ const FormConsolidadoServicio = {
       const aa = String(d.getFullYear()).slice(-2);
       return dd + mm + aa + (cli + 'XXX').slice(0, 3) + bk.slice(-3);
     }
+    // v78: el código es el del servicio (fijo desde que se registra) y no se cambia aquí.
+    const codigoFijo = String(servicio['CODIGO SERVICIO'] || '').trim().toUpperCase();
+    if (codigoFijo) {
+      q('txtCodigoServicioConsol').value = codigoFijo;
+      q('txtCodigoServicioConsol').disabled = true;
+      q('txtCodigoServicioConsol').title = 'Código del servicio (amarra el viaje con seguimiento, depósitos, consolidado y factura)';
+      q('btnGenerarCodigoConsol').style.display = 'none';
+      codigoEditadoAMano = true;
+    }
     function ponerCodigo(forzar) {
+      if (codigoFijo) { q('txtCodigoServicioConsol').value = codigoFijo; return; }
       if (codigoEditadoAMano && !forzar) return;
       const cod = generarCodigo();
       q('txtCodigoServicioConsol').value = cod;
@@ -721,7 +731,7 @@ const FormConsolidadoServicio = {
         const el = q(id);
         if (el && !el.disabled && el.type !== 'hidden') el.value = f.campos[id];
       });
-      if (f.campos.txtCodigoServicioConsol) { q('txtCodigoServicioConsol').value = f.campos.txtCodigoServicioConsol; codigoEditadoAMano = true; }
+      if (f.campos.txtCodigoServicioConsol && !codigoFijo) { q('txtCodigoServicioConsol').value = f.campos.txtCodigoServicioConsol; codigoEditadoAMano = true; }
       ['cboDominicalConsol', 'cboFeriadoConsol'].forEach(function (id) { q(id).dispatchEvent(new Event('change')); });
       if (Array.isArray(f.guias) && f.guias.length) {
         tbodyGuias.innerHTML = '';

@@ -225,7 +225,7 @@ const FormSelServicioContabilidad = {
       });
 
       const booking = raiz.querySelector('#filtroBooking').value.trim().toUpperCase();
-      if (booking) filas = filas.filter(f => String(f['BOOKING'] || '').toUpperCase().indexOf(booking) !== -1);
+      if (booking) filas = filas.filter(f => (String(f['BOOKING'] || '') + ' ' + String(f['CODIGO SERVICIO'] || '')).toUpperCase().indexOf(booking) !== -1);
 
       const datos = raiz.querySelector('#filtroDatos').value;
       if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
@@ -276,7 +276,7 @@ const FormSelServicioContabilidad = {
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
           <td>${f['CONDUCTOR'] || ''}</td>
           <td>${linea(f['PLACA TRACTO'], reeferSeco)}</td>
-          <td>${f['BOOKING'] || ''}</td>
+          <td>${f['BOOKING'] || ''}${f['CODIGO SERVICIO'] ? '<div style="font-size:.7rem;color:#64748b">' + f['CODIGO SERVICIO'] + '</div>' : ''}</td>
           <td>${linea([f['CIUDAD DE RETIRO'], f['DEPOSITO DE RETIRO']].filter(Boolean).join(' · '), formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO']))}</td>
           <td>${linea(f['DESTINO 1'], formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1']))}</td>
           <td>${f['PACKING'] || ''}</td>
