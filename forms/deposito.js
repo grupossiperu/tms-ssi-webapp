@@ -61,7 +61,8 @@ const FormDeposito = {
         .dep-nuevo .btn-mas-dep { border: 1.5px dashed #94a3b8; background: #f8fafc; color: #1c3a5e; border-radius: 8px; font-size: .8rem; font-weight: 700; padding: 6px 12px; cursor: pointer; }
         .dep-nuevo .total-nuevo { font-weight: 700; color: #1c3a5e; margin-left: auto; }
         .dep-nuevo .quitar-dep { border: none; background: transparent; color: #b91c1c; font-size: 1.1rem; cursor: pointer; }
-        .dep-bk { color: #1c3a5e; font-weight: 700; font-size: .7rem; margin-top: 2px; word-break: normal !important; overflow-wrap: normal !important; white-space: nowrap; }
+        .dep-bk { color: #1c3a5e; font-weight: 700; font-size: .7rem; margin-top: 2px; white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
+        .dep-cod { color: #64748b; font-weight: 600; font-size: .68rem; overflow-wrap: anywhere; word-break: break-all; }
         .dep-mini { padding: 3px 7px; border-radius: 6px; border: 1.5px solid #1c3a5e; background: #fff; color: #1c3a5e; font-weight: 700; font-size: .7rem; cursor: pointer; white-space: nowrap; }
         .dep-mini:hover { background: #1c3a5e; color: #fff; }
         .dep-mini.verde { border-color: #1f9d55; color: #157a41; }
@@ -362,7 +363,7 @@ const FormDeposito = {
         if (depositado) tr.classList.add('dep-hecho');
         tr.innerHTML = `
           <td>${ddmm(f['FECHA DE PROGRAMACION'])}</td>
-          <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}${f['BOOKING'] ? '<div class="dep-bk">BK ' + esc(f['BOOKING']) + (f['CODIGO SERVICIO'] ? ' · ' + esc(f['CODIGO SERVICIO']) : '') + '</div>' : ''}</td>
+          <td>${esc(f['CLIENTE PARA FACTURACIÓN'])}${f['BOOKING'] ? '<div class="dep-bk">BK ' + esc(f['BOOKING']) + '</div>' + (f['CODIGO SERVICIO'] ? '<div class="dep-cod">' + esc(f['CODIGO SERVICIO']) + '</div>' : '') : ''}</td>
           <td>${esc(f['CONDUCTOR'])}<div class="sub">${esc(f['PLACA TRACTO'])}</div></td>
           <td>${ruta}<div class="sub">Devolución: ${esc(f['CIUDAD DE DEVOLUCION'])}</div></td>
           <td>${ddmm(f['FECHA DE RETIRO'])}<div class="sub">${hora(f['HORA DE RETIRO'])}</div></td>
