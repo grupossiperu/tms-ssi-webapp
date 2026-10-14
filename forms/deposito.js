@@ -258,16 +258,18 @@ const FormDeposito = {
     });
 
     /* ------------------------------- carga ------------------------------- */
+    let cargaTurno = 0;
     const cargarTodo = async function () {
-      const filtros = {
-        fechaDesde: isoADdmm(raiz.querySelector('#depDesde').value),
-        fechaHasta: isoADdmm(raiz.querySelector('#depHasta').value)
-      };
+      // Las fechas se filtran en el navegador (antes se pedían al servidor y una
+      // respuesta lenta pisaba a la otra: la lista aparecía y se borraba).
+      const filtros = {};
+      const turno = ++cargaTurno;
       const res = await Promise.all([
         llamarBackend('listarServiciosPendientes', filtros),
         llamarBackend('resumenDepositos', {}),
         llamarBackend('listarDepositosAdicionales', {}).catch(function () { return []; })
       ]);
+      if (turno !== cargaTurno) return;
       servicios = Array.isArray(res[0]) ? res[0] : [];
       resumen = res[1] || {};
       adicionales = Array.isArray(res[2]) ? res[2] : [];
@@ -298,8 +300,17 @@ const FormDeposito = {
       const booking = mayus(raiz.querySelector('#depBooking').value);
       const check = raiz.querySelector('#depEstadoCheck').value;
       const filtroAdic = raiz.querySelector('#depFiltroAdic').value;
+      const vDesde = raiz.querySelector('#depDesde').value, vHasta = raiz.querySelector('#depHasta').value;
+      const fDesde = vDesde ? new Date(vDesde + 'T00:00:00') : null;
+      const fHasta = vHasta ? new Date(vHasta + 'T23:59:59') : null;
 
       let filas = servicios.filter(function (f) {
+        if (fDesde || fHasta) {
+          const fp = fechaDe(f['FECHA DE PROGRAMACION']);
+          if (!fp) return false;
+          if (fDesde && fp < fDesde) return false;
+          if (fHasta && fp > fHasta) return false;
+        }
         if (!msCliente.cumple(mayus(f['CLIENTE PARA FACTURACIÓN']))) return false;
         if (!msConductor.cumple(mayus(f['CONDUCTOR']))) return false;
         if (!msEstado.cumple(mayus(f['ESTADO']) || 'PROGRAMADO')) return false;
@@ -397,7 +408,7 @@ const FormDeposito = {
     };
 
     ['depDesde', 'depHasta'].forEach(function (id) {
-      raiz.querySelector('#' + id).addEventListener('change', cargarTodo);
+      raiz.querySelector('#' + id).addEventListener('change', pintarServicios);
     });
     ['depEstadoCheck', 'depFiltroAdic'].forEach(function (id) {
       raiz.querySelector('#' + id).addEventListener('change', pintarServicios);
