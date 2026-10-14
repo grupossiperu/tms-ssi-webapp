@@ -9,6 +9,8 @@
  *  - Forma de pago por factura (con/sin detracción, con/sin IGV) y estado de
  *    la detracción (pendiente / depositada con fecha y constancia).
  *  - Historial de abonos (anular) y "Copiar estado de cuenta" para el correo.
+ *  - v80: vista "Todas las facturas" con filtros (cliente, estado, vencimiento,
+ *    fechas, tipo, detracción, moneda, búsqueda) y copiar tabla para correo.
  * Backend: cobranzaDatos, cobranzaGrabarCobro, cobranzaAnularCobro,
  *          cobranzaGuardarFactura.
  * -------------------------------------------------------------------------
@@ -87,6 +89,40 @@ const FormCobranzas = {
   },
   _pendiente: function (f) { return f.estado === 'FACTURADO' || f.estado === 'PAGO PARCIAL'; },
 
+  /* ---------- copiar tabla de cobranza (formato del correo) ---------- */
+  _copiar: async function (lista) {
+    const self = this;
+    const vis = (lista || []).filter(f => f.estado !== 'SIN MONTO');
+    if (!vis.length) { mostrarMensaje('No hay facturas para copiar con estos filtros.', 'error'); return; }
+    const monTxt = m => m === 'PEN' ? 'SOLES (S/)' : 'DÓLARES AMERICANOS (USD)';
+    const num = n => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const filas = [];
+    vis.forEach(function (f) {
+      const canc = f.estado === 'PAGADO' ? 'PAGADO ' + self._f(f.ultimoPago) : f.vencido ? 'VENCIDO' : 'POR VENCER';
+      filas.push({ razon: f.razon, emision: self._f(f.fecha), numero: f.numero, moneda: monTxt(f.moneda), importe: num(f.conIgv ? f.total : f.valor),
+        detr: num(f.detr ? f.detraccion : 0), saldo: num(f.saldo), venc: self._f(f.vencimiento), canc: canc, rojo: f.vencido });
+      f.pagos.filter(p => p.tipo === 'NOTA CREDITO').forEach(function (p) {
+        filas.push({ razon: f.razon, emision: self._f(p.fecha), numero: p.operacion, moneda: monTxt(f.moneda), importe: '-' + num(p.monto), detr: num(0), saldo: '-' + num(p.monto), venc: '', canc: f.numero, rojo: false });
+      });
+    });
+    const cab = ['Razón Social', 'Fecha Emisión', 'Número de la Factura', 'Moneda', 'Importe', 'Monto de Detracción', 'Saldo a Pagar', 'Fecha de Vencimiento', 'Estado de Pago'];
+    const th = 'style="background:#d9d9d9;border:1px solid #808080;padding:4px 8px;font-family:Calibri,Arial;font-size:11pt;font-weight:bold;text-align:center"';
+    const td = (al, rojo) => 'style="border:1px solid #bfbfbf;padding:3px 8px;font-family:Calibri,Arial;font-size:11pt;text-align:' + al + ';color:' + (rojo ? '#c00000' : '#000') + '"';
+    const tot = vis.reduce((a, f) => a + f.saldo, 0);
+    let h = '<table style="border-collapse:collapse"><tr>' + cab.map(c => '<th ' + th + '>' + c + '</th>').join('') + '</tr>';
+    filas.forEach(function (x) {
+      h += '<tr><td ' + td('left', x.rojo) + '>' + esc(x.razon) + '</td><td ' + td('center', x.rojo) + '>' + x.emision + '</td><td ' + td('center', x.rojo) + '>' + esc(x.numero) +
+        '</td><td ' + td('left', x.rojo) + '>' + x.moneda + '</td><td ' + td('right', x.rojo) + '>' + x.importe + '</td><td ' + td('right', x.rojo) + '>' + x.detr +
+        '</td><td ' + td('right', x.rojo) + '>' + x.saldo + '</td><td ' + td('center', x.rojo) + '><b>' + x.venc + '</b></td><td ' + td('center', x.rojo) + '><b>' + esc(x.canc) + '</b></td></tr>';
+    });
+    h += '<tr><td colspan="6" ' + td('right', false) + '><b>TOTAL SALDO A PAGAR</b></td><td ' + td('right', false) + '><b>' + num(tot) + '</b></td><td colspan="2" ' + td('center', false) + '></td></tr></table>';
+    const txt = cab.join('\t') + '\n' + filas.map(x => [x.razon, x.emision, x.numero, x.moneda, x.importe, x.detr, x.saldo, x.venc, x.canc].join('\t')).join('\n');
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([h], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]);
+      mostrarMensaje('Estado de cuenta copiado (' + vis.length + ' factura(s)). Pégalo en el correo con Ctrl+V.', 'exito');
+    } catch (e) { mostrarMensaje('No se pudo copiar automáticamente.', 'error'); }
+  },
+
   /* ---------- vista 1: resumen por cliente ---------- */
   _resumen: function () {
     const self = this, d = self._d, raiz = self._raiz;
@@ -110,6 +146,7 @@ const FormCobranzas = {
       kpi('Facturas vencidas', nVenc, nVenc ? 'rojo' : '') + kpi('Detracción pendiente', self._m(tot.dt), 'ambar') + '</div>' +
       '<div class="cb-barra"><div class="campo"><label>Buscar cliente</label><input id="cbBuscar" placeholder="Código o razón social" autocomplete="off"></div>' +
       '<div class="campo"><label>Mostrar</label><select id="cbMostrarCli"><option value="deuda">Con deuda o detracción pendiente</option><option value="todos">Todos</option></select></div>' +
+      '<button class="boton-primario" id="cbTodas">Todas las facturas (filtros y copiar)</button>' +
       '<span style="font-size:.76rem;color:#64748b">Haz clic en un cliente para ver sus facturas, registrar abonos o copiar su estado de cuenta.</span></div>' +
       '<div class="cb-wrap"><table class="cb-t"><colgroup><col style="width:11%"><col style="width:25%"><col style="width:7%"><col style="width:6%"><col><col><col><col><col style="width:9%"></colgroup>' +
       '<thead><tr><th>Cliente</th><th>Razón social</th><th>Crédito</th><th>Fact. pend.</th><th>Por cobrar</th><th>Vencido</th><th>Por vencer</th><th>Detracción pend.</th><th></th></tr></thead>' +
@@ -132,6 +169,82 @@ const FormCobranzas = {
     raiz.querySelector('#cbCuerpoCli').addEventListener('click', function (ev) { const tr = ev.target.closest('tr[data-cli]'); if (tr) self._detalle(tr.dataset.cli); });
     raiz.querySelector('#cbCerrar').addEventListener('click', solicitarCierrePanel);
     raiz.querySelector('#cbActualizar').addEventListener('click', function () { self._cargar(); });
+    raiz.querySelector('#cbTodas').addEventListener('click', function () { self._facturas(); });
+    pintar();
+  },
+
+  /* ---------- vista 3: todas las facturas con filtros ---------- */
+  _facturas: function () {
+    const self = this, d = self._d, raiz = self._raiz;
+    const todas = d.facturas.slice().sort((a, b) => String(a.cliente).localeCompare(String(b.cliente)) || String(a.fecha).localeCompare(String(b.fecha)) || String(a.numero).localeCompare(String(b.numero)));
+    raiz.querySelector('#cbVista').innerHTML =
+      '<div class="cb-tit"><div><h3>Todas las facturas</h3><small>Filtra y copia la tabla para enviar la cobranza por correo.</small></div><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+      '<button class="boton-secundario" id="cbFVolver">‹ Por cliente</button><button class="boton-secundario" id="cbFLimpiar">Borrar filtros</button><button class="boton-primario" id="cbFCopiar">Copiar tabla para correo</button></div></div>' +
+      '<div class="cb-barra">' +
+      '<div class="campo"><label>Cliente</label><div id="msCbCli"></div></div>' +
+      '<div class="campo"><label>Estado</label><div id="msCbEst"></div></div>' +
+      '<div class="campo"><label>Vencimiento</label><select id="cbFVen"><option value="">Todos</option><option value="venc">Vencidas</option><option value="7">Vencen en 7 días</option><option value="pv">Por vencer</option></select></div>' +
+      '<div class="campo"><label>Emitida desde</label><input type="date" id="cbFDesde"></div><div class="campo"><label>Hasta</label><input type="date" id="cbFHasta"></div>' +
+      '<div class="campo"><label>Vence desde</label><input type="date" id="cbFVDesde"></div><div class="campo"><label>Hasta</label><input type="date" id="cbFVHasta"></div>' +
+      '<div class="campo"><label>Tipo</label><div id="msCbTipo"></div></div>' +
+      '<div class="campo"><label>Detracción</label><select id="cbFDetr"><option value="">Todas</option><option value="PENDIENTE">Pendiente</option><option value="DEPOSITADA">Depositada</option><option value="NO APLICA">No aplica</option></select></div>' +
+      '<div class="campo"><label>Moneda</label><select id="cbFMon"><option value="">Todas</option><option value="USD">USD</option><option value="PEN">S/</option></select></div>' +
+      '<div class="campo"><label>Buscar</label><input id="cbFBuscar" placeholder="Factura, booking, contenedor o código" autocomplete="off"></div></div>' +
+      '<div class="cb-wrap"><table class="cb-t" id="cbTablaT"><colgroup><col style="width:9%"><col style="width:8%"><col style="width:6%"><col style="width:7%"><col style="width:8%"><col><col><col><col><col style="width:13%"><col style="width:8%"><col style="width:5%"></colgroup>' +
+      '<thead><tr><th>Cliente</th><th>Factura</th><th>Tipo</th><th>Emisión</th><th>Vence</th><th>Importe</th><th>Detracción</th><th>A cobrar</th><th>Saldo</th><th>Estado</th><th>Detracción</th><th></th></tr></thead>' +
+      '<tbody></tbody><tfoot></tfoot></table></div>' +
+      '<div class="panel-footer" style="padding-top:10px;"><button class="boton-secundario" id="cbFCerrar">Cerrar</button></div>';
+    const $ = id => raiz.querySelector('#' + id);
+    let vis = [];
+    const hoy = d.hoy;
+    const en7 = (function () { const m = hoy.match(/^(\d{4})-(\d{2})-(\d{2})/); const f = new Date(+m[1], +m[2] - 1, +m[3] + 7); return f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0'); })();
+    const pintar = function () {
+      const ven = $('cbFVen').value, de = $('cbFDesde').value, ha = $('cbFHasta').value, vde = $('cbFVDesde').value, vha = $('cbFVHasta').value;
+      const detr = $('cbFDetr').value, mon = $('cbFMon').value, q = $('cbFBuscar').value.trim().toUpperCase();
+      vis = todas.filter(function (f) {
+        const estTxt = f.vencido ? 'VENCIDO' : f.estado;
+        if (!msCli.cumple(f.cliente) || !msTipo.cumple(f.tipo)) return false;
+        if (!msEst.cumple(f.estado) && !(f.vencido && msEst.cumple('VENCIDO'))) return false;
+        if (ven === 'venc' && !f.vencido) return false;
+        if (ven === 'pv' && !(self._pendiente(f) && !f.vencido)) return false;
+        if (ven === '7' && !(self._pendiente(f) && f.vencimiento >= hoy && f.vencimiento <= en7)) return false;
+        if (de && f.fecha < de) return false; if (ha && f.fecha > ha) return false;
+        if (vde && f.vencimiento < vde) return false; if (vha && f.vencimiento > vha) return false;
+        if (detr && f.detrEstado !== detr) return false;
+        if (mon && f.moneda !== mon) return false;
+        if (q && (f.numero + ' ' + f.servicios.map(s => s.booking + ' ' + s.contenedor + ' ' + s.codigo).join(' ')).toUpperCase().indexOf(q) === -1) return false;
+        return estTxt !== undefined;
+      });
+      $('cbTablaT').querySelector('tbody').innerHTML = vis.length ? vis.slice(0, 600).map(f => '<tr><td class="i"><b>' + esc(f.cliente) + '</b></td><td class="i"><b>' + esc(f.numero) +
+        '</b><br><small class="cb-gris">' + esc(f.servicios[0] ? f.servicios[0].booking : '') + '</small></td><td class="c">' + esc(f.tipo.slice(0, 5)) + '</td><td class="c">' + self._f(f.fecha) +
+        '</td><td class="c">' + self._vence(f) + '</td><td>' + self._m(f.conIgv ? f.total : f.valor, f.moneda) + '</td><td>' + (f.detr ? self._m(f.detraccion, f.moneda) : '<span class="cb-gris">sin detr.</span>') +
+        '</td><td>' + self._m(f.aCobrar, f.moneda) + '</td><td class="' + (f.vencido ? 'cb-rojo' : '') + '"><b>' + self._m(f.saldo, f.moneda) + '</b></td><td class="c">' + self._badge(f) +
+        '</td><td class="c">' + self._detrBadge(f) + '</td><td class="c"><button class="cb-mini" data-cli="' + esc(f.cliente) + '" title="Abrir cliente">›</button></td></tr>').join('') +
+        (vis.length > 600 ? '<tr><td colspan="12" class="c cb-gris">Se muestran 600 de ' + vis.length + '. Usa los filtros (la copia incluye todas).</td></tr>' : '')
+        : '<tr><td colspan="12" class="c" style="color:#8b95a1;padding:16px">No hay facturas con estos filtros.</td></tr>';
+      const tot = {};
+      vis.forEach(f => { const t = tot[f.moneda] = tot[f.moneda] || { ac: 0, s: 0, n: 0 }; t.ac += f.aCobrar; t.s += f.saldo; t.n++; });
+      $('cbTablaT').querySelector('tfoot').innerHTML = Object.keys(tot).map(m => '<tr><td colspan="7" class="i">TOTAL ' + (m === 'PEN' ? 'S/' : 'USD') + ' · ' + tot[m].n + ' factura(s)</td><td>' +
+        self._m(tot[m].ac, m) + '</td><td>' + self._m(tot[m].s, m) + '</td><td colspan="3"></td></tr>').join('');
+      _refrescarSnapshotFormulario();
+    };
+    const msCli = crearMultiSelect($('msCbCli'), { onChange: pintar });
+    const msEst = crearMultiSelect($('msCbEst'), { onChange: pintar });
+    const msTipo = crearMultiSelect($('msCbTipo'), { onChange: pintar });
+    msCli.setOpciones(Array.from(new Set(todas.map(f => f.cliente))).sort());
+    msEst.setOpciones(['FACTURADO', 'PAGO PARCIAL', 'PAGADO', 'VENCIDO', 'SIN MONTO']);
+    msTipo.setOpciones(['VIAJE', 'SOBRECOSTO', 'BALANZA']);
+    ['cbFVen', 'cbFDesde', 'cbFHasta', 'cbFVDesde', 'cbFVHasta', 'cbFDetr', 'cbFMon'].forEach(id => $(id).addEventListener('change', pintar));
+    $('cbFBuscar').addEventListener('input', pintar);
+    $('cbFLimpiar').addEventListener('click', function () {
+      [msCli, msEst, msTipo].forEach(m => m.limpiar());
+      ['cbFVen', 'cbFDesde', 'cbFHasta', 'cbFVDesde', 'cbFVHasta', 'cbFDetr', 'cbFMon', 'cbFBuscar'].forEach(id => { $(id).value = ''; });
+      pintar();
+    });
+    $('cbFVolver').addEventListener('click', function () { self._resumen(); });
+    $('cbFCerrar').addEventListener('click', solicitarCierrePanel);
+    $('cbFCopiar').addEventListener('click', function () { self._copiar(vis); });
+    $('cbTablaT').addEventListener('click', function (ev) { const b = ev.target.closest('[data-cli]'); if (b) self._detalle(b.dataset.cli); });
     pintar();
   },
 
@@ -154,6 +267,7 @@ const FormCobranzas = {
       '<div id="cbForm"></div><div id="cbHistBox"></div>' +
       '<div class="cb-barra"><div class="campo"><label>Mostrar</label><select id="cbMostrar"><option value="pend">Pendientes</option><option value="venc">Solo vencidas</option><option value="detr">Detracción pendiente</option><option value="todas">Todas</option></select></div>' +
       (monedas.length > 1 ? '<div class="campo"><label>Moneda</label><select id="cbMon">' + monedas.map(m => '<option>' + m + '</option>').join('') + '</select></div>' : '') +
+      '<div class="campo"><label>Emitida desde</label><input type="date" id="cbDDesde"></div><div class="campo"><label>Hasta</label><input type="date" id="cbDHasta"></div>' +
       '<div class="campo"><label>Buscar</label><input id="cbBuscarF" placeholder="Factura, booking o contenedor" autocomplete="off"></div></div>' +
       '<div class="cb-wrap"><table class="cb-t" id="cbTablaF"><colgroup><col style="width:8%"><col style="width:6%"><col style="width:7%"><col style="width:8%"><col><col><col><col><col style="width:13%"><col style="width:8%"><col style="width:9%"></colgroup>' +
       '<thead><tr><th>Factura</th><th>Tipo</th><th>Emisión</th><th>Vence</th><th>Importe</th><th>Detracción</th><th>A cobrar</th><th>Saldo</th><th>Estado</th><th>Detracción</th><th id="cbThAcc"></th></tr></thead>' +
@@ -162,8 +276,8 @@ const FormCobranzas = {
     const monedaSel = () => ($('cbMon') ? $('cbMon').value : (monedas[0] || 'USD'));
 
     const visibles = function () {
-      const m = $('cbMostrar').value, q = $('cbBuscarF').value.trim().toUpperCase(), mon = monedaSel();
-      return facts.filter(f => f.moneda === mon &&
+      const m = $('cbMostrar').value, q = $('cbBuscarF').value.trim().toUpperCase(), mon = monedaSel(), de = $('cbDDesde').value, ha = $('cbDHasta').value;
+      return facts.filter(f => f.moneda === mon && (!de || f.fecha >= de) && (!ha || f.fecha <= ha) &&
         (m === 'todas' || (m === 'pend' && self._pendiente(f)) || (m === 'venc' && f.vencido) || (m === 'detr' && f.detrEstado === 'PENDIENTE') || (modo && aplicar[f.key])) &&
         (!q || (f.numero + ' ' + f.servicios.map(s => s.booking + ' ' + s.contenedor + ' ' + s.codigo).join(' ')).toUpperCase().indexOf(q) !== -1));
     };
@@ -298,37 +412,7 @@ const FormCobranzas = {
     });
 
     /* --- estado de cuenta para correo --- */
-    const copiar = async function () {
-      const vis = visibles().filter(f => f.estado !== 'SIN MONTO');
-      if (!vis.length) { mostrarMensaje('No hay facturas para copiar con estos filtros.', 'error'); return; }
-      const monTxt = m => m === 'PEN' ? 'SOLES (S/)' : 'DÓLARES AMERICANOS (USD)';
-      const num = n => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const filas = [];
-      vis.forEach(function (f) {
-        const canc = f.estado === 'PAGADO' ? 'PAGADO ' + self._f(f.ultimoPago) : f.vencido ? 'VENCIDO' : 'POR VENCER';
-        filas.push({ razon: f.razon, emision: self._f(f.fecha), numero: f.numero, moneda: monTxt(f.moneda), importe: num(f.conIgv ? f.total : f.valor),
-          detr: num(f.detr ? f.detraccion : 0), saldo: num(f.saldo), venc: self._f(f.vencimiento), canc: canc, rojo: f.vencido });
-        f.pagos.filter(p => p.tipo === 'NOTA CREDITO').forEach(function (p) {
-          filas.push({ razon: f.razon, emision: self._f(p.fecha), numero: p.operacion, moneda: monTxt(f.moneda), importe: '-' + num(p.monto), detr: num(0), saldo: '-' + num(p.monto), venc: '', canc: f.numero, rojo: false });
-        });
-      });
-      const cab = ['Razón Social', 'Fecha Emisión', 'Número de la Factura', 'Moneda', 'Importe', 'Monto de Detracción', 'Saldo a Pagar', 'Fecha de Vencimiento', 'Estado de Pago'];
-      const th = 'style="background:#d9d9d9;border:1px solid #808080;padding:4px 8px;font-family:Calibri,Arial;font-size:11pt;font-weight:bold;text-align:center"';
-      const td = (al, rojo) => 'style="border:1px solid #bfbfbf;padding:3px 8px;font-family:Calibri,Arial;font-size:11pt;text-align:' + al + ';color:' + (rojo ? '#c00000' : '#000') + '"';
-      const tot = vis.reduce((a, f) => a + f.saldo, 0);
-      let h = '<table style="border-collapse:collapse"><tr>' + cab.map(c => '<th ' + th + '>' + c + '</th>').join('') + '</tr>';
-      filas.forEach(function (x) {
-        h += '<tr><td ' + td('left', x.rojo) + '>' + esc(x.razon) + '</td><td ' + td('center', x.rojo) + '>' + x.emision + '</td><td ' + td('center', x.rojo) + '>' + esc(x.numero) +
-          '</td><td ' + td('left', x.rojo) + '>' + x.moneda + '</td><td ' + td('right', x.rojo) + '>' + x.importe + '</td><td ' + td('right', x.rojo) + '>' + x.detr +
-          '</td><td ' + td('right', x.rojo) + '>' + x.saldo + '</td><td ' + td('center', x.rojo) + '><b>' + x.venc + '</b></td><td ' + td('center', x.rojo) + '><b>' + esc(x.canc) + '</b></td></tr>';
-      });
-      h += '<tr><td colspan="6" ' + td('right', false) + '><b>TOTAL SALDO A PAGAR</b></td><td ' + td('right', false) + '><b>' + num(tot) + '</b></td><td colspan="2" ' + td('center', false) + '></td></tr></table>';
-      const txt = cab.join('\t') + '\n' + filas.map(x => [x.razon, x.emision, x.numero, x.moneda, x.importe, x.detr, x.saldo, x.venc, x.canc].join('\t')).join('\n');
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([h], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]);
-        mostrarMensaje('Estado de cuenta copiado (' + vis.length + ' factura(s)). Pégalo en el correo con Ctrl+V.', 'exito');
-      } catch (e) { mostrarMensaje('No se pudo copiar automáticamente.', 'error'); }
-    };
+    const copiar = function () { self._copiar(visibles()); };
 
     /* --- eventos --- */
     $('cbVolver').addEventListener('click', function () { modo = null; _refrescarSnapshotFormulario(); self._resumen(); });
@@ -336,7 +420,7 @@ const FormCobranzas = {
     $('cbNC').addEventListener('click', function () { abrirForm('NOTA CREDITO'); });
     $('cbHist').addEventListener('click', function () { modo = null; $('cbForm').innerHTML = ''; historial(); pintar(); });
     $('cbCopiar').addEventListener('click', copiar);
-    ['cbMostrar', 'cbMon'].forEach(id => { if ($(id)) $(id).addEventListener('change', pintar); });
+    ['cbMostrar', 'cbMon', 'cbDDesde', 'cbDHasta'].forEach(id => { if ($(id)) $(id).addEventListener('change', pintar); });
     $('cbBuscarF').addEventListener('input', pintar);
     $('cbTablaF').addEventListener('input', function (ev) {
       const i = ev.target.closest('.cb-aplicar'); if (!i) return;
