@@ -37,6 +37,7 @@ const FormCobranzas = {
         .cb-t td.i { text-align:left; } .cb-t td.c { text-align:center; }
         .cb-t tbody tr:hover td { background:#f5f9fd; }
         .cb-t tfoot td { font-weight:800; background:#eef3f8; position:sticky; bottom:0; }
+        #cbTablaT tfoot td { position:static; }
         .cb-b { display:inline-block; padding:2px 7px; border-radius:10px; font-size:.66rem; font-weight:800; white-space:nowrap; }
         .cb-b.FACTURADO { background:#e0e7ff; color:#3730a3; } .cb-b.PAGO { background:#fef3c7; color:#92400e; }
         .cb-b.PAGADO { background:#dcfce7; color:#166534; } .cb-b.VENCIDO { background:#fee2e2; color:#b91c1c; }
