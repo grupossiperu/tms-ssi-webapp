@@ -43,6 +43,23 @@ const MT = {
     return (textoVacio !== undefined ? '<option value="">' + esc(textoVacio) + '</option>' : '') +
       lista.map(v => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
   },
+  /** Placa / unidad: lista de placas + escribir otra (ej. genset UG-0116). Las escritas se recuerdan. */
+  campoPlaca: function (id, placas) {
+    let extra = [];
+    try { extra = JSON.parse(localStorage.getItem('tms_mt_placas_extra') || '[]'); } catch (e) { extra = []; }
+    const lista = Array.from(new Set((placas || []).concat(extra))).sort();
+    return '<input id="' + id + '" list="dl_' + id + '" autocomplete="off" placeholder="Elige o escribe (ej. UG-0116)" style="text-transform:uppercase">' + MT.datalist('dl_' + id, lista);
+  },
+  placa: function (el, placas) {
+    const v = String(el.value || '').trim().toUpperCase();
+    if (v && (placas || []).indexOf(v) === -1) {
+      try {
+        const extra = JSON.parse(localStorage.getItem('tms_mt_placas_extra') || '[]');
+        if (extra.indexOf(v) === -1) { extra.push(v); localStorage.setItem('tms_mt_placas_extra', JSON.stringify(extra)); }
+      } catch (e) { /* sin almacenamiento */ }
+    }
+    return v;
+  },
   datalist: function (id, lista) {
     return '<datalist id="' + id + '">' + lista.map(v => '<option value="' + esc(v) + '">').join('') + '</datalist>';
   },
@@ -1010,7 +1027,7 @@ const FormAlmacen = {
             ${self._campoUsuario('sUsuario')}
             <div class="campo"><label>Motivo de salida</label><select id="sMotivo">${MT.opciones(MT_MOTIVOS_SALIDA, '')}</select></div>
             <div class="campo ancho2"><label>Entregado a</label><select id="sEntregado">${MT.opciones(d.personal, '')}</select></div>
-            <div class="campo"><label>Placa</label><select id="sPlaca">${MT.opciones(d.placas, '')}</select></div>
+            <div class="campo"><label>Placa</label>${MT.campoPlaca('sPlaca', d.placas)}</div>
             <div class="campo"></div>
             <div class="campo ancho4"><label>Observación (opcional)</label><input type="text" id="sObs" autocomplete="off" style="text-transform:uppercase"></div>
           </div>
@@ -1055,12 +1072,12 @@ const FormAlmacen = {
         if (!usuario) return;
         if (!$('sMotivo').value) { mostrarMensaje('Seleccione el motivo de salida.', 'error'); return; }
         if (!$('sEntregado').value) { mostrarMensaje('Seleccione a quién se entregó.', 'error'); return; }
-        if (!$('sPlaca').value) { mostrarMensaje('Seleccione la placa.', 'error'); return; }
+        if (!$('sPlaca').value.trim()) { mostrarMensaje('Elige o escribe la placa o unidad (ej. UG-0116).', 'error'); return; }
         const err = lineas.validar();
         if (err) { mostrarMensaje(err, 'error'); return; }
         const r = await MT.llamar('mtGrabarSalidaLote', {
           fecha: $('sFecha').value, hora: $('sHora').value, usuario: usuario,
-          entregadoA: $('sEntregado').value, placa: $('sPlaca').value, motivo: $('sMotivo').value,
+          entregadoA: $('sEntregado').value, placa: MT.placa($('sPlaca'), d.placas), motivo: $('sMotivo').value,
           observacion: $('sObs').value, items: lineas.leer()
         });
         if (!r) return;
@@ -1483,7 +1500,7 @@ const FormAlmacen = {
           <div class="mt-seccion"><h3>Pieza dañada retirada de una unidad</h3>
             <div class="fila-campos">
               <div class="campo"><label>Fecha</label><input type="date" id="reFecha" value="${MT.hoy()}"></div>
-              <div class="campo"><label>Placa de origen *</label><select id="rePlaca">${MT.opciones(d.placas, '')}</select></div>
+              <div class="campo"><label>Placa de origen *</label>${MT.campoPlaca('rePlaca', d.placas)}</div>
               <div class="campo ancho2"><label>Observación (qué falla tiene)</label><input id="reObs" style="text-transform:uppercase"></div>
             </div>
             <table class="tabla-lista mt-lineas" id="tablaRetiro">
@@ -1547,7 +1564,7 @@ const FormAlmacen = {
               <div class="campo"><label>Cantidad *</label><input type="number" id="cjCantidad" min="0" step="any"></div>
               <div class="campo"><label>Fecha</label><input type="date" id="cjFecha" value="${MT.hoy()}"></div>
               <div class="campo"><label>Los vencidos vienen de *</label><select id="cjOrigen"><option value="ALMACEN">Stock del almacén</option><option value="UNIDAD">Una unidad (placa)</option></select></div>
-              <div class="campo" id="cjCampoPlaca" style="display:none"><label>Placa</label><select id="cjPlaca">${MT.opciones(d.placas, '')}</select></div>
+              <div class="campo" id="cjCampoPlaca" style="display:none"><label>Placa</label>${MT.campoPlaca('cjPlaca', d.placas)}</div>
               <div class="campo ancho2"><label>Taller / proveedor *</label><input id="cjTaller" list="dlTalleres2" style="text-transform:uppercase">${MT.datalist('dlTalleres2', talleres)}</div>
               <div class="campo"><label>Nueva fecha de vencimiento *</label><input type="date" id="cjVence"></div>
               <div class="campo"><label>Costo</label><input type="number" id="cjCosto" min="0" step="any"></div>
@@ -1597,11 +1614,11 @@ const FormAlmacen = {
       $('reAgregar').addEventListener('click', () => lineasRetiro.agregar().querySelector('.l-cod').focus());
       protegerClic($('reGrabar'), async function () {
         const u = usuario(); if (!u) return;
-        if (!$('rePlaca').value) { mostrarMensaje('Elige la placa de donde se retiró la pieza.', 'error'); return; }
+        if (!$('rePlaca').value.trim()) { mostrarMensaje('Elige la placa de donde se retiró la pieza.', 'error'); return; }
         if (raiz.querySelector('#tablaRetiro tr.l-sub')) { mostrarMensaje('Termina de crear el producto nuevo ("Guardar y seguir").', 'error'); return; }
         const err = lineasRetiro.validar(); if (err) { mostrarMensaje(err, 'error'); return; }
         const items = lineasRetiro.leer();
-        const r = await MT.llamar('mtRepRetiro', { usuario: u, fecha: $('reFecha').value, placa: $('rePlaca').value, observacion: $('reObs').value,
+        const r = await MT.llamar('mtRepRetiro', { usuario: u, fecha: $('reFecha').value, placa: MT.placa($('rePlaca'), d.placas), observacion: $('reObs').value,
           items: items.map(it => ({ codigo: it.codigo, cantidad: it.cantidad })), productosNuevos: items.filter(it => it.nuevo).map(it => it.nuevo) });
         if (!r) return;
         mostrarMensaje(r.mensaje, 'exito');
@@ -1655,9 +1672,9 @@ const FormAlmacen = {
         if (!(MT.num($('cjCantidad').value) > 0)) { mostrarMensaje('Escribe la cantidad.', 'error'); return; }
         if (!$('cjTaller').value.trim()) { mostrarMensaje('Escribe el taller o proveedor.', 'error'); return; }
         if (!$('cjVence').value) { mostrarMensaje('Escribe la nueva fecha de vencimiento.', 'error'); return; }
-        if ($('cjOrigen').value === 'UNIDAD' && !$('cjPlaca').value) { mostrarMensaje('Elige la placa.', 'error'); return; }
+        if ($('cjOrigen').value === 'UNIDAD' && !$('cjPlaca').value.trim()) { mostrarMensaje('Elige la placa.', 'error'); return; }
         const r = await MT.llamar('mtRepCanje', { usuario: u, fecha: $('cjFecha').value, codigo: $('cjProducto').value, cantidad: $('cjCantidad').value,
-          origen: $('cjOrigen').value, placa: $('cjPlaca').value, taller: $('cjTaller').value, nuevoVencimiento: $('cjVence').value,
+          origen: $('cjOrigen').value, placa: MT.placa($('cjPlaca'), d.placas), taller: $('cjTaller').value, nuevoVencimiento: $('cjVence').value,
           costo: $('cjCosto').value, moneda: $('cjMoneda').value, documento: $('cjDoc').value });
         if (!r) return;
         mostrarMensaje(r.mensaje, 'exito');
