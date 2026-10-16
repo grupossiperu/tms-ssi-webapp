@@ -676,7 +676,8 @@ const FormAlmacen = {
       }
       if (conPrecio) {
         const pc = MT.num(tr.querySelector('.l-pcon').value);
-        tr.querySelector('.l-tot').textContent = !isNaN(pc) && !isNaN(cant) ? MT.dinero(pc * cant) : '';
+        const ti = tr.querySelector('.l-totin');
+        if (document.activeElement !== ti) ti.value = !isNaN(pc) && !isNaN(cant) && cant > 0 ? MT.dinero(pc * cant) : '';
       }
       const mal = esSalida && p && !isNaN(cant) && cant > p.stock;
       tr.querySelector('.l-stock').classList.toggle('mt-bajo', !!mal);
@@ -717,9 +718,10 @@ const FormAlmacen = {
         '<label>Sale del almacén en<select class="n-ustock">' + MT.opciones(MT_UNIDADES_STOCK, '(igual a la de compra)') + '</select></label>' +
         '<label>Ubicación<input class="n-ubic" style="text-transform:uppercase" placeholder="Ej. A1" value="' + esc(n.ubicacion || '') + '"></label>' +
         '<label>Stock mínimo<input class="n-min" type="number" min="0" step="any" value="' + esc(n.stockMinimo === undefined ? '' : n.stockMinimo) + '"></label>' +
-        '<label>Moneda<select class="n-mon"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select></label>' +
-        '<label>Precio sin IGV<input class="n-sub" type="number" min="0" step="any" value="' + esc(n.total ? MT.r4(MT.num(n.total) / 1.18) : '') + '"></label>' +
-        '<label>Precio con IGV<input class="n-total" type="number" min="0" step="any" value="' + esc(n.total || '') + '"></label>' +
+        (conPrecio ? '' :
+          '<label>Moneda<select class="n-mon"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select></label>' +
+          '<label>Precio unitario sin IGV<input class="n-sub" type="number" min="0" step="any" value="' + esc(n.total ? MT.r4(MT.num(n.total) / 1.18) : '') + '"></label>' +
+          '<label>Precio unitario con IGV<input class="n-total" type="number" min="0" step="any" value="' + esc(n.total || '') + '"></label>') +
         '<label class="chk"><input type="checkbox" class="n-rep"' + (n.reparable ? ' checked' : '') + '> Reparable</label>' +
         '<label class="chk"><input type="checkbox" class="n-vence"' + (n.vence ? ' checked' : '') + '> Vence</label>' +
         '<label class="n-campo-fv" style="display:none">Fecha de vencimiento<input class="n-fv" type="date" value="' + esc(n.fechaVencimiento || '') + '"></label>' +
@@ -727,14 +729,17 @@ const FormAlmacen = {
         '<button type="button" class="mt-quitar n-quitar">✕ Quitar y volver a buscar</button>' +
         (editando ? '<button type="button" class="boton-secundario n-cerrar">Cerrar sin cambios</button>' : '') +
         '<button type="button" class="boton-primario n-ok">Guardar y seguir</button></div>' +
-        '<div class="mt-ayuda">Obligatorio: nombre, marca, tipo, categoría y unidad. Lo que dejes en blanco se completa después en Catálogo.</div></div></td>';
+        '<div class="mt-ayuda">Obligatorio: nombre, marca, tipo, categoría y unidad. Lo que dejes en blanco se completa después en Catálogo.' +
+        (conPrecio ? ' El <b>precio</b> se escribe en la fila del producto: unitario (con o sin IGV) o el total de la línea.' : '') + '</div></div></td>';
       tr.after(sub);
       sub.querySelector('.n-cat').value = n.categoria || 'NUEVO';
       if (n.unidad) sub.querySelector('.n-unidad').value = n.unidad;
-      if (n.moneda) sub.querySelector('.n-mon').value = n.moneda;
+      if (n.moneda && sub.querySelector('.n-mon')) sub.querySelector('.n-mon').value = n.moneda;
       if (n.unidadStock && n.unidadStock !== n.unidad) sub.querySelector('.n-ustock').value = n.unidadStock;
-      sub.querySelector('.n-sub').addEventListener('input', function () { const v = MT.num(this.value); sub.querySelector('.n-total').value = isNaN(v) ? '' : MT.r4(v * 1.18); });
-      sub.querySelector('.n-total').addEventListener('input', function () { const v = MT.num(this.value); sub.querySelector('.n-sub').value = isNaN(v) ? '' : MT.r4(v / 1.18); });
+      if (sub.querySelector('.n-sub')) {
+        sub.querySelector('.n-sub').addEventListener('input', function () { const v = MT.num(this.value); sub.querySelector('.n-total').value = isNaN(v) ? '' : MT.r4(v * 1.18); });
+        sub.querySelector('.n-total').addEventListener('input', function () { const v = MT.num(this.value); sub.querySelector('.n-sub').value = isNaN(v) ? '' : MT.r4(v / 1.18); });
+      }
       const verFv = function () { sub.querySelector('.n-campo-fv').style.display = sub.querySelector('.n-vence').checked ? '' : 'none'; };
       sub.querySelector('.n-vence').addEventListener('change', verFv);
       verFv();
@@ -752,7 +757,7 @@ const FormAlmacen = {
         const v = function (c) { return sub.querySelector(c).value.trim().toUpperCase(); };
         const datos = { producto: v('.n-prod'), marca: v('.n-marca'), tipo: v('.n-tipo'), categoria: sub.querySelector('.n-cat').value,
           unidad: sub.querySelector('.n-unidad').value, ubicacion: v('.n-ubic'), stockMinimo: sub.querySelector('.n-min').value.trim(),
-          moneda: sub.querySelector('.n-mon').value, total: sub.querySelector('.n-total').value.trim(),
+          moneda: sub.querySelector('.n-mon') ? sub.querySelector('.n-mon').value : '', total: sub.querySelector('.n-total') ? sub.querySelector('.n-total').value.trim() : '',
           factor: sub.querySelector('.n-factor').value.trim(), unidadStock: sub.querySelector('.n-ustock').value,
           reparable: sub.querySelector('.n-rep').checked, vence: sub.querySelector('.n-vence').checked,
           fechaVencimiento: sub.querySelector('.n-vence').checked ? sub.querySelector('.n-fv').value : '' };
@@ -787,7 +792,7 @@ const FormAlmacen = {
         '<td class="l-prod"></td><td class="l-stock mt-stock" style="text-align:center"></td>' +
         '<td><input class="l-cant" type="number" min="0" step="any" placeholder="0"><div class="mt-ayuda l-uni"></div></td>' +
         (!conPrecio ? '' : '<td><input class="l-psin" type="number" min="0" step="any" placeholder="0.00"></td><td><input class="l-pcon" type="number" min="0" step="any" placeholder="0.00"></td>' +
-          '<td class="l-tot" style="text-align:right;font-weight:700"></td>') +
+          '<td><input class="l-totin" type="number" min="0" step="any" placeholder="0.00" title="Total de la línea con IGV (cantidad × precio unitario)"></td>') +
         '<td style="text-align:center"><button type="button" class="btn-quitar-l" title="Quitar">×</button></td>';
       const cod = tr.querySelector('.l-cod'), cant = tr.querySelector('.l-cant');
       const elegir = function (p) { if (p) { cod.value = p.codigo; pintarFila(tr); cant.focus(); avisar(); } };
@@ -818,6 +823,14 @@ const FormAlmacen = {
         psin.addEventListener('input', function () { const v = MT.num(psin.value); pcon.value = isNaN(v) ? '' : MT.r4(v * 1.18); pintarFila(tr); avisar(); });
         pcon.addEventListener('input', function () { const v = MT.num(pcon.value); psin.value = isNaN(v) ? '' : MT.r4(v / 1.18); pintarFila(tr); avisar(); });
         pcon.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); agregar().querySelector('.l-cod').focus(); } });
+        const totin = tr.querySelector('.l-totin');
+        totin.addEventListener('input', function () {
+          const t = MT.num(totin.value), c = MT.num(cant.value);
+          if (!isNaN(t) && !isNaN(c) && c > 0) { pcon.value = MT.r4(t / c); psin.value = MT.r4(t / c / 1.18); }
+          pintarFila(tr); avisar();
+        });
+        totin.addEventListener('blur', function () { pintarFila(tr); });
+        totin.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); agregar().querySelector('.l-cod').focus(); } });
       }
       cant.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!conPrecio) agregar().querySelector('.l-cod').focus(); else tr.querySelector('.l-pcon').focus(); } });
       tr.querySelector('.l-lupa').addEventListener('click', function () { self.consultarStock(elegir); });
@@ -846,7 +859,7 @@ const FormAlmacen = {
     function leer() {
       return Array.from(tbody.querySelectorAll('tr.l-fila')).map(function (tr) {
         const it = { codigo: tr.querySelector('.l-cod').value.trim().toUpperCase(), cantidad: tr.querySelector('.l-cant').value.trim() };
-        if (conPrecio) { it.precioSinIgv = tr.querySelector('.l-psin').value.trim(); it.precioConIgv = tr.querySelector('.l-pcon').value.trim(); }
+        if (conPrecio) { it.precioSinIgv = tr.querySelector('.l-psin').value.trim(); it.precioConIgv = tr.querySelector('.l-pcon').value.trim(); it.totalLinea = tr.querySelector('.l-totin').value.trim(); }
         if (tr._nuevo) it.nuevo = tr._nuevo;
         return it;
       }).filter(function (x) { return x.codigo || x.cantidad; });
@@ -882,7 +895,7 @@ const FormAlmacen = {
     }
     agregar();
     return { agregar: agregar, leer: leer, validar: validar, limpiar: limpiar, cargar: cargar,
-      total: function () { return leer().reduce(function (a, it) { const pc = MT.num(it.precioConIgv), c = MT.num(it.cantidad); return a + (isNaN(pc) || isNaN(c) ? 0 : pc * c); }, 0); } };
+      total: function () { return leer().reduce(function (a, it) { const pc = MT.num(it.precioConIgv), c = MT.num(it.cantidad); return a + (isNaN(pc) || isNaN(c) ? 0 : Math.round(pc * c * 100) / 100); }, 0); } };
   },
 
   /** Actualiza el stock local con lo que devolvió el servidor. */
@@ -939,9 +952,10 @@ const FormAlmacen = {
         <div class="mt-seccion"><h3>Productos</h3>
           <table class="tabla-lista mt-lineas" id="tablaLineasIng">
             <colgroup><col style="width:27%"><col><col style="width:100px"><col style="width:120px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:36px"></colgroup>
-            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad (unid. de compra)</th><th>P. unit. sin IGV</th><th>P. unit. con IGV</th><th>Total</th><th></th></tr></thead><tbody></tbody>
+            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad (unid. de compra)</th><th>Precio UNITARIO sin IGV</th><th>Precio UNITARIO con IGV</th><th>Total de la línea con IGV</th><th></th></tr></thead><tbody></tbody>
           </table>
           <button type="button" class="mt-agregar" id="btnAgregarLineaIng">+ Agregar producto</button>
+          <div class="mt-ayuda">Precio: escribe el <b>unitario</b> (con o sin IGV) <b>o</b> el <b>total de la línea</b> como figura en la factura; lo demás se calcula solo. Ej.: 7 unidades a S/ 4.00 = total S/ 28.00.</div>
           <div id="iTotales" style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:end;justify-content:flex-end;margin-top:8px">
             <div><span class="mt-ayuda">Subtotal</span><div><b id="iSub">0.00</b></div></div>
             <div><span class="mt-ayuda">IGV</span><div><b id="iIgv">0.00</b></div></div>
@@ -1064,7 +1078,7 @@ const FormAlmacen = {
         MT.guardarUsuario(usuario);
         guardarBorrador();
         const items = lineasObj.leer();
-        const nuevos = items.filter(it => it.nuevo).map(it => it.nuevo);
+        const nuevos = items.filter(it => it.nuevo).map(it => Object.assign({}, it.nuevo, { total: it.precioConIgv || it.nuevo.total || '', moneda: $('iMoneda').value || it.nuevo.moneda || '' }));
         const r = await MT.llamar('mtGrabarIngresoV2', {
           fecha: $('iFecha').value, hora: $('iHora').value, usuario: usuario,
           tipoDocumento: $('iTipoDoc').value, documento: $('iDocumento').value, razonSocial: razon, ruc: proveedorNuevo ? proveedorNuevo.ruc : $('iRuc').value,
