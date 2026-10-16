@@ -60,6 +60,18 @@ const MT = {
     }
     return v;
   },
+  /** Número legible (hasta 2 decimales) + unidad. */
+  cant: function (n, unidad) {
+    const v = Math.round((Number(n) || 0) * 100) / 100;
+    return String(v) + (unidad ? ' ' + String(unidad).toLowerCase() : '');
+  },
+  /** Stock de un producto en su unidad de salida y, si compra en otra unidad, el equivalente. */
+  stockTxt: function (p) {
+    if (!p) return '';
+    const f = Number(p.factor) || 1, u = p.unidadStock || p.unidad || '';
+    return MT.cant(p.stock, u) + (f > 1 ? ' (' + MT.cant((Number(p.stock) || 0) / f, p.unidad) + ')' : '');
+  },
+  r4: function (n) { return Math.round((Number(n) || 0) * 10000) / 10000; },
   datalist: function (id, lista) {
     return '<datalist id="' + id + '">' + lista.map(v => '<option value="' + esc(v) + '">').join('') + '</datalist>';
   },
@@ -261,7 +273,9 @@ const MT_ESTILOS = `
 const MT_TIPOS_PRODUCTO = ['FILTRO', 'RODAJE', 'LUCES', 'MOTOR', 'FAJA', 'ACEITE', 'MANGUERA', 'TERMINAL', 'PERNO', 'SENSOR',
   'ELÉCTRICO', 'FRENO', 'LLANTA', 'HERRAMIENTA', 'ACCESORIO', 'EXTINTOR', 'CONSUMIBLE', 'TUBERIA', 'CHASIS', 'OTROS'];
 const MT_CATEGORIAS = ['NUEVO', 'USADO', 'REMAN', 'CORE'];
-const MT_UNIDADES = ['UNIDAD', 'DOCENA', 'CILINDRO', 'BALDE', 'CAJA', 'GALÓN', 'KILO', 'BOLSA', 'PAQUETE', 'JUEGO', 'LITRO', 'METRO', 'PAR', 'KIT'];
+const MT_UNIDADES = ['UNIDAD', 'DOCENA', 'CILINDRO', 'BALDE', 'CAJA', 'GALÓN', 'KILO', 'BOLSA', 'PAQUETE', 'JUEGO', 'LITRO', 'METRO', 'PAR', 'KIT', 'ROLLO', 'LIBRA'];
+// Unidades en que puede salir del almacén (unidad de stock).
+const MT_UNIDADES_STOCK = ['UNIDAD', 'GALÓN', 'LITRO', 'METRO', 'KILO', 'LIBRA', 'PAR', 'JUEGO'];
 const MT_MOTIVOS_SALIDA = ['MANTENIMIENTO', 'CONSUMO INTERNO', 'OTROS'];
 const MT_DIAS_AVISO_VENCIMIENTO = 30;
 
@@ -566,8 +580,9 @@ const FormAlmacen = {
    * En el INGRESO, si el código no existe, "Crear aquí" abre los datos mínimos
    * del producto nuevo en la misma fila (se crea al grabar el ingreso).
    */
-  _lineas: function (raiz, idTabla, esSalida, alCambiar) {
+  _lineas: function (raiz, idTabla, esSalida, alCambiar, opciones) {
     const self = this;
+    const conPrecio = !esSalida && !!(opciones && opciones.precios);
     const tbody = raiz.querySelector('#' + idTabla + ' tbody');
     const avisar = function () { if (typeof alCambiar === 'function') alCambiar(); };
     const camara = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
@@ -651,7 +666,18 @@ const FormAlmacen = {
         : '<span class="mt-bajo">No existe</span> <button type="button" class="mt-mini l-crear">Agregar producto nuevo</button>';
       tr.querySelector('.l-prod').innerHTML = html;
       tr.classList.toggle('l-ok-nuevo', !!tr._nuevo);
-      tr.querySelector('.l-stock').textContent = p ? p.stock : (tr._nuevo ? '0' : '');
+      tr.querySelector('.l-stock').textContent = p ? MT.stockTxt(p) : (tr._nuevo ? '0' : '');
+      const info = p || tr._nuevo;
+      const uLbl = tr.querySelector('.l-uni');
+      if (uLbl) {
+        const f = info ? (Number(info.factor) || 1) : 1;
+        const uC = info ? (info.unidad || '') : '', uS = info ? (info.unidadStock || info.unidad || '') : '';
+        uLbl.textContent = info ? (esSalida ? String(uS).toLowerCase() : String(uC).toLowerCase() + (f > 1 && !isNaN(cant) && cant > 0 ? ' = ' + MT.cant(cant * f, uS) : (f > 1 ? ' de ' + f + ' ' + String(uS).toLowerCase() : ''))) : '';
+      }
+      if (conPrecio) {
+        const pc = MT.num(tr.querySelector('.l-pcon').value);
+        tr.querySelector('.l-tot').textContent = !isNaN(pc) && !isNaN(cant) ? MT.dinero(pc * cant) : '';
+      }
       const mal = esSalida && p && !isNaN(cant) && cant > p.stock;
       tr.querySelector('.l-stock').classList.toggle('mt-bajo', !!mal);
       tr.querySelector('.l-cant').classList.toggle('falta', !!mal);
@@ -679,17 +705,20 @@ const FormAlmacen = {
       sub.className = 'l-sub';
       const dl = 'dlTiposNuevo' + Math.random().toString(36).slice(2, 7);
       const codTxt = tr.querySelector('.l-cod').value.trim().toUpperCase();
-      sub.innerHTML = '<td colspan="5"><div class="mt-crear">' +
+      sub.innerHTML = '<td colspan="' + (conPrecio ? 8 : 5) + '"><div class="mt-crear">' +
         '<div class="mt-crear-tit">Producto nuevo ' + (codTxt ? '(código ' + esc(codTxt) + ')' : '(sin código de barras: se generará uno)') + '</div>' +
         '<div class="mt-crear-g g4">' +
         '<label class="s2">Nombre del producto *<input class="n-prod" style="text-transform:uppercase" value="' + esc(n.producto || '') + '"></label>' +
         '<label>Marca *<input class="n-marca" style="text-transform:uppercase" placeholder="GENERICO si no tiene" value="' + esc(n.marca || '') + '"></label>' +
         '<label>Tipo de producto *<input class="n-tipo" list="' + dl + '" style="text-transform:uppercase" value="' + esc(n.tipo || '') + '">' + MT.datalist(dl, self._tiposProducto()) + '</label>' +
         '<label>Categoría *<select class="n-cat">' + MT.opciones(MT_CATEGORIAS) + '</select></label>' +
-        '<label>Unidad *<select class="n-unidad">' + MT.opciones(MT_UNIDADES, '') + '</select></label>' +
+        '<label>Unidad de compra *<select class="n-unidad">' + MT.opciones(MT_UNIDADES, '') + '</select></label>' +
+        '<label>Contenido por unidad<input class="n-factor" type="number" min="0" step="any" placeholder="1" value="' + esc(n.factor && n.factor > 1 ? n.factor : '') + '"></label>' +
+        '<label>Sale del almacén en<select class="n-ustock">' + MT.opciones(MT_UNIDADES_STOCK, '(igual a la de compra)') + '</select></label>' +
         '<label>Ubicación<input class="n-ubic" style="text-transform:uppercase" placeholder="Ej. A1" value="' + esc(n.ubicacion || '') + '"></label>' +
         '<label>Stock mínimo<input class="n-min" type="number" min="0" step="any" value="' + esc(n.stockMinimo === undefined ? '' : n.stockMinimo) + '"></label>' +
         '<label>Moneda<select class="n-mon"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select></label>' +
+        '<label>Precio sin IGV<input class="n-sub" type="number" min="0" step="any" value="' + esc(n.total ? MT.r4(MT.num(n.total) / 1.18) : '') + '"></label>' +
         '<label>Precio con IGV<input class="n-total" type="number" min="0" step="any" value="' + esc(n.total || '') + '"></label>' +
         '<label class="chk"><input type="checkbox" class="n-rep"' + (n.reparable ? ' checked' : '') + '> Reparable</label>' +
         '<label class="chk"><input type="checkbox" class="n-vence"' + (n.vence ? ' checked' : '') + '> Vence</label>' +
@@ -703,6 +732,9 @@ const FormAlmacen = {
       sub.querySelector('.n-cat').value = n.categoria || 'NUEVO';
       if (n.unidad) sub.querySelector('.n-unidad').value = n.unidad;
       if (n.moneda) sub.querySelector('.n-mon').value = n.moneda;
+      if (n.unidadStock && n.unidadStock !== n.unidad) sub.querySelector('.n-ustock').value = n.unidadStock;
+      sub.querySelector('.n-sub').addEventListener('input', function () { const v = MT.num(this.value); sub.querySelector('.n-total').value = isNaN(v) ? '' : MT.r4(v * 1.18); });
+      sub.querySelector('.n-total').addEventListener('input', function () { const v = MT.num(this.value); sub.querySelector('.n-sub').value = isNaN(v) ? '' : MT.r4(v / 1.18); });
       const verFv = function () { sub.querySelector('.n-campo-fv').style.display = sub.querySelector('.n-vence').checked ? '' : 'none'; };
       sub.querySelector('.n-vence').addEventListener('change', verFv);
       verFv();
@@ -721,10 +753,16 @@ const FormAlmacen = {
         const datos = { producto: v('.n-prod'), marca: v('.n-marca'), tipo: v('.n-tipo'), categoria: sub.querySelector('.n-cat').value,
           unidad: sub.querySelector('.n-unidad').value, ubicacion: v('.n-ubic'), stockMinimo: sub.querySelector('.n-min').value.trim(),
           moneda: sub.querySelector('.n-mon').value, total: sub.querySelector('.n-total').value.trim(),
+          factor: sub.querySelector('.n-factor').value.trim(), unidadStock: sub.querySelector('.n-ustock').value,
           reparable: sub.querySelector('.n-rep').checked, vence: sub.querySelector('.n-vence').checked,
           fechaVencimiento: sub.querySelector('.n-vence').checked ? sub.querySelector('.n-fv').value : '' };
         if (!datos.producto || !datos.marca || !datos.tipo || !datos.categoria || !datos.unidad) { mostrarMensaje('Completa nombre, marca, tipo, categoría y unidad del producto nuevo.', 'error'); return; }
         if (datos.total && !datos.moneda) { mostrarMensaje('Elige la moneda del precio.', 'error'); return; }
+        const fNum = MT.num(datos.factor);
+        if (datos.factor && (isNaN(fNum) || fNum <= 0)) { mostrarMensaje('El contenido por unidad debe ser mayor a 0 (ej. 5 para un balde de 5 galones).', 'error'); return; }
+        datos.factor = isNaN(fNum) || fNum <= 0 ? 1 : fNum;
+        if (!datos.unidadStock) datos.unidadStock = datos.unidad;
+        if (datos.factor > 1 && datos.unidadStock === datos.unidad) { mostrarMensaje('Si cada ' + datos.unidad.toLowerCase() + ' contiene ' + datos.factor + ', elige en qué unidad sale del almacén (galón, metro, kilo…).', 'error'); return; }
         let codigo = tr.querySelector('.l-cod').value.trim().toUpperCase();
         if (!codigo) codigo = self._generarCodigo(datos.producto, datos.marca, codigosNuevos(tr));
         if (self._producto(codigo)) { mostrarMensaje('El código ' + codigo + ' ya existe.', 'error'); return; }
@@ -733,12 +771,13 @@ const FormAlmacen = {
         tr._nuevo = datos;
         tr.querySelector('.l-cod').value = codigo;
         sub.remove();
+        if (conPrecio && datos.total && !tr.querySelector('.l-pcon').value) { tr.querySelector('.l-pcon').value = datos.total; tr.querySelector('.l-psin').value = MT.r4(MT.num(datos.total) / 1.18); }
         pintarFila(tr);
         tr.querySelector('.l-cant').focus();
         avisar();
       });
     }
-    function agregar(codigo, cantidad, nuevo) {
+    function agregar(codigo, cantidad, nuevo, precioSinIgv, precioConIgv) {
       const tr = document.createElement('tr');
       tr.className = 'l-fila';
       tr.innerHTML =
@@ -746,7 +785,9 @@ const FormAlmacen = {
         '<button type="button" class="l-lupa" title="Buscar en el stock">Buscar</button><button type="button" class="l-cam" title="Escanear con la cámara">' + camara + '</button>' +
         (esSalida ? '' : '<button type="button" class="l-nuevo" title="Producto nuevo sin código de barras">Nuevo</button>') + '</div></td>' +
         '<td class="l-prod"></td><td class="l-stock mt-stock" style="text-align:center"></td>' +
-        '<td><input class="l-cant" type="number" min="0" step="any" placeholder="0"></td>' +
+        '<td><input class="l-cant" type="number" min="0" step="any" placeholder="0"><div class="mt-ayuda l-uni"></div></td>' +
+        (!conPrecio ? '' : '<td><input class="l-psin" type="number" min="0" step="any" placeholder="0.00"></td><td><input class="l-pcon" type="number" min="0" step="any" placeholder="0.00"></td>' +
+          '<td class="l-tot" style="text-align:right;font-weight:700"></td>') +
         '<td style="text-align:center"><button type="button" class="btn-quitar-l" title="Quitar">×</button></td>';
       const cod = tr.querySelector('.l-cod'), cant = tr.querySelector('.l-cant');
       const elegir = function (p) { if (p) { cod.value = p.codigo; pintarFila(tr); cant.focus(); avisar(); } };
@@ -772,7 +813,13 @@ const FormAlmacen = {
         if (!esSalida) crearDesdeTexto(tr);
       });
       cant.addEventListener('input', function () { pintarFila(tr); avisar(); });
-      cant.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); agregar().querySelector('.l-cod').focus(); } });
+      if (conPrecio) {
+        const psin = tr.querySelector('.l-psin'), pcon = tr.querySelector('.l-pcon');
+        psin.addEventListener('input', function () { const v = MT.num(psin.value); pcon.value = isNaN(v) ? '' : MT.r4(v * 1.18); pintarFila(tr); avisar(); });
+        pcon.addEventListener('input', function () { const v = MT.num(pcon.value); psin.value = isNaN(v) ? '' : MT.r4(v / 1.18); pintarFila(tr); avisar(); });
+        pcon.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); agregar().querySelector('.l-cod').focus(); } });
+      }
+      cant.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!conPrecio) agregar().querySelector('.l-cod').focus(); else tr.querySelector('.l-pcon').focus(); } });
       tr.querySelector('.l-lupa').addEventListener('click', function () { self.consultarStock(elegir); });
       tr.querySelector('.l-cam').addEventListener('click', function () {
         MT.escanear(function (c) {
@@ -790,6 +837,7 @@ const FormAlmacen = {
       });
       if (codigo) cod.value = codigo;
       if (cantidad) cant.value = cantidad;
+      if (conPrecio && precioConIgv !== undefined && precioConIgv !== '') { tr.querySelector('.l-pcon').value = precioConIgv; tr.querySelector('.l-psin').value = precioSinIgv !== undefined && precioSinIgv !== '' ? precioSinIgv : MT.r4(MT.num(precioConIgv) / 1.18); }
       if (nuevo && nuevo.codigo === String(codigo || '').toUpperCase() && !self._producto(codigo)) tr._nuevo = nuevo;
       tbody.appendChild(tr);
       pintarFila(tr);
@@ -798,6 +846,7 @@ const FormAlmacen = {
     function leer() {
       return Array.from(tbody.querySelectorAll('tr.l-fila')).map(function (tr) {
         const it = { codigo: tr.querySelector('.l-cod').value.trim().toUpperCase(), cantidad: tr.querySelector('.l-cant').value.trim() };
+        if (conPrecio) { it.precioSinIgv = tr.querySelector('.l-psin').value.trim(); it.precioConIgv = tr.querySelector('.l-pcon').value.trim(); }
         if (tr._nuevo) it.nuevo = tr._nuevo;
         return it;
       }).filter(function (x) { return x.codigo || x.cantidad; });
@@ -810,6 +859,10 @@ const FormAlmacen = {
         if (!p) return 'Producto ' + (i + 1) + ': el código ' + (items[i].codigo || '(vacío)') + ' no existe.' + (esSalida ? '' : ' Usa "Crear aquí" para registrarlo.');
         const c = MT.num(items[i].cantidad);
         if (isNaN(c) || c <= 0) return 'Producto ' + (i + 1) + ' (' + p.producto + '): escribe la cantidad.';
+        if (conPrecio) {
+          const pc = MT.num(items[i].precioConIgv);
+          if (isNaN(pc) || pc < 0) return 'Producto ' + (i + 1) + ' (' + p.producto + '): escribe el precio unitario (sin IGV o con IGV).';
+        }
       }
       if (esSalida) {
         const suma = {};
@@ -824,11 +877,12 @@ const FormAlmacen = {
     function limpiar() { tbody.innerHTML = ''; agregar(); }
     function cargar(items) {
       tbody.innerHTML = '';
-      (items || []).forEach(function (it) { agregar(it.codigo, it.cantidad, it.nuevo); });
+      (items || []).forEach(function (it) { agregar(it.codigo, it.cantidad, it.nuevo, it.precioSinIgv, it.precioConIgv); });
       if (!tbody.children.length) agregar();
     }
     agregar();
-    return { agregar: agregar, leer: leer, validar: validar, limpiar: limpiar, cargar: cargar };
+    return { agregar: agregar, leer: leer, validar: validar, limpiar: limpiar, cargar: cargar,
+      total: function () { return leer().reduce(function (a, it) { const pc = MT.num(it.precioConIgv), c = MT.num(it.cantidad); return a + (isNaN(pc) || isNaN(c) ? 0 : pc * c); }, 0); } };
   },
 
   /** Actualiza el stock local con lo que devolvió el servidor. */
@@ -863,6 +917,7 @@ const FormAlmacen = {
             ${self._campoUsuario('iUsuario')}
             <div class="campo"><label>Tipo de documento</label><select id="iTipoDoc"><option value=""></option><option value="FACTURA">FACTURA</option><option value="BOLETA">BOLETA</option></select></div>
             <div class="campo"><label>N° de documento</label><input type="text" id="iDocumento" autocomplete="off" placeholder="Ej. F001-000123" style="text-transform:uppercase"></div>
+            <div class="campo"><label>Moneda</label><select id="iMoneda"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select></div>
             <div class="campo ancho2"><label>Razón social (proveedor)</label>
               <div class="mt-buscar"><select id="iRazon" style="flex:1">${MT.opciones(self._datos.proveedores.map(p => p.razonSocial), '')}</select><button type="button" id="btnNuevoProv">+ Nuevo</button></div></div>
             <div class="campo"><label>RUC</label><input type="text" id="iRuc" readonly></div>
@@ -883,10 +938,17 @@ const FormAlmacen = {
         </div>
         <div class="mt-seccion"><h3>Productos</h3>
           <table class="tabla-lista mt-lineas" id="tablaLineasIng">
-            <colgroup><col style="width:36%"><col><col style="width:70px"><col style="width:110px"><col style="width:40px"></colgroup>
-            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad ingresada</th><th></th></tr></thead><tbody></tbody>
+            <colgroup><col style="width:27%"><col><col style="width:100px"><col style="width:120px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:36px"></colgroup>
+            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad (unid. de compra)</th><th>P. unit. sin IGV</th><th>P. unit. con IGV</th><th>Total</th><th></th></tr></thead><tbody></tbody>
           </table>
           <button type="button" class="mt-agregar" id="btnAgregarLineaIng">+ Agregar producto</button>
+          <div id="iTotales" style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:end;justify-content:flex-end;margin-top:8px">
+            <div><span class="mt-ayuda">Subtotal</span><div><b id="iSub">0.00</b></div></div>
+            <div><span class="mt-ayuda">IGV</span><div><b id="iIgv">0.00</b></div></div>
+            <div><span class="mt-ayuda">Total</span><div><b id="iTot" style="font-size:1.1rem">0.00</b></div></div>
+            <div class="campo" style="margin:0;width:170px"><label>Total según comprobante</label><input id="iTotalComp" type="number" min="0" step="any" placeholder="Opcional"></div>
+            <div id="iCuadre" style="font-size:.8rem;font-weight:700;min-width:160px"></div>
+          </div>
           <div class="mt-ayuda">Escanea el código o escribe el nombre, marca, tipo o categoría y elige de la lista. Si no está, elige "+ Agregar producto nuevo" (o "Nuevo" si no tiene código de barras). Lo escrito se guarda solo en este navegador hasta que grabes.</div>
           <div class="mt-botones">
             <button class="boton-secundario" id="btnInicioIngreso">Inicio</button>
@@ -905,6 +967,7 @@ const FormAlmacen = {
           if (!lineas.length && !$('iDocumento').value.trim()) { localStorage.removeItem(CLAVE_BORRADOR); return; }
           localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
             fecha: $('iFecha').value, tipoDoc: $('iTipoDoc').value, documento: $('iDocumento').value.trim().toUpperCase(),
+            moneda: $('iMoneda').value, totalComp: $('iTotalComp').value,
             razon: $('iRazon').value, provNuevo: provNuevo ? { razonSocial: $('iProvRazon').value, ruc: $('iProvRuc').value, vendedor: $('iProvVendedor').value,
               direccion: $('iProvDireccion').value, ubicacion: $('iProvMapa').value } : null,
             obs: $('iObs').value, lineas: lineas
@@ -912,8 +975,20 @@ const FormAlmacen = {
         } catch (e) { /* sin almacenamiento */ }
       };
       let espera = null;
-      const programarBorrador = function () { clearTimeout(espera); espera = setTimeout(guardarBorrador, 400); };
-      const lineasObj = self._lineas(raiz, 'tablaLineasIng', false, programarBorrador);
+      const totales = function () {
+        if (typeof lineasObj === 'undefined' || !lineasObj) return;
+        const mon = $('iMoneda').value || '';
+        const tot = lineasObj.total(), sub = tot / 1.18;
+        $('iSub').textContent = mon + ' ' + MT.dinero(sub); $('iIgv').textContent = mon + ' ' + MT.dinero(tot - sub); $('iTot').textContent = mon + ' ' + MT.dinero(tot);
+        const tc = MT.num($('iTotalComp').value);
+        const el = $('iCuadre');
+        if (isNaN(tc) || tc <= 0) { el.textContent = ''; return; }
+        const dif = Math.round((tc - tot) * 100) / 100;
+        el.style.color = Math.abs(dif) <= 0.1 ? '#166534' : '#b91c1c';
+        el.textContent = Math.abs(dif) <= 0.1 ? '✔ Cuadra con el comprobante' : (dif > 0 ? 'Faltan ' : 'Sobran ') + mon + ' ' + MT.dinero(Math.abs(dif));
+      };
+      const programarBorrador = function () { try { totales(); } catch (e) { /* aún cargando */ } clearTimeout(espera); espera = setTimeout(guardarBorrador, 400); };
+      const lineasObj = self._lineas(raiz, 'tablaLineasIng', false, programarBorrador, { precios: true });
       const mostrarProvNuevo = function (si) {
         provNuevo = si;
         $('iProvNuevo').style.display = si ? '' : 'none';
@@ -930,7 +1005,7 @@ const FormAlmacen = {
         const p = self._datos.proveedores.find(x => x.razonSocial === this.value);
         $('iRuc').value = p ? p.ruc : '';
       });
-      ['iFecha', 'iTipoDoc', 'iDocumento', 'iRazon', 'iObs', 'iProvRazon', 'iProvRuc', 'iProvVendedor', 'iProvDireccion', 'iProvMapa'].forEach(id => {
+      ['iFecha', 'iTipoDoc', 'iDocumento', 'iMoneda', 'iTotalComp', 'iRazon', 'iObs', 'iProvRazon', 'iProvRuc', 'iProvVendedor', 'iProvDireccion', 'iProvMapa'].forEach(id => {
         $(id).addEventListener('input', programarBorrador); $(id).addEventListener('change', programarBorrador);
       });
       // Recuperar el borrador
@@ -938,6 +1013,7 @@ const FormAlmacen = {
         if (borrador.fecha) $('iFecha').value = borrador.fecha;
         $('iTipoDoc').value = borrador.tipoDoc || '';
         $('iDocumento').value = borrador.documento || '';
+        $('iMoneda').value = borrador.moneda || ''; $('iTotalComp').value = borrador.totalComp || '';
         $('iObs').value = borrador.obs || '';
         if (borrador.provNuevo) {
           mostrarProvNuevo(true);
@@ -947,10 +1023,12 @@ const FormAlmacen = {
         }
         else if (borrador.razon) { $('iRazon').value = borrador.razon; $('iRazon').dispatchEvent(new Event('change')); }
         lineasObj.cargar(borrador.lineas);
+        totales();
       }
       function limpiarTodo() {
         lineasObj.limpiar();
-        ['iTipoDoc', 'iDocumento', 'iRazon', 'iRuc', 'iObs'].forEach(id => { $(id).value = ''; });
+        ['iTipoDoc', 'iDocumento', 'iMoneda', 'iTotalComp', 'iRazon', 'iRuc', 'iObs'].forEach(id => { $(id).value = ''; });
+        totales();
         mostrarProvNuevo(false);
         $('iFecha').value = MT.hoy(); $('iHora').value = MT.ahora();
         try { localStorage.removeItem(CLAVE_BORRADOR); } catch (e) { /* no-op */ }
@@ -964,6 +1042,7 @@ const FormAlmacen = {
         if (!usuario) { mostrarMensaje('Ingrese el usuario.', 'error'); return; }
         if (!$('iTipoDoc').value) { mostrarMensaje('Elige si el documento es FACTURA o BOLETA.', 'error'); return; }
         if (!$('iDocumento').value.trim()) { mostrarMensaje('Escribe el número de ' + $('iTipoDoc').value.toLowerCase() + '.', 'error'); return; }
+        if (!$('iMoneda').value) { mostrarMensaje('Elige la moneda del comprobante (S/ o $).', 'error'); return; }
         let razon = $('iRazon').value, proveedorNuevo = null;
         if (provNuevo) {
           razon = $('iProvRazon').value.trim().toUpperCase();
@@ -979,6 +1058,9 @@ const FormAlmacen = {
         if (raiz.querySelector('#tablaLineasIng tr.l-sub')) { mostrarMensaje('Hay un producto nuevo sin terminar: completa sus datos y pulsa "Guardar y seguir".', 'error'); return; }
         const err = lineasObj.validar();
         if (err) { mostrarMensaje(err, 'error'); return; }
+        const tcomp = MT.num($('iTotalComp').value), tsum = lineasObj.total();
+        if (!isNaN(tcomp) && tcomp > 0 && Math.abs(tcomp - tsum) > 0.1) { mostrarMensaje('La suma de los productos (' + MT.dinero(tsum) + ') no cuadra con el total del comprobante (' + MT.dinero(tcomp) + '). Revisa precios o cantidades.', 'error'); return; }
+        if (!confirmar('Total del ' + $('iTipoDoc').value.toLowerCase() + ' ' + $('iDocumento').value.trim().toUpperCase() + ': ' + $('iMoneda').value + ' ' + MT.dinero(tsum) + '\n\n¿Grabar el ingreso?')) return;
         MT.guardarUsuario(usuario);
         guardarBorrador();
         const items = lineasObj.leer();
@@ -987,7 +1069,8 @@ const FormAlmacen = {
           fecha: $('iFecha').value, hora: $('iHora').value, usuario: usuario,
           tipoDocumento: $('iTipoDoc').value, documento: $('iDocumento').value, razonSocial: razon, ruc: proveedorNuevo ? proveedorNuevo.ruc : $('iRuc').value,
           observacion: $('iObs').value, proveedorNuevo: proveedorNuevo, productosNuevos: nuevos,
-          items: items.map(it => ({ codigo: it.codigo, cantidad: it.cantidad }))
+          moneda: $('iMoneda').value, totalComprobante: $('iTotalComp').value,
+          items: items.map(it => ({ codigo: it.codigo, cantidad: it.cantidad, precioSinIgv: it.precioSinIgv, precioConIgv: it.precioConIgv }))
         });
         if (!r) return;
         // Productos y proveedor nuevos entran a la lista local
@@ -995,6 +1078,7 @@ const FormAlmacen = {
           if (!self._producto(n.codigo)) self._datos.productos.push({ codigo: n.codigo, producto: n.producto, marca: n.marca, tipo: n.tipo, categoria: n.categoria || 'NUEVO', unidad: n.unidad,
             ubicacion: n.ubicacion || '', stockMinimo: MT.num(n.stockMinimo) || 0, moneda: n.moneda || '', total: MT.num(n.total) || 0, vence: n.vence ? 'SÍ' : 'NO',
             fechaVencimiento: n.fechaVencimiento || '', stock: 0, proveedor: razon, reparable: !!n.reparable,
+            factor: Number(n.factor) || 1, unidadStock: n.unidadStock || n.unidad, precioStock: (MT.num(n.total) || 0) / (Number(n.factor) || 1),
             incompleto: !(n.ubicacion && n.moneda && n.total !== '' && n.stockMinimo !== ''), danado: 0, enReparacion: 0 });
         });
         if (proveedorNuevo && !self._datos.proveedores.find(p => p.razonSocial === razon)) self._datos.proveedores.push({ razonSocial: razon, ruc: proveedorNuevo.ruc,
@@ -1035,8 +1119,8 @@ const FormAlmacen = {
         </div>
         <div class="mt-seccion"><h3>Productos</h3>
           <table class="tabla-lista mt-lineas" id="tablaLineasSal">
-            <colgroup><col style="width:30%"><col><col style="width:80px"><col style="width:120px"><col style="width:40px"></colgroup>
-            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad entregada</th><th></th></tr></thead><tbody></tbody>
+            <colgroup><col style="width:30%"><col><col style="width:120px"><col style="width:130px"><col style="width:40px"></colgroup>
+            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad entregada (unid. de salida)</th><th></th></tr></thead><tbody></tbody>
           </table>
           <button type="button" class="mt-agregar" id="btnAgregarLineaSal">+ Agregar producto</button>
           <div class="mt-botones">
@@ -1106,8 +1190,8 @@ const FormAlmacen = {
         <div id="kResumen" class="mt-kres"></div>
         <div class="mt-tabla-wrap">
           <table class="tabla-lista" id="tablaKardex">
-            <thead><tr><th>Fecha</th><th>Hora</th><th>Movimiento</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th>Referencia / placa</th><th>Entregado a</th><th>Usuario</th><th>Observación</th></tr></thead>
-            <tbody><tr><td colspan="10" style="text-align:center;color:#8b95a1;padding:16px;">Elige un producto.</td></tr></tbody>
+            <thead><tr><th>Fecha</th><th>Hora</th><th>Movimiento</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th>Detalle (comprobante · proveedor · precio / entregado a · unidad · motivo)</th><th>Usuario</th><th>Observación</th></tr></thead>
+            <tbody><tr><td colspan="9" style="text-align:center;color:#8b95a1;padding:16px;">Elige un producto.</td></tr></tbody>
           </table>
         </div>
         <div class="mt-botones"><button class="boton-secundario" id="kCerrar">Cerrar</button></div>
@@ -1123,15 +1207,25 @@ const FormAlmacen = {
         if (!r) return;
         const m = r.movimientos || [];
         const ent = m.reduce((a, x) => a + x.entrada, 0), sal = m.reduce((a, x) => a + x.salida, 0);
+        const uS = (r.producto && r.producto.unidadStock) || p.unidadStock || p.unidad || '';
+        const detalle = function (x) {
+          if (x.ingreso) {
+            const g = x.ingreso;
+            return '<b>' + esc([g.tipoDoc, g.documento].filter(Boolean).join(' ')) + '</b> · ' + esc(g.proveedor) +
+              (g.cantidadCompra ? '<br><small>' + esc(MT.cant(g.cantidadCompra, g.unidadCompra)) + (g.precioConIgv ? ' × ' + esc(g.moneda) + ' ' + MT.dinero(g.precioConIgv) + ' c/IGV (' + MT.dinero(g.precioSinIgv) + ' s/IGV) = ' + esc(g.moneda) + ' ' + MT.dinero(g.totalLinea) : '') + '</small>' : '');
+          }
+          if (x.salida && (x.entregadoA || x.placa)) return '<b>' + esc(x.entregadoA) + '</b> · ' + esc(x.placa) + (x.motivo ? '<br><small>' + esc(x.motivo) + (x.estadoMant && x.estadoMant !== 'NO APLICA' ? ' (' + esc(x.estadoMant) + ')' : '') + '</small>' : '');
+          return esc(x.referencia || '');
+        };
         $('kResumen').innerHTML = '<div><span>Producto</span><b>' + esc(p.producto) + '</b><small>' + esc([p.codigo, p.marca, p.ubicacion].filter(Boolean).join(' · ')) + '</small></div>' +
-          '<div><span>Stock actual</span><b>' + esc(p.stock) + '</b>' + (p.stockMinimo ? '<small>mínimo ' + esc(p.stockMinimo) + '</small>' : '') + '</div>' +
-          '<div><span>Total ingresado</span><b>' + ent + '</b></div><div><span>Total entregado</span><b>' + sal + '</b></div><div><span>Movimientos</span><b>' + m.length + '</b></div>';
+          '<div><span>Stock actual</span><b>' + esc(MT.stockTxt(p)) + '</b>' + (p.stockMinimo ? '<small>mínimo ' + esc(MT.cant(p.stockMinimo, uS)) + '</small>' : '') + '</div>' +
+          '<div><span>Total ingresado</span><b>' + esc(MT.cant(ent, uS)) + '</b></div><div><span>Total entregado</span><b>' + esc(MT.cant(sal, uS)) + '</b></div><div><span>Movimientos</span><b>' + m.length + '</b></div>';
         $('tablaKardex').querySelector('tbody').innerHTML = m.length ? m.map(x =>
           '<tr><td>' + esc(MT.fechaVista(x.fecha)) + '</td><td>' + esc(String(x.hora || '').slice(0, 5)) + '</td><td>' + esc(x.tipo) + '</td>' +
-          '<td style="text-align:center;color:#166534;font-weight:700">' + (x.entrada || '') + '</td><td style="text-align:center;color:#b91c1c;font-weight:700">' + (x.salida || '') + '</td>' +
-          '<td style="text-align:center;font-weight:800">' + x.saldo + '</td><td>' + esc(x.referencia) + '</td><td>' + esc(x.entregadoA || '') + '</td>' +
+          '<td style="text-align:center;color:#166534;font-weight:700">' + (x.entrada ? MT.cant(x.entrada) : '') + '</td><td style="text-align:center;color:#b91c1c;font-weight:700">' + (x.salida ? MT.cant(x.salida) : '') + '</td>' +
+          '<td style="text-align:center;font-weight:800">' + MT.cant(x.saldo) + '</td><td>' + detalle(x) + '</td>' +
           '<td>' + esc(x.usuario) + '</td><td>' + esc(x.observacion) + '</td></tr>').join('')
-          : '<tr><td colspan="10" style="text-align:center;color:#8b95a1;padding:16px;">Sin movimientos.</td></tr>';
+          : '<tr><td colspan="9" style="text-align:center;color:#8b95a1;padding:16px;">Sin movimientos.</td></tr>';
       }
       $('kVer').addEventListener('click', ver);
       $('kProducto').addEventListener('change', function () { if (self._producto(this.value)) ver(); });
@@ -1262,7 +1356,7 @@ const FormAlmacen = {
         <div class="mt-ayuda" id="stCuenta" style="margin-bottom:6px"></div>
         <div class="mt-tabla-wrap" style="max-height:56vh">
           <table class="tabla-lista" id="tablaStockP">
-            <thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Tipo</th><th>Ubicación</th><th>Operativo</th><th>Dañado</th><th>En reparación</th><th>Mínimo</th><th>Precio</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Producto</th><th>Marca</th><th>Tipo</th><th>Ubicación</th><th>Stock</th><th>Dañado</th><th>En reparación</th><th>Mínimo</th><th>Precio</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -1285,13 +1379,13 @@ const FormAlmacen = {
         $('stCuenta').textContent = filas.length + ' producto(s)';
         $('tablaStockP').querySelector('tbody').innerHTML = filas.map(p => {
           const bajo = p.stockMinimo > 0 && p.stock <= p.stockMinimo;
-          return '<tr><td>' + esc(p.codigo) + '</td><td><b>' + esc(p.producto) + '</b>' + (p.incompleto ? ' <span class="mt-incompleto">datos incompletos</span>' : '') + '</td><td>' + esc(p.marca) +
-            '</td><td>' + esc(p.tipo) + '</td><td>' + esc(p.ubicacion) + '</td><td class="mt-stock' + (bajo ? ' mt-bajo' : '') + '" style="text-align:center">' + esc(p.stock) +
+          return '<tr data-fila-k="' + esc(p.codigo) + '" style="cursor:pointer" title="Ver movimientos"><td>' + esc(p.codigo) + '</td><td><b>' + esc(p.producto) + '</b>' + (p.incompleto ? ' <span class="mt-incompleto">datos incompletos</span>' : '') + '</td><td>' + esc(p.marca) +
+            '</td><td>' + esc(p.tipo) + '</td><td>' + esc(p.ubicacion) + '</td><td class="mt-stock' + (bajo ? ' mt-bajo' : '') + '" style="text-align:center">' + esc(MT.stockTxt(p)) +
             '</td><td style="text-align:center;color:#991b1b;font-weight:700">' + (p.danado || '') + '</td><td style="text-align:center;color:#92400e;font-weight:700">' + (p.enReparacion || '') +
-            '</td><td style="text-align:center">' + (p.stockMinimo || '') + '</td><td style="white-space:nowrap">' + (p.total ? esc(p.moneda) + ' ' + MT.dinero(p.total) : '') +
-            '</td><td><button type="button" class="mt-mini" data-k="' + esc(p.codigo) + '">Kardex</button></td></tr>';
+            '</td><td style="text-align:center">' + (p.stockMinimo ? esc(MT.cant(p.stockMinimo, p.unidadStock || p.unidad)) : '') + '</td><td style="white-space:nowrap">' + (p.total ? esc(p.moneda) + ' ' + MT.dinero(p.total) + ((Number(p.factor) || 1) > 1 ? '<br><small>' + esc(p.moneda) + ' ' + MT.dinero(p.precioStock) + ' / ' + esc(String(p.unidadStock).toLowerCase()) + '</small>' : '') : '') +
+            '</td><td><button type="button" class="mt-mini">Movimientos</button></td></tr>';
         }).join('') || '<tr><td colspan="11" style="text-align:center;color:#8b95a1;padding:16px;">Sin productos con estos filtros.</td></tr>';
-        raiz.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => self.abrirKardex(b.dataset.k)));
+        raiz.querySelectorAll('[data-fila-k]').forEach(tr => tr.addEventListener('click', () => self.abrirKardex(tr.dataset.filaK)));
       }
       let espera = null;
       $('stBuscar').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(pintar, 200); });
@@ -1323,10 +1417,13 @@ const FormAlmacen = {
             <div class="campo"><label>Marca *</label><input id="ceMarca" style="text-transform:uppercase"></div>
             <div class="campo"><label>Tipo *</label><input id="ceTipo" list="dlCatTipos" style="text-transform:uppercase">${MT.datalist('dlCatTipos', tipos)}</div>
             <div class="campo"><label>Categoría *</label><select id="ceCategoria">${MT.opciones(MT_CATEGORIAS, '')}</select></div>
-            <div class="campo"><label>Unidad *</label><select id="ceUnidad">${MT.opciones(MT_UNIDADES, '')}</select></div>
+            <div class="campo"><label>Unidad de compra *</label><select id="ceUnidad">${MT.opciones(MT_UNIDADES, '')}</select></div>
+            <div class="campo"><label>Contenido por unidad</label><input id="ceFactor" type="number" min="0" step="any" placeholder="1"></div>
+            <div class="campo"><label>Sale del almacén en</label><select id="ceUStock">${MT.opciones(MT_UNIDADES_STOCK, '(igual a la de compra)')}</select></div>
             <div class="campo"><label>Ubicación *</label><input id="ceUbicacion" style="text-transform:uppercase"></div>
             <div class="campo"><label>Stock mínimo *</label><input id="ceMin" type="number" min="0" step="any"></div>
             <div class="campo"><label>Moneda *</label><select id="ceMoneda">${MT.opciones(['S/', '$'], '')}</select></div>
+            <div class="campo"><label>Precio sin IGV</label><input id="ceSub" type="number" min="0" step="any"></div>
             <div class="campo"><label>Precio con IGV *</label><input id="ceTotal" type="number" min="0" step="any"></div>
             <div class="campo"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ceRep" style="width:auto"> Reparable</label>
               <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ceVence" style="width:auto"> Vence</label></div>
@@ -1396,6 +1493,11 @@ const FormAlmacen = {
           $('ceCodigo').value = p.codigo; $('ceProducto').value = p.producto; $('ceMarca').value = p.marca; $('ceTipo').value = p.tipo;
           $('ceCategoria').value = p.categoria || ''; $('ceUnidad').value = p.unidad || ''; $('ceUbicacion').value = p.ubicacion || '';
           $('ceMin').value = p.incompleto && !p.stockMinimo ? '' : (p.stockMinimo || 0); $('ceMoneda').value = p.moneda || ''; $('ceTotal').value = p.total || '';
+          $('ceSub').value = p.total ? MT.r4(p.total / 1.18) : '';
+          $('ceFactor').value = (Number(p.factor) || 1) > 1 ? p.factor : '';
+          const us = p.unidadStock && p.unidadStock !== p.unidad ? p.unidadStock : '';
+          if (us && !Array.from($('ceUStock').options).some(o => o.value === us)) $('ceUStock').insertAdjacentHTML('beforeend', '<option value="' + esc(us) + '">' + esc(us) + '</option>');
+          $('ceUStock').value = us;
           $('ceRep').checked = !!p.reparable; $('ceVence').checked = /^S/i.test(String(p.vence || ''));
           $('ceFechaV').value = /^\d{4}-\d{2}-\d{2}/.test(String(p.fechaVencimiento || '')) ? String(p.fechaVencimiento).slice(0, 10) : '';
           $('cEditor').style.display = '';
@@ -1404,14 +1506,22 @@ const FormAlmacen = {
         });
         protegerClic($('ceGuardar'), async function () {
           if (!actual) return;
+          const fac = MT.num($('ceFactor').value);
+          const f1 = isNaN(fac) || fac <= 0 ? 1 : fac, f0 = Number(actual.factor) || 1;
+          if (f1 > 1 && !$('ceUStock').value) { mostrarMensaje('Elige en qué unidad sale del almacén (galón, metro, kilo…).', 'error'); return; }
+          if (f1 !== f0 && actual.stock && !confirmar('Vas a cambiar el contenido por unidad de ' + f0 + ' a ' + f1 + '.\nEl stock actual (' + actual.stock + ') se convertirá a ' + MT.r4(actual.stock * f1 / f0) + ' ' + ($('ceUStock').value || $('ceUnidad').value).toLowerCase() + ' y quedará anotado en sus movimientos.\n\nRecuerda ajustar el stock mínimo a la nueva unidad. ¿Continuar?')) return;
           const d = {
+            factor: f1, unidadStock: $('ceUStock').value || $('ceUnidad').value,
             codigo: actual.codigo, producto: $('ceProducto').value, marca: $('ceMarca').value, tipo: $('ceTipo').value, categoria: $('ceCategoria').value,
             unidad: $('ceUnidad').value, ubicacion: $('ceUbicacion').value, stockMinimo: $('ceMin').value, moneda: $('ceMoneda').value, total: $('ceTotal').value,
             reparable: $('ceRep').checked, tieneVencimiento: $('ceVence').checked, fechaVencimiento: $('ceFechaV').value
           };
           const r = await MT.llamar('mtActualizarProducto', d);
           if (!r) return;
+          const f0b = Number(actual.factor) || 1;
           Object.assign(actual, r.producto || {});
+          if ((Number(actual.factor) || 1) !== f0b && actual.stock) actual.stock = MT.r4(actual.stock * (Number(actual.factor) || 1) / f0b);
+          actual.precioStock = (Number(actual.total) || 0) / (Number(actual.factor) || 1);
           mostrarMensaje(r.mensaje, 'exito');
           $('cEditor').style.display = 'none';
           pintar();
