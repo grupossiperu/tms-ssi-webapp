@@ -77,6 +77,8 @@ const FormAlmacenCorregir = {
 
   /* ---------- utilidades ---------- */
   _f: function (v) { return MT.fechaVista(v); },
+  /** Nombre del producto desde el catálogo (en algunas hojas la columna Producto guarda otro código). */
+  _nom: function (codigo, texto) { const p = FormAlmacen._producto ? FormAlmacen._producto(codigo) : null; return (p && p.producto) || texto || codigo; },
   _motivoHtml: '<div class="campo ancho4"><label>Motivo del cambio *</label><textarea id="dlMotivo" placeholder="Ej. se digitó mal la cantidad; la factura dice 4"></textarea></div>',
   /** Abre un cuadro con campos; al aceptar llama a la acción y recarga. */
   _dialogo: function (titulo, campos, accion, armar, aviso) {
@@ -134,7 +136,7 @@ const FormAlmacenCorregir = {
       });
       const lista = Object.keys(docs).map(k => docs[k]).filter(function (g) {
         const todoAnul = g.lineas.every(l => l.anulado);
-        return self._pasa(g.fecha, [g.tipoDoc, g.documento, g.proveedor].concat(g.lineas.map(l => l.producto + ' ' + l.codigo)).join(' '), todoAnul);
+        return self._pasa(g.fecha, [g.tipoDoc, g.documento, g.proveedor].concat(g.lineas.map(l => self._nom(l.codigo, l.producto) + ' ' + l.producto + ' ' + l.codigo)).join(' '), todoAnul);
       }).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
       const va = self._raiz.querySelector('#crAnul').checked;
       self._raiz.querySelector('#crTb').innerHTML = lista.length ? lista.slice(0, 200).map(function (g) {
@@ -144,7 +146,7 @@ const FormAlmacenCorregir = {
         return '<tr class="doc"><td>' + esc(self._f(g.fecha)) + '</td><td colspan="3">' + esc((g.tipoDoc || 'S/D') + ' ' + (g.documento || '')) + ' · ' + esc(g.proveedor) +
           ' <small>(' + vivas.length + ' línea(s))</small></td><td>' + (tot ? esc(g.moneda) + ' ' + MT.dinero(tot) : '') + '</td><td><div class="cr-acc">' +
           (vivas.length ? '<button class="cr-b" data-doc="' + filasDoc + '">Editar comprobante</button><button class="cr-b rojo" data-anuldoc="' + vivas.map(l => l.fila).join(',') + '">Anular todo</button>' : '') +
-          '</div></td></tr>' + g.lineas.filter(l => va || !l.anulado).map(l => '<tr class="' + (l.anulado ? 'anulado' : '') + '"><td></td><td>' + esc(l.producto) + ' <small>(' + esc(l.codigo) + ')</small>' +
+          '</div></td></tr>' + g.lineas.filter(l => va || !l.anulado).map(l => '<tr class="' + (l.anulado ? 'anulado' : '') + '"><td></td><td>' + esc(self._nom(l.codigo, l.producto)) + ' <small>(' + esc(l.codigo) + ')</small>' +
             (l.anulado ? '<br><small>' + esc(l.observacion) + '</small>' : '') + '</td><td>' + esc(MT.cant(l.cantidad, l.unidadCompra)) + (l.cantidadStock && l.unidadStock && l.unidadStock !== l.unidadCompra ? '<br><small>= ' + esc(MT.cant(l.cantidadStock, l.unidadStock)) + '</small>' : '') +
             '</td><td>' + (l.precioConIgv ? esc(l.moneda) + ' ' + MT.dinero(l.precioConIgv) : '<small>sin precio</small>') + '</td><td>' + (l.totalLinea ? MT.dinero(l.totalLinea) : '') + '</td><td><div class="cr-acc">' +
             (l.anulado ? '' : '<button class="cr-b" data-lin="' + l.fila + '">Editar</button><button class="cr-b rojo" data-anullin="' + l.fila + '">Anular</button>') + '</div></td></tr>').join('');
@@ -168,7 +170,7 @@ const FormAlmacenCorregir = {
         }, 0);
       } else if (b.dataset.lin) {
         const l = linea(b.dataset.lin);
-        self._dialogo('Editar línea: ' + l.producto, '<div class="campo"><label>Cantidad (' + esc((l.unidadCompra || '').toLowerCase()) + ')</label><input type="number" step="any" min="0" id="dCant"></div>' +
+        self._dialogo('Editar línea: ' + self._nom(l.codigo, l.producto), '<div class="campo"><label>Cantidad (' + esc((l.unidadCompra || '').toLowerCase()) + ')</label><input type="number" step="any" min="0" id="dCant"></div>' +
           '<div class="campo"><label>P. unit. con IGV</label><input type="number" step="any" min="0" id="dPcon"></div><div class="campo"><label>Total línea</label><input id="dTot" readonly></div>',
           'mtCorrIngresoLinea', function (q) { return { fila: l.fila, cantidad: q('dCant').value, precioConIgv: q('dPcon').value }; },
           'Si bajas la cantidad y esas unidades ya salieron, no se podrá grabar.');
@@ -180,7 +182,7 @@ const FormAlmacenCorregir = {
         }, 0);
       } else if (b.dataset.anullin || b.dataset.anuldoc) {
         const filas = (b.dataset.anullin || b.dataset.anuldoc).split(',').map(Number);
-        self._dialogo(filas.length > 1 ? 'Anular comprobante completo (' + filas.length + ' líneas)' : 'Anular línea: ' + linea(filas[0]).producto, '',
+        self._dialogo(filas.length > 1 ? 'Anular comprobante completo (' + filas.length + ' líneas)' : 'Anular línea: ' + self._nom(linea(filas[0]).codigo, linea(filas[0]).producto), '',
           'mtCorrAnularIngreso', function () { return { filas: filas }; }, 'Las unidades de este ingreso se quitarán del stock. Si ya salieron, no se podrá anular.');
       }
     });
@@ -193,9 +195,9 @@ const FormAlmacenCorregir = {
     c.innerHTML = self._filtros() + '<div class="cr-wrap"><table class="cr-t"><colgroup><col style="width:9%"><col><col style="width:11%"><col style="width:20%"><col style="width:14%"><col style="width:140px"></colgroup>' +
       '<thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Entregado a · unidad</th><th>Motivo</th><th></th></tr></thead><tbody id="crTb"></tbody></table></div>';
     const pintar = function () {
-      const lista = self._d.salidas.filter(x => self._pasa(x.fecha, [x.producto, x.codigo, x.entregadoA, x.placa, x.motivo].join(' '), x.anulado))
+      const lista = self._d.salidas.filter(x => self._pasa(x.fecha, [self._nom(x.codigo, x.producto), x.producto, x.codigo, x.entregadoA, x.placa, x.motivo].join(' '), x.anulado))
         .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || b.fila - a.fila);
-      self._raiz.querySelector('#crTb').innerHTML = lista.length ? lista.slice(0, 300).map(x => '<tr class="' + (x.anulado ? 'anulado' : '') + '"><td>' + esc(self._f(x.fecha)) + '</td><td>' + esc(x.producto) +
+      self._raiz.querySelector('#crTb').innerHTML = lista.length ? lista.slice(0, 300).map(x => '<tr class="' + (x.anulado ? 'anulado' : '') + '"><td>' + esc(self._f(x.fecha)) + '</td><td>' + esc(self._nom(x.codigo, x.producto)) +
         ' <small>(' + esc(x.codigo) + ')</small>' + (x.anulado ? '<br><small>' + esc(x.observacion) + '</small>' : '') + '</td><td>' + esc(MT.cant(x.cantidad)) + '</td><td>' + esc(x.entregadoA) + ' · ' + esc(x.placa) +
         '</td><td>' + esc(x.motivo) + (x.estadoMant && x.estadoMant !== 'NO APLICA' ? '<br><small>' + esc(x.estadoMant) + '</small>' : '') + '</td><td><div class="cr-acc">' +
         (x.anulado ? '' : '<button class="cr-b" data-ed="' + x.fila + '">Editar</button>' + (x.estadoMant === 'ASOCIADO' ? '' : '<button class="cr-b rojo" data-an="' + x.fila + '">Anular</button>')) +
@@ -207,7 +209,7 @@ const FormAlmacenCorregir = {
       const b = ev.target.closest('button'); if (!b) return;
       const x = self._d.salidas.find(s => s.fila === Number(b.dataset.ed || b.dataset.an));
       if (b.dataset.ed) {
-        self._dialogo('Editar salida: ' + x.producto, '<div class="campo"><label>Cantidad</label><input type="number" step="any" min="0" id="dCant"' + (x.estadoMant === 'ASOCIADO' ? ' disabled' : '') + '></div>' +
+        self._dialogo('Editar salida: ' + self._nom(x.codigo, x.producto), '<div class="campo"><label>Cantidad</label><input type="number" step="any" min="0" id="dCant"' + (x.estadoMant === 'ASOCIADO' ? ' disabled' : '') + '></div>' +
           '<div class="campo"><label>Entregado a</label><input id="dEnt" list="crDlPer" style="text-transform:uppercase">' + MT.datalist('crDlPer', d.personal || []) + '</div>' +
           '<div class="campo"><label>Placa / unidad</label>' + MT.campoPlaca('dPlaca', d.placas || []) + '</div>' +
           '<div class="campo"><label>Motivo de salida</label><input id="dMot" style="text-transform:uppercase"></div><div class="campo ancho2"><label>Observación</label><input id="dObs" style="text-transform:uppercase"></div>',
@@ -215,7 +217,7 @@ const FormAlmacenCorregir = {
           x.estadoMant === 'ASOCIADO' ? 'Esta salida ya está asociada a un mantenimiento: no se puede cambiar la cantidad.' : '');
         setTimeout(function () { const q = id => document.getElementById(id); q('dCant').value = x.cantidad; q('dEnt').value = x.entregadoA; q('dPlaca').value = x.placa; q('dMot').value = x.motivo; q('dObs').value = x.observacion; }, 0);
       } else if (b.dataset.an) {
-        self._dialogo('Anular salida: ' + x.producto + ' (' + MT.cant(x.cantidad) + ')', '', 'mtCorrAnularSalida', function () { return { fila: x.fila }; }, 'El producto vuelve al stock.');
+        self._dialogo('Anular salida: ' + self._nom(x.codigo, x.producto) + ' (' + MT.cant(x.cantidad) + ')', '', 'mtCorrAnularSalida', function () { return { fila: x.fila }; }, 'El producto vuelve al stock.');
       }
     });
     pintar();
