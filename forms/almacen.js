@@ -1342,7 +1342,8 @@ const FormAlmacen = {
     const n = this._datos ? this._alertas().total : 0;
     const t = function (k, txt) { return '<button type="button" class="mt-tab' + (k === activa ? ' activo' : '') + '" data-tab-stock="' + k + '">' + txt + '</button>'; };
     return '<div class="mt-tabs">' + t('stock', 'Stock') + t('kardex', 'Kardex por producto') +
-      t('alertas', 'Alertas' + (n ? '<span class="n">' + n + '</span>' : '')) + '</div>';
+      t('alertas', 'Alertas' + (n ? '<span class="n">' + n + '</span>' : '')) +
+      (typeof FormAlmacenCorregir !== 'undefined' && FormAlmacenCorregir.esMaestro() ? t('corregir', 'Corregir (maestros)') : '') + '</div>';
   },
   _wireTabsStock: function (raiz) {
     const self = this;
@@ -1350,7 +1351,7 @@ const FormAlmacen = {
       b.addEventListener('click', function () {
         if (b.classList.contains('activo')) return;
         const k = b.dataset.tabStock;
-        if (k === 'stock') self.abrirStock(); else if (k === 'kardex') self.abrirKardex(); else self.abrirAlertas();
+        if (k === 'stock') self.abrirStock(); else if (k === 'kardex') self.abrirKardex(); else if (k === 'corregir') FormAlmacenCorregir.abrir(); else self.abrirAlertas();
       });
     });
   },
