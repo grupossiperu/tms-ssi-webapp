@@ -505,13 +505,13 @@ Object.assign(FormLiquidacionConductores, {
     const n = etiquetas.length, ns = series.length;
     const alto = Math.max(360, Math.min(1500, 110 + n * (ns * 26 + 16)));
     const c = self._canvas(titulo, alto), g = c.g;
-    const x0 = 330, x1 = c.W - 150, y0 = ns > 1 ? 104 : 74, h = c.H - y0 - 20;
+    const x0 = 450, x1 = c.W - 150, y0 = ns > 1 ? 104 : 74, h = c.H - y0 - 20;
     const max = Math.max(1, ...series.map(s => Math.max(0, ...s.datos)));
     const fila = h / Math.max(1, n), bh = Math.min(30, (fila - 12) / ns);
     if (ns > 1) series.forEach((s, i) => { g.fillStyle = s.color; g.fillRect(24 + i * 260, 64, 22, 22); g.fillStyle = '#334155'; g.font = '22px Calibri, Arial'; g.fillText(s.nombre, 54 + i * 260, 76); });
     etiquetas.forEach((e, i) => {
       const yc = y0 + fila * i + fila / 2;
-      g.fillStyle = '#334155'; g.font = '21px Calibri, Arial'; g.textAlign = 'right'; g.fillText(self._corto(e, 30), x0 - 12, yc); g.textAlign = 'left';
+      g.fillStyle = '#334155'; g.font = '20px Calibri, Arial'; g.textAlign = 'right'; g.fillText(self._corto(e, 38), x0 - 12, yc); g.textAlign = 'left';
       series.forEach((s, j) => {
         const v = s.datos[i] || 0, w = Math.max(0, v) / max * (x1 - x0);
         const y = yc - (ns * bh) / 2 + j * bh;
