@@ -220,6 +220,15 @@
           <span class="tile-texto"><strong>Cobranzas</strong><small>Deuda por cliente, abonos y vencidos</small></span>
         </button>
 
+        <button class="tile" id="btn-liquidacion-conductores">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="9" cy="7" r="3"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"></path><path d="M16 11h5"></path><path d="M16 15h5"></path><path d="M18.5 8.5v9"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Liquidación de conductores</strong><small>Gastos, bonos y depósitos por viaje</small></span>
+        </button>
+
         <button class="tile" id="btn-deposito">
           <span class="tile-icono">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -468,7 +477,8 @@
     'forms/cierreCombustible.js',
     'forms/rendimiento.js',
     'forms/graficoCombustible.js',
-    'forms/cobranzas.js'
+    'forms/cobranzas.js',
+    'forms/liquidacionConductores.js'
   ].forEach(function (src) {
     document.write('<script src="' + src + '?v=' + window.__VERSION_APP + '"><\/script>');
   });
