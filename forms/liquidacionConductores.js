@@ -87,7 +87,7 @@ const FormLiquidacionConductores = {
       $('lqCerrar').addEventListener('click', cerrarPanel);
       $('lqCopiar').addEventListener('click', () => self._copiar());
       $('lqImprimir').addEventListener('click', () => self._imprimir());
-      $('lqExcel').addEventListener('click', () => self._excel());
+      $('lqExcel').addEventListener('click', () => self._dlgExportar());
       $('lqHist').addEventListener('click', () => self._historial());
       await self._cargar(true);
     }, { ancho: true });
@@ -140,7 +140,7 @@ const FormLiquidacionConductores = {
   },
   _suma: function (lista) {
     return lista.reduce(function (a, f) {
-      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'gastos', 'depositado', 'extras', 'totalDep', 'totalBono'].forEach(k => { a[k] = (a[k] || 0) + (f[k] || 0); });
+      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'gastos', 'depositado', 'extras', 'totalDep', 'totalBono', 'km'].forEach(k => { a[k] = (a[k] || 0) + (f[k] || 0); });
       a.n = (a.n || 0) + 1; return a;
     }, {});
   },
@@ -420,6 +420,317 @@ const FormLiquidacionConductores = {
       : '<p style="color:#64748b">Aún no hay cambios registrados.</p>';
   }
 };
+
+/* =========================================================================
+ * v85 — Exportar liquidaciones a Excel (hoja Liquidaciones + hoja Dashboard
+ * con indicadores, cuadros y gráficos). Usa ExcelJS (cdnjs); si no carga,
+ * se exporta con SheetJS sin gráficos.
+ * ========================================================================= */
+Object.assign(FormLiquidacionConductores, {
+  _EST_TXT: { PENDIENTE: 'Pendiente de liquidar', LIQUIDADO: 'Por depositar', DEPOSITADO: 'Depositado' },
+
+  _cargarExcelJS: function () {
+    if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+    return new Promise(function (ok, mal) {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+      s.onload = () => window.ExcelJS ? ok(window.ExcelJS) : mal(new Error('ExcelJS'));
+      s.onerror = mal; document.head.appendChild(s);
+    });
+  },
+
+  _dlgExportar: function () {
+    const self = this, $ = id => self._raiz.querySelector('#' + id);
+    if (!self._filas.length) { mostrarMensaje('No hay viajes cargados.', 'error'); return; }
+    const quins = Array.from(new Set(self._filas.map(f => f.quincena).filter(Boolean))).sort().reverse();
+    const qAct = $('lqQuin').value || quins[0] || '';
+    const opQ = sel => quins.map(q => '<option value="' + q + '"' + (q === sel ? ' selected' : '') + '>' + self._qTxt(q) + '</option>').join('');
+    const conds = Array.from(new Set(self._filas.map(f => f.conductor))).sort();
+    const cAct = $('lqCond').value;
+    const ov = self._dlg('Exportar liquidaciones a Excel',
+      '<div class="g">' +
+      '<div><label>Quincena desde</label><select data-qd>' + opQ(qAct) + '</select></div>' +
+      '<div><label>Quincena hasta</label><select data-qh>' + opQ(qAct) + '</select></div>' +
+      '<div><label>Estado</label><select data-e><option value="">Todos</option><option value="PENDIENTE">Pendientes de liquidar</option><option value="LIQUIDADO">Por depositar</option><option value="DEPOSITADO">Depositados</option></select></div>' +
+      '</div>' +
+      '<label style="margin-top:10px">Conductores <a href="#" data-todos style="font-weight:400;margin-left:8px">Todos</a> · <a href="#" data-ninguno style="font-weight:400">Ninguno</a></label>' +
+      '<div data-conds style="max-height:190px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;font-size:.74rem">' +
+      conds.map(c => '<label style="font-weight:400;color:#1e293b;display:flex;gap:6px;align-items:center"><input type="checkbox" value="' + esc(c) + '"' + (!cAct || cAct === c ? ' checked' : '') + ' style="width:auto"> ' + esc(c) + '</label>').join('') + '</div>' +
+      '<div class="nota" data-prev style="font-size:.78rem;color:#1c3a5e;font-weight:700"></div>' +
+      '<p class="nota">El Excel trae 2 hojas: <b>Liquidaciones</b> (todas las liquidaciones, una por conductor, lista para imprimir) y <b>Dashboard</b> (indicadores, cuadros y gráficos).</p>',
+      'Descargar Excel', async function (o) {
+        const sel = self._selExport(o);
+        if (!sel.vis.length) return 'No hay viajes con esos filtros.';
+        o.querySelector('[data-ok]').textContent = 'Generando…';
+        try { await self._generarExcel(sel); } catch (e) { o.querySelector('[data-ok]').textContent = 'Descargar Excel'; return 'No se pudo generar el Excel: ' + e.message; }
+        return '';
+      });
+    ov.querySelector('.lq-dlg').style.width = 'min(720px,96vw)';
+    const prev = () => { const s = self._selExport(ov); const t = self._suma(s.vis);
+      ov.querySelector('[data-prev]').textContent = s.vis.length + ' viaje(s) · ' + s.conds.length + ' conductor(es) · Total bono S/ ' + self._m(t.totalBono || 0); };
+    ov.querySelectorAll('select, input').forEach(i => i.addEventListener('change', prev));
+    ov.querySelector('[data-todos]').addEventListener('click', e => { e.preventDefault(); ov.querySelectorAll('[data-conds] input').forEach(i => { i.checked = true; }); prev(); });
+    ov.querySelector('[data-ninguno]').addEventListener('click', e => { e.preventDefault(); ov.querySelectorAll('[data-conds] input').forEach(i => { i.checked = false; }); prev(); });
+    prev();
+  },
+
+  _selExport: function (ov) {
+    let qd = ov.querySelector('[data-qd]').value, qh = ov.querySelector('[data-qh]').value;
+    if (qd > qh) { const x = qd; qd = qh; qh = x; }
+    const est = ov.querySelector('[data-e]').value;
+    const marc = {}; ov.querySelectorAll('[data-conds] input:checked').forEach(i => { marc[i.value] = 1; });
+    const vis = this._filas.filter(f => f.quincena >= qd && f.quincena <= qh && (!est || f.liqEstado === est) && marc[f.conductor])
+      .sort((a, b) => String(a.conductor).localeCompare(String(b.conductor)) || String(a.fecha).localeCompare(String(b.fecha)));
+    return { vis: vis, qd: qd, qh: qh, est: est, conds: Array.from(new Set(vis.map(f => f.conductor))).sort() };
+  },
+
+  _periodoTxt: function (s) {
+    return (s.qd === s.qh ? 'Quincena ' + this._qTxt(s.qd) : 'Del ' + this._qTxt(s.qd) + ' al ' + this._qTxt(s.qh)) + ' · ' + (s.est ? this._EST_TXT[s.est] : 'Todos los estados');
+  },
+
+  /* ------------------------- gráficos (canvas → PNG) ------------------------- */
+  _canvas: function (titulo, alto) {
+    const W = 1200, H = alto || 640;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#d6dee8'; g.lineWidth = 2; g.strokeRect(1, 1, W - 2, H - 2);
+    g.fillStyle = '#1c3a5e'; g.font = 'bold 30px Calibri, Arial'; g.textBaseline = 'middle'; g.fillText(titulo, 24, 34);
+    return { cv: cv, g: g, W: W, H: H };
+  },
+  _corto: function (t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; },
+  /** Barras horizontales. series: [{nombre, color, datos[]}] */
+  _grafBarras: function (titulo, etiquetas, series, fmt) {
+    const self = this;
+    const n = etiquetas.length, ns = series.length;
+    const alto = Math.max(360, Math.min(1500, 110 + n * (ns * 26 + 16)));
+    const c = self._canvas(titulo, alto), g = c.g;
+    const x0 = 330, x1 = c.W - 150, y0 = ns > 1 ? 104 : 74, h = c.H - y0 - 20;
+    const max = Math.max(1, ...series.map(s => Math.max(0, ...s.datos)));
+    const fila = h / Math.max(1, n), bh = Math.min(30, (fila - 12) / ns);
+    if (ns > 1) series.forEach((s, i) => { g.fillStyle = s.color; g.fillRect(24 + i * 260, 64, 22, 22); g.fillStyle = '#334155'; g.font = '22px Calibri, Arial'; g.fillText(s.nombre, 54 + i * 260, 76); });
+    etiquetas.forEach((e, i) => {
+      const yc = y0 + fila * i + fila / 2;
+      g.fillStyle = '#334155'; g.font = '21px Calibri, Arial'; g.textAlign = 'right'; g.fillText(self._corto(e, 30), x0 - 12, yc); g.textAlign = 'left';
+      series.forEach((s, j) => {
+        const v = s.datos[i] || 0, w = Math.max(0, v) / max * (x1 - x0);
+        const y = yc - (ns * bh) / 2 + j * bh;
+        g.fillStyle = s.color; g.fillRect(x0, y + 2, Math.max(2, w), bh - 4);
+        g.fillStyle = '#0f172a'; g.font = 'bold 19px Calibri, Arial'; g.fillText(fmt(v), x0 + w + 8, y + bh / 2);
+      });
+    });
+    g.strokeStyle = '#94a3b8'; g.lineWidth = 2; g.beginPath(); g.moveTo(x0, y0 - 6); g.lineTo(x0, c.H - 16); g.stroke();
+    return { url: c.cv.toDataURL('image/png'), alto: c.H };
+  },
+  _grafDona: function (titulo, etiquetas, datos, colores, fmt) {
+    const c = this._canvas(titulo, 520), g = c.g;
+    const tot = datos.reduce((a, b) => a + Math.max(0, b), 0) || 1;
+    const cx = 270, cy = 290, R = 190, r = 105;
+    let a = -Math.PI / 2;
+    datos.forEach((v, i) => {
+      const d = Math.max(0, v) / tot * Math.PI * 2; if (!d) return;
+      g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a, a + d); g.closePath(); g.fillStyle = colores[i]; g.fill(); a += d;
+    });
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill();
+    g.fillStyle = '#1c3a5e'; g.font = 'bold 28px Calibri, Arial'; g.textAlign = 'center'; g.fillText(fmt(tot), cx, cy); g.textAlign = 'left';
+    etiquetas.forEach((e, i) => {
+      const y = 140 + i * 74;
+      g.fillStyle = colores[i]; g.fillRect(540, y - 16, 32, 32);
+      g.fillStyle = '#334155'; g.font = '26px Calibri, Arial'; g.fillText(e, 586, y - 6);
+      g.fillStyle = '#0f172a'; g.font = 'bold 24px Calibri, Arial'; g.fillText(fmt(datos[i]) + '  (' + Math.round(Math.max(0, datos[i]) / tot * 100) + '%)', 586, y + 22);
+    });
+    return { url: c.cv.toDataURL('image/png'), alto: c.H };
+  },
+
+  /* ------------------------------ cálculos ------------------------------ */
+  _agrupar: function (lista, clave) {
+    const g = {};
+    lista.forEach(f => { const k = clave(f) || '(SIN DATO)'; (g[k] = g[k] || []).push(f); });
+    return g;
+  },
+
+  _generarExcel: async function (sel) {
+    const self = this;
+    let X;
+    try { X = await self._cargarExcelJS(); } catch (e) { return self._excelSimple(sel); }
+    const vis = sel.vis, t = self._suma(vis);
+    const n2 = x => Math.round((Number(x) || 0) * 100) / 100;
+    const AZ = 'FF1C3A5E', CEL = 'FFBCD3EE', VER = 'FFD7E8C9', NAR = 'FFFFD8A8', GRIS = 'FFF1F5F9';
+    const borde = { top: { style: 'thin', color: { argb: 'FFC9D3DF' } }, left: { style: 'thin', color: { argb: 'FFC9D3DF' } }, bottom: { style: 'thin', color: { argb: 'FFC9D3DF' } }, right: { style: 'thin', color: { argb: 'FFC9D3DF' } } };
+    const relleno = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
+    const wb = new X.Workbook(); wb.creator = 'TMS SSI'; wb.created = new Date();
+
+    /* ---------------- Hoja 1: Liquidaciones ---------------- */
+    const ws = wb.addWorksheet('Liquidaciones', { views: [{ showGridLines: false }] });
+    ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } };
+    const cols = [['QUINCENA', 15], ['FECHA', 11], ['PLACA', 9], ['CLIENTE', 11], ['DESTINO', 20], ['CÓDIGO', 15], ['N° VIÁTICO', 10], ['KM', 8], ['PEAJES', 10], ['VIÁTICO', 10], ['LLANTA', 9], ['COCHERA', 9],
+      ['LAVADO', 9], ['OTROS', 9], ['MOTIVO OTROS', 22], ['BONO', 9], ['FERIADO', 9], ['DOMINICAL', 10], ['TOTAL GASTOS', 12], ['MONTO DEPOSITADO', 12], ['EXTRAS', 9], ['TOTAL DEPÓSITO', 12], ['TOTAL BONO', 12], ['ESTADO', 15]];
+    const NC = cols.length;
+    cols.forEach((c, i) => { ws.getColumn(i + 1).width = c[1]; });
+    const numCols = [8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23];
+    let r = 1;
+    ws.mergeCells(r, 1, r, NC); ws.getCell(r, 1).value = 'TRANSPORTES SSI S.A.C. — LIQUIDACIÓN DE CONDUCTORES';
+    ws.getCell(r, 1).font = { bold: true, size: 15, color: { argb: AZ } }; r++;
+    ws.mergeCells(r, 1, r, NC); ws.getCell(r, 1).value = self._periodoTxt(sel) + ' · ' + vis.length + ' viajes · ' + sel.conds.length + ' conductores · generado ' + new Date().toLocaleString('es-PE');
+    ws.getCell(r, 1).font = { size: 10, color: { argb: 'FF475569' } }; r += 2;
+    const grupos = self._agrupar(vis, f => f.conductor);
+    const nombres = Object.keys(grupos).sort();
+    nombres.forEach(function (cond, gi) {
+      const lista = grupos[cond], s = self._suma(lista);
+      const ests = Array.from(new Set(lista.map(f => self._EST_TXT[f.liqEstado] || f.liqEstado))).join(' / ');
+      ws.mergeCells(r, 1, r, NC);
+      const ch = ws.getCell(r, 1);
+      ch.value = 'CONDUCTOR: ' + cond + '   ·   ' + lista.length + ' viaje(s)   ·   Total bono S/ ' + self._m(s.totalBono) + '   ·   ' + ests;
+      ch.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }; ch.fill = relleno(AZ); ch.alignment = { vertical: 'middle' };
+      ws.getRow(r).height = 22; r++;
+      const hr = ws.getRow(r);
+      cols.forEach((c, i) => {
+        const cel = hr.getCell(i + 1); cel.value = c[0];
+        cel.font = { bold: true, size: 9, color: { argb: AZ } }; cel.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; cel.border = borde;
+        cel.fill = relleno(i >= 19 && i <= 21 ? VER : i === 22 ? NAR : CEL);
+      });
+      hr.height = 28; r++;
+      lista.forEach(function (f) {
+        const v = [self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
+          n2(f.bono), n2(f.feriado), n2(f.dominical), n2(f.gastos), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), (self._EST_TXT[f.liqEstado] || f.liqEstado) + (f.modPor ? ' · ✎ ' + f.modPor : '')];
+        const row = ws.getRow(r);
+        v.forEach((x, i) => {
+          const cel = row.getCell(i + 1); cel.value = x; cel.border = borde; cel.font = { size: 9 };
+          if (numCols.indexOf(i + 1) >= 0) { cel.numFmt = i === 7 ? '#,##0' : '#,##0.00;[Red]-#,##0.00;""'; }
+          if (i === 18) { cel.font = { size: 9, bold: true }; cel.fill = relleno(GRIS); }
+          if (i === 21) { cel.font = { size: 9, bold: true }; cel.fill = relleno('FFE6F2DC'); }
+          if (i === 22) { cel.font = { size: 9, bold: true, color: { argb: 'FFB45309' } }; cel.fill = relleno('FFFFF3E0'); }
+          if (i === 4 || i === 14 || i === 23) cel.alignment = { wrapText: true, vertical: 'middle' };
+        });
+        r++;
+      });
+      const tr = ws.getRow(r);
+      tr.getCell(1).value = 'TOTAL ' + cond; ws.mergeCells(r, 1, r, 7);
+      const tv = { 8: s.km, 9: s.peajes, 10: s.viatico, 11: s.llanta, 12: s.cochera, 13: s.lavado, 14: s.otros, 16: s.bono, 17: s.feriado, 18: s.dominical, 19: s.gastos, 20: s.depositado, 21: s.extras, 22: s.totalDep, 23: s.totalBono };
+      for (let i = 1; i <= NC; i++) {
+        const cel = tr.getCell(i); cel.border = borde; cel.font = { bold: true, size: 10 }; cel.fill = relleno('FFE9EEF5');
+        if (tv[i] !== undefined) { cel.value = n2(tv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
+      }
+      tr.getCell(23).font = { bold: true, size: 11, color: { argb: 'FFB45309' } };
+      r += 2;
+      ws.getCell(r, 2).value = '______________________________'; ws.getCell(r, 16).value = '______________________________';
+      ws.getCell(r + 1, 2).value = 'Firma del conductor: ' + cond; ws.getCell(r + 1, 16).value = 'Transportes SSI S.A.C.';
+      ws.getCell(r + 1, 2).font = { size: 9 }; ws.getCell(r + 1, 16).font = { size: 9 };
+      r += 2;
+      if (gi < nombres.length - 1) ws.getRow(r - 1).addPageBreak();
+      r += 2;
+    });
+    // Total general
+    ws.mergeCells(r, 1, r, 7);
+    const gr = ws.getRow(r); gr.getCell(1).value = 'TOTAL GENERAL (' + vis.length + ' viajes · ' + nombres.length + ' conductores)';
+    const gv = { 8: t.km, 9: t.peajes, 10: t.viatico, 11: t.llanta, 12: t.cochera, 13: t.lavado, 14: t.otros, 16: t.bono, 17: t.feriado, 18: t.dominical, 19: t.gastos, 20: t.depositado, 21: t.extras, 22: t.totalDep, 23: t.totalBono };
+    for (let i = 1; i <= NC; i++) {
+      const cel = gr.getCell(i); cel.border = borde; cel.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } }; cel.fill = relleno(AZ);
+      if (gv[i] !== undefined) { cel.value = n2(gv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
+    }
+    gr.height = 22;
+
+    /* ---------------- Hoja 2: Dashboard ---------------- */
+    const d = wb.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+    d.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+    d.getColumn(1).width = 36; for (let i = 2; i <= 8; i++) d.getColumn(i).width = 14; d.getColumn(9).width = 3;
+    for (let i = 10; i <= 27; i++) d.getColumn(i).width = 10;
+    d.mergeCells('A1:H1'); d.getCell('A1').value = 'DASHBOARD — LIQUIDACIÓN DE CONDUCTORES'; d.getCell('A1').font = { bold: true, size: 16, color: { argb: AZ } };
+    d.mergeCells('A2:H2'); d.getCell('A2').value = self._periodoTxt(sel) + ' · ' + (sel.conds.length === new Set(self._filas.map(f => f.conductor)).size ? 'todos los conductores' : sel.conds.length + ' conductor(es)');
+    d.getCell('A2').font = { size: 10, color: { argb: 'FF475569' } };
+    const porEst = { PENDIENTE: 0, LIQUIDADO: 0, DEPOSITADO: 0 }, viajesEst = { PENDIENTE: 0, LIQUIDADO: 0, DEPOSITADO: 0 };
+    vis.forEach(f => { porEst[f.liqEstado] = (porEst[f.liqEstado] || 0) + f.totalBono; viajesEst[f.liqEstado] = (viajesEst[f.liqEstado] || 0) + 1; });
+    const kpis = [['Conductores', nombres.length, '0'], ['Viajes', vis.length, '0'], ['Km recorridos', t.km || 0, '#,##0'], ['Total gastos (S/)', t.gastos, '#,##0.00'],
+      ['Total depósito (S/)', t.totalDep, '#,##0.00'], ['Total bono (S/)', t.totalBono, '#,##0.00'], ['Por depositar (S/)', porEst.LIQUIDADO, '#,##0.00'], ['Depositado (S/)', porEst.DEPOSITADO, '#,##0.00']];
+    kpis.forEach((k, i) => {
+      const a = d.getCell(4, i + 1), b = d.getCell(5, i + 1);
+      a.value = k[0]; a.font = { bold: true, size: 9, color: { argb: 'FF64748B' } }; a.fill = relleno(GRIS); a.alignment = { horizontal: 'center', wrapText: true };
+      b.value = n2(k[1]); b.numFmt = k[2]; b.font = { bold: true, size: 15, color: { argb: i === 5 ? 'FFB45309' : AZ } }; b.fill = relleno(i === 5 ? 'FFFFF3E0' : GRIS); b.alignment = { horizontal: 'center' };
+      a.border = { top: { style: 'medium', color: { argb: i === 5 ? 'FFF59E0B' : 'FF94A3B8' } } };
+    });
+    d.getRow(4).height = 26; d.getRow(5).height = 28;
+    let fr = 7;
+    const tabla = function (titulo, enc, filas, fmts, colorEnc) {
+      d.mergeCells(fr, 1, fr, enc.length); d.getCell(fr, 1).value = titulo; d.getCell(fr, 1).font = { bold: true, size: 12, color: { argb: AZ } }; fr++;
+      enc.forEach((e, i) => { const c = d.getCell(fr, i + 1); c.value = e; c.font = { bold: true, size: 9, color: { argb: AZ } }; c.fill = relleno(colorEnc || CEL); c.border = borde; c.alignment = { horizontal: 'center', wrapText: true }; });
+      fr++;
+      filas.forEach((f, j) => {
+        f.forEach((v, i) => { const c = d.getCell(fr, i + 1); c.value = v; c.border = borde; c.font = { size: 9, bold: !!f._tot }; if (fmts[i]) c.numFmt = fmts[i]; if (f._tot) c.fill = relleno('FFE9EEF5'); });
+        fr++;
+      });
+      fr++;
+    };
+    // Resumen por conductor
+    const resumen = nombres.map(c => { const l = grupos[c], s = self._suma(l); return [c, l.length, n2(s.km), n2(s.gastos), n2(s.totalDep), n2(s.totalBono), Array.from(new Set(l.map(f => self._EST_TXT[f.liqEstado]))).join(' / '), l.length ? n2((s.km || 0) / l.length) : 0]; })
+      .sort((a, b) => b[5] - a[5]);
+    const totR = ['TOTAL', vis.length, n2(t.km), n2(t.gastos), n2(t.totalDep), n2(t.totalBono), '', vis.length ? n2((t.km || 0) / vis.length) : 0]; totR._tot = true;
+    tabla('Resumen por conductor', ['Conductor', 'Viajes', 'Km', 'Total gastos', 'Total depósito', 'Total bono', 'Estado', 'Km por viaje'], resumen.concat([totR]), [null, '0', '#,##0', '#,##0.00', '#,##0.00', '#,##0.00', null, '#,##0']);
+    // Gastos por concepto
+    const conceptos = [['Peajes', t.peajes], ['Viático', t.viatico], ['Llanta', t.llanta], ['Cochera', t.cochera], ['Lavado', t.lavado], ['Otros', t.otros], ['Bono', t.bono], ['Feriado', t.feriado], ['Dominical', t.dominical]];
+    const tg = t.gastos || 1;
+    const cf = conceptos.map(c => [c[0], n2(c[1] || 0), (c[1] || 0) / tg]); const cft = ['TOTAL GASTOS', n2(t.gastos), 1]; cft._tot = true;
+    tabla('Gastos por concepto', ['Concepto', 'Monto (S/)', '% del total'], cf.concat([cft]), [null, '#,##0.00', '0.0%']);
+    // Estado de pago
+    const ef = ['PENDIENTE', 'LIQUIDADO', 'DEPOSITADO'].map(e => [self._EST_TXT[e], viajesEst[e] || 0, n2(porEst[e] || 0)]);
+    tabla('Estado de pago', ['Estado', 'Viajes', 'Total bono (S/)'], ef, [null, '0', '#,##0.00'], NAR);
+    // Destinos más frecuentes
+    const gd = self._agrupar(vis, f => f.destino);
+    const dest = Object.keys(gd).map(k => [k, gd[k].length, n2(self._suma(gd[k]).km), n2(self._suma(gd[k]).gastos)]).sort((a, b) => b[1] - a[1] || b[2] - a[2]).slice(0, 15);
+    tabla('Viajes más frecuentes (destino)', ['Destino', 'Viajes', 'Km', 'Gastos (S/)'], dest, [null, '0', '#,##0', '#,##0.00'], VER);
+    // Clientes con mayor frecuencia
+    const gc = self._agrupar(vis, f => f.cliente);
+    const cli = Object.keys(gc).map(k => [k, gc[k].length, gc[k].length / (vis.length || 1), n2(self._suma(gc[k]).km)]).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    tabla('Clientes con mayor frecuencia', ['Cliente', 'Viajes', '% de viajes', 'Km'], cli, [null, '0', '0.0%', '#,##0'], VER);
+
+    // Gráficos
+    const S = v => 'S/ ' + self._m(v), N = v => Math.round(v).toLocaleString('en-US');
+    const porBono = resumen.slice().sort((a, b) => b[5] - a[5]);
+    const graf = [
+      self._grafBarras('Total bono por conductor (S/)', porBono.map(x => x[0]), [{ nombre: 'Total bono', color: '#f59e0b', datos: porBono.map(x => x[5]) }], S),
+      self._grafBarras('Gastos por concepto (S/)', conceptos.map(c => c[0]), [{ nombre: 'Monto', color: '#3b82f6', datos: conceptos.map(c => c[1] || 0) }], S),
+      self._grafBarras('Depositado vs gastos por conductor (S/)', porBono.map(x => x[0]), [{ nombre: 'Total depósito', color: '#16a34a', datos: porBono.map(x => x[4]) }, { nombre: 'Total gastos', color: '#1c3a5e', datos: porBono.map(x => x[3]) }], S),
+      self._grafDona('Estado de pago (total bono S/)', ef.map(e => e[0] + ' · ' + e[1] + ' viajes'), ef.map(e => e[2]), ['#f59e0b', '#3b82f6', '#16a34a'], S),
+      self._grafBarras('Viajes por conductor', resumen.slice().sort((a, b) => b[1] - a[1]).map(x => x[0]), [{ nombre: 'Viajes', color: '#6366f1', datos: resumen.slice().sort((a, b) => b[1] - a[1]).map(x => x[1]) }], N),
+      self._grafBarras('Kilómetros recorridos por conductor', resumen.slice().sort((a, b) => b[2] - a[2]).map(x => x[0]), [{ nombre: 'Km', color: '#0ea5e9', datos: resumen.slice().sort((a, b) => b[2] - a[2]).map(x => x[2]) }], N),
+      self._grafBarras('Viajes más frecuentes (destino)', dest.slice(0, 10).map(x => x[0]), [{ nombre: 'Viajes', color: '#16a34a', datos: dest.slice(0, 10).map(x => x[1]) }], N),
+      self._grafBarras('Clientes con mayor frecuencia (viajes)', cli.slice(0, 10).map(x => x[0]), [{ nombre: 'Viajes', color: '#a855f7', datos: cli.slice(0, 10).map(x => x[1]) }], N)
+    ];
+    // 2 columnas de gráficos a la derecha de los cuadros (columna J en adelante)
+    const ANCHO = 600, PX_FILA = 20;
+    let filaIzq = 3, filaDer = 3;
+    graf.forEach((gx, i) => {
+      const alto = Math.round(gx.alto * ANCHO / 1200);
+      const izq = filaIzq <= filaDer;
+      const img = wb.addImage({ base64: gx.url, extension: 'png' });
+      d.addImage(img, { tl: { col: izq ? 9.2 : 17.6, row: izq ? filaIzq : filaDer }, ext: { width: ANCHO, height: alto } });
+      const filas = Math.ceil(alto / PX_FILA) + 1;
+      if (izq) filaIzq += filas; else filaDer += filas;
+    });
+
+    wb.views = [{ activeTab: 1 }];
+    const buf = await wb.xlsx.writeBuffer();
+    const nombre = 'Liquidaciones_' + sel.qd + (sel.qh !== sel.qd ? '_a_' + sel.qh : '') + (sel.conds.length === 1 ? '_' + sel.conds[0].replace(/\s+/g, '_') : '') + '.xlsx';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+    mostrarMensaje('Excel generado: ' + nombre, 'exito');
+  },
+
+  /** Respaldo sin gráficos (si ExcelJS no carga). */
+  _excelSimple: async function (sel) {
+    const self = this, X = await self._cargarXlsx(), n2 = x => Math.round((Number(x) || 0) * 100) / 100;
+    const enc = ['CONDUCTOR', 'QUINCENA', 'FECHA', 'PLACA', 'CLIENTE', 'DESTINO', 'CÓDIGO', 'N° VIÁTICO', 'KM', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS', 'BONO', 'FERIADO', 'DOMINICAL', 'TOTAL GASTOS', 'MONTO DEPOSITADO', 'EXTRAS', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO'];
+    const filas = sel.vis.map(f => [f.conductor, self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
+      n2(f.bono), n2(f.feriado), n2(f.dominical), n2(f.gastos), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), self._EST_TXT[f.liqEstado] || f.liqEstado]);
+    const g = self._agrupar(sel.vis, f => f.conductor);
+    const res = Object.keys(g).sort().map(c => { const s = self._suma(g[c]); return [c, g[c].length, n2(s.km), n2(s.gastos), n2(s.totalDep), n2(s.totalBono)]; });
+    const wb = X.utils.book_new();
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([[self._periodoTxt(sel)], [], enc].concat(filas)), 'Liquidaciones');
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Resumen por conductor'], [], ['Conductor', 'Viajes', 'Km', 'Total gastos', 'Total depósito', 'Total bono']].concat(res)), 'Dashboard');
+    X.writeFile(wb, 'Liquidaciones_' + sel.qd + '.xlsx');
+    mostrarMensaje('Excel generado sin gráficos (no cargó el componente de gráficos).', 'exito');
+  }
+});
 
 document.addEventListener('DOMContentLoaded', function () {
   const b = document.getElementById('btn-liquidacion-conductores');
