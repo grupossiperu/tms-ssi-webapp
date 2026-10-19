@@ -212,7 +212,7 @@ const FormConsolidadoServicio = {
               ${c('Lavado', 'txtLavadoConsol', 0, true)}
               ${c('Balanza', 'txtBalanzaConsol', 0, true)}
               ${c('Otros', 'txtOtrosConsol', 0, true)}
-              <div></div>
+              <div class="campo" id="campoMotivoOtros"><label for="txtMotivoOtrosConsol">Motivo de "Otros"<span class="req">*</span></label><input id="txtMotivoOtrosConsol" autocomplete="off" placeholder="Ej. POLICIA POR LUCES - AUTORIZADO POR ADRIAN" style="text-transform:uppercase"></div>
               <div class="sub">Bonos del conductor</div>
               <div class="campo"><label for="cboDominicalConsol">¿Dominical?</label><select id="cboDominicalConsol"><option>NO</option><option>SI</option></select></div>
               <div class="campo calc"><label for="txtDominicalConsol">Dominical</label><input id="txtDominicalConsol" value="0" disabled></div>
@@ -359,7 +359,12 @@ const FormConsolidadoServicio = {
         .concat(guiasIncompletas().length ? ['__guias'] : [])
         .concat(inicialIncompleto().length ? ['__inicial'] : [])
         .concat(recargasIncompletas().length ? ['__recargas'] : [])
-        .concat(depositosSinConfirmar() ? ['__depositos'] : []);
+        .concat(depositosSinConfirmar() ? ['__depositos'] : [])
+        .concat(motivoOtrosFalta() ? ['txtMotivoOtrosConsol'] : []);
+    }
+    // Si se registra un monto en "Otros", el motivo es obligatorio.
+    function motivoOtrosFalta() {
+      return self._n(raiz.querySelector('#txtOtrosConsol').value) > 0 && !raiz.querySelector('#txtMotivoOtrosConsol').value.trim();
     }
     function actualizarFaltantes() {
       const lista = faltantes();
@@ -367,7 +372,7 @@ const FormConsolidadoServicio = {
       if (!esCulminado) { aviso.textContent = ''; }
       else if (lista.length) { aviso.textContent = 'Faltan ' + lista.length + ' campo' + (lista.length === 1 ? '' : 's') + ' obligatorio' + (lista.length === 1 ? '' : 's'); aviso.classList.remove('ok'); }
       else { aviso.textContent = 'Todo completo'; aviso.classList.add('ok'); }
-      OBLIGATORIOS.forEach(function (id) {
+      OBLIGATORIOS.concat(['txtMotivoOtrosConsol']).forEach(function (id) {
         const campo = raiz.querySelector('#' + id).closest('.campo');
         if (campo) campo.classList.toggle('falta', marcarFaltantes && lista.indexOf(id) !== -1);
       });
@@ -974,7 +979,7 @@ const FormConsolidadoServicio = {
         'VIATICO': v('txtViaticoConsol'), 'PEAJE': v('txtPeajeConsol'), 'PEAJE S.D.C.F.': v('txtPeajeSDCFConsol'),
         'PEAJE ADICIONAL': v('txtPeajeAdicionalConsol'), 'PEAJE BASE IMPONIBLE': v('txtPeajeBIConsol'),
         'LLANTA': v('txtLlantaConsol'), 'LAVADO': v('txtLavadoConsol'), 'BALANZA': v('txtBalanzaConsol'),
-        'COCHERA': v('txtCocheraConsol'), 'OTROS': v('txtOtrosConsol'),
+        'COCHERA': v('txtCocheraConsol'), 'OTROS': v('txtOtrosConsol'), 'MOTIVO OTROS': v('txtMotivoOtrosConsol').trim().toUpperCase(),
         'DOMINICAL       (S/.)': v('txtDominicalConsol'), 'FERIADO (S/.)         ': v('txtFeriadoConsol'),
         'BONO': v('txtBonoConsol'), 'BONO + DOM + FERIADO': v('txtBonoTotalConsol'),
         'TOTAL POR VIAJE': v('txtTotalViajeConsol'), 'DIFERENCIA (MONTO DEPOSITADO - T.VIAJE)': v('txtDiferenciaConsol'),
