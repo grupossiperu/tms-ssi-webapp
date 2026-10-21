@@ -84,15 +84,19 @@ const FormConsolidadoServicios = {
     const msPacking = crearMultiSelect(raiz.querySelector('#msConsPacking'), { textoTodos: 'Todas', onChange: pintar });
 
     async function cargar() {
-      const filas = await llamarBackend('listarServiciosPendientes', {
-        estado: 'CULMINADO',
+      const pedir = estado => llamarBackend('listarServiciosPendientes', {
+        estado: estado,
         fechaDesde: raiz.querySelector('#filtroConsDesde').value.trim(),
         fechaHasta: raiz.querySelector('#filtroConsHasta').value.trim()
       });
+      // Culminados + falsos fletes (también tienen gastos, combustible, bono y a veces se facturan).
+      const [filas, falsos] = await Promise.all([pedir('CULMINADO'), pedir('FALSO FLETE')]);
       if (!Array.isArray(filas)) {
         mostrarMensaje((filas && filas.mensaje) || 'No se pudo cargar la lista de servicios.', 'error');
         return;
       }
+      filas.forEach(f => { f._estadoServ = 'CULMINADO'; });
+      (Array.isArray(falsos) ? falsos : []).forEach(f => { f._estadoServ = 'FALSO FLETE'; filas.push(f); });
       filasCache = filas;
       msConductor.setOpciones(unicos('CONDUCTOR'));
       msCliente.setOpciones(unicos('CLIENTE PARA FACTURACIÓN'));
@@ -122,12 +126,12 @@ const FormConsolidadoServicios = {
 
       const pendientes = filas.filter(f => !completo(f)).length;
       raiz.querySelector('#consCuenta').textContent = filas.length + ' servicio' + (filas.length === 1 ? '' : 's') +
-        ' culminado' + (filas.length === 1 ? '' : 's') + ' · ' + pendientes + ' por completar';
+        ' (culminados y falsos fletes) · ' + pendientes + ' por completar';
 
       const tbody = raiz.querySelector('#tablaConsolidadoServicios tbody');
       tbody.innerHTML = '';
       if (!filas.length) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#8b95a1; padding:18px;">No hay servicios culminados con estos filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#8b95a1; padding:18px;">No hay servicios culminados ni falsos fletes con estos filtros.</td></tr>';
       }
       filas.forEach(function (f) {
         const ok = completo(f);
@@ -136,7 +140,7 @@ const FormConsolidadoServicios = {
         tr.innerHTML =
           '<td>' + esc(formatoFecha(f['FECHA DE PROGRAMACION'], '')) + '</td>' +
           '<td>' + esc(f['CLIENTE PARA FACTURACIÓN']) + '</td>' +
-          '<td>' + esc(f['BOOKING']) + '</td>' +
+          '<td>' + esc(f['BOOKING']) + (f._estadoServ === 'FALSO FLETE' ? '<div><span class="badge-datos incompleto" style="background:#fee2e2;color:#b91c1c">FALSO FLETE</span></div>' : '') + '</td>' +
           '<td>' + esc(f['CONDUCTOR']) + '</td>' +
           '<td>' + esc(f['PLACA TRACTO']) + '</td>' +
           '<td>' + esc(f['TIPO DE CARGA']) + '</td>' +
@@ -149,7 +153,7 @@ const FormConsolidadoServicios = {
             (ok ? 'Revisar' : 'Completar') + '</button></td>';
         tr.querySelector('.btn-completar-consolidado').addEventListener('click', function (ev) {
           ev.stopPropagation();
-          FormConsolidadoServicio.abrir(f._fila, 'CULMINADO');
+          FormConsolidadoServicio.abrir(f._fila, f._estadoServ || 'CULMINADO');
         });
         tbody.appendChild(tr);
       });
