@@ -212,6 +212,17 @@ const FormFacturaViaje = {
     async function calcularDetraccion() {
       const miConsulta = ++consultaDetraccion;
       const campos = ['#txtImporteOperacionFact', '#txtDetraccionFact', '#txtEstimacionResultanteFact', '#txtDetraccionDolarFact', '#txtImporteFacturadoFact'];
+      // Sin venta no hay operación: no corresponde detracción (el valor referencial solo aplica si hay venta).
+      if (self._n(raiz.querySelector('#txtPrecioVentaFact').value) <= 0) {
+        const costo = self._n(raiz.querySelector('#txtCostoViajeRealizadoFact').value);
+        raiz.querySelector('#txtImporteOperacionFact').value = 'S/ 0.00';
+        raiz.querySelector('#txtDetraccionFact').value = 'S/ 0.00';
+        raiz.querySelector('#txtEstimacionResultanteFact').value = 'S/ ' + (-costo).toFixed(2);
+        raiz.querySelector('#txtDetraccionDolarFact').value = '$ 0.00';
+        raiz.querySelector('#txtImporteFacturadoFact').value = '$ 0.00';
+        pintarTotales();
+        return;
+      }
       let resp;
       try {
         resp = await llamarBackend('calcularDetraccionFactura', {
