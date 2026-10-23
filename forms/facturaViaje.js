@@ -171,9 +171,11 @@ const FormFacturaViaje = {
         <div class="tot"><span>Detracción</span><b id="totDetraccionFact">-</b></div>
         <div class="tot prin"><span>Importe facturado</span><b id="totImporteFact">-</b></div>
         <div class="esp"></div>
+        <button class="boton-secundario" id="btnNoFacturableFact" style="color:#b91c1c;border-color:#fca5a5;display:none" title="El viaje se hizo pero no se cobra: no lleva factura, GRE ni GRT">No se cobra (no facturable)</button>
         <button class="boton-secundario" id="btnInicioFact">Inicio</button>
         <button class="boton-primario" id="btnGrabarFact">Grabar</button>
       </div>`;
+    this._fila = fila;
 
     abrirPanel('Facturar viaje - ' + esc(tipoFacturacionActual), html, (raiz) => this._wire(raiz, datos), { clase: 'panel-fact' });
   },
@@ -393,6 +395,37 @@ const FormFacturaViaje = {
     raiz.querySelector('#cboPorcentajeDetraccionFact').addEventListener('change', programarDetraccion);
 
     raiz.querySelector('#btnInicioFact').addEventListener('click', cerrarPanel);
+
+    // No se cobra: marca el viaje como NO FACTURABLE (sin factura, GRE ni GRT), con motivo y huella.
+    const rolNF = (typeof Sesion !== 'undefined' && Sesion.datos && Sesion.datos()) ? Sesion.datos().rol : '';
+    if (rolNF === 'MAESTRO' || rolNF === 'FACTURACION') raiz.querySelector('#btnNoFacturableFact').style.display = '';
+    raiz.querySelector('#btnNoFacturableFact').addEventListener('click', function () {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10050;display:flex;align-items:center;justify-content:center';
+      ov.innerHTML = '<div style="background:#fff;border-radius:12px;padding:16px 18px;width:min(520px,94vw);box-shadow:0 10px 40px rgba(0,0,0,.25)">' +
+        '<h4 style="margin:0 0 6px;color:#b91c1c">Marcar como no facturable</h4>' +
+        '<p style="margin:0 0 10px;font-size:.82rem;color:#475569">Viaje <b>' + esc(raiz.querySelector('#hidCodigoServicio').value) + '</b> · BK ' + esc(raiz.querySelector('#txtBookingFact').value) +
+        '. Sale de los pendientes de facturar, no pide factura ni guías y en Resultados cuenta solo el costo. Se puede revertir desde Facturar → Mostrar: No facturables.</p>' +
+        '<label style="font-size:.75rem;font-weight:700;color:#475569">Motivo</label>' +
+        '<select data-m style="width:100%;padding:6px;margin-bottom:8px"><option>CORTESIA AL CLIENTE</option><option>FALLA DE SSI</option><option>VIAJE INTERNO SSI</option><option>OTRO</option></select>' +
+        '<label style="font-size:.75rem;font-weight:700;color:#475569">Detalle (obligatorio si es OTRO)</label>' +
+        '<input data-d maxlength="200" style="width:100%;box-sizing:border-box;padding:6px">' +
+        '<div data-err style="color:#b91c1c;font-size:.78rem;margin-top:6px"></div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="boton-secundario" data-x>Cancelar</button><button class="boton-primario" data-ok style="background:#b91c1c;border-color:#b91c1c">Marcar no facturable</button></div></div>';
+      document.body.appendChild(ov);
+      ov.querySelector('[data-x]').addEventListener('click', () => ov.remove());
+      ov.querySelector('[data-ok]').addEventListener('click', async function () {
+        const m = ov.querySelector('[data-m]').value, det = ov.querySelector('[data-d]').value.trim();
+        if (m === 'OTRO' && det.length < 3) { ov.querySelector('[data-err]').textContent = 'Escribe el detalle del motivo.'; return; }
+        this.disabled = true;
+        const r = await llamarBackend('noFacturableMarcar', { fila: self._fila, codigo: raiz.querySelector('#hidCodigoServicio').value, motivo: m + (det ? ' - ' + det : '') });
+        if (!r || !r.ok) { this.disabled = false; ov.querySelector('[data-err]').textContent = (r && r.mensaje) || 'No se pudo marcar.'; return; }
+        ov.remove();
+        mostrarMensaje(r.mensaje, 'exito');
+        cerrarPanel();
+        if (typeof FormSelFacturaViaje !== 'undefined') FormSelFacturaViaje.abrir();
+      });
+    });
 
     protegerClic(raiz.querySelector('#btnGrabarFact'), async function () {
       const facturas = leerFacturas();

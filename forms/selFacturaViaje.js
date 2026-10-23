@@ -52,6 +52,7 @@ const FormSelFacturaViaje = {
             <option value="">Todos (pendientes primero)</option>
             <option value="P">Solo pendientes de facturar</option>
             <option value="F">Solo facturados</option>
+            <option value="N">No facturables (no se cobran)</option>
           </select>
         </div>
         <div class="campo"><label>Buscar (contenedor, código…)</label><input type="text" id="txtBuscarFact" autocomplete="off"></div>
@@ -114,7 +115,48 @@ const FormSelFacturaViaje = {
       pintar();
     }
 
+    // ---- No facturables (viajes que no se cobran) ----
+    let noFact = null;
+    async function pintarNF() {
+      const tbody = $('tablaFact').querySelector('tbody');
+      seleccionado = null;
+      if (!noFact) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#8b95a1;padding:16px;">Cargando…</td></tr>';
+        const r = await llamarBackend('noFacturableListar', {});
+        if (!r || !r.ok) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#b91c1c;padding:16px;">' + esc((r && r.mensaje) || 'No se pudo cargar.') + '</td></tr>'; return; }
+        noFact = r;
+      }
+      if ($('cboEstadoFact').value !== 'N') return;
+      const desde = $('factDesde').value, hasta = $('factHasta').value;
+      const bk = txt($('factBooking').value).replace(/\s+/g, ''), q = txt($('txtBuscarFact').value);
+      const lista = noFact.filas.filter(f => (!desde || f.fecha >= desde) && (!hasta || f.fecha <= hasta) && (!bk || txt(f.booking).replace(/\s+/g, '').indexOf(bk) !== -1) &&
+        (!q || [f.booking, f.contenedor, f.codigo, f.destino, f.cliente, f.placa, f.motivo].some(v => txt(v).indexOf(q) !== -1))).sort((a, b) => b.fecha.localeCompare(a.fecha));
+      $('factResumen').textContent = lista.length + ' viaje(s) no facturable(s). Se hicieron pero no se cobran; en Resultados cuentan solo el costo.';
+      tbody.innerHTML = lista.length ? '' : '<tr><td colspan="9" style="text-align:center;color:#8b95a1;padding:16px;">No hay viajes no facturables con estos filtros.</td></tr>';
+      lista.forEach(function (f) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><span class="fact-badge" style="background:#fee2e2;color:#b91c1c">No facturable</span>' +
+          (noFact.puede ? '<br><button type="button" class="boton-secundario boton-chico" data-rev style="margin-top:4px;font-size:.7rem;padding:2px 6px">Devolver a pendiente</button>' : '') + '</td>' +
+          '<td>' + esc(formatoFecha(f.fecha)) + '</td><td>' + esc(f.booking) + '</td><td>' + esc(f.contenedor) + '</td><td>' + esc(f.cliente) + '</td><td>' + esc(f.destino) + '</td><td>' + esc(f.placa) + '</td>' +
+          '<td>' + esc(f.codigo) + '</td><td style="font-size:.72rem">' + esc(f.motivo) + '<div style="color:#8b95a1">' + esc(f.por) + ' · ' + esc(f.fechaMarca) + '</div></td>';
+        const b = tr.querySelector('[data-rev]');
+        if (b) b.addEventListener('click', async function (ev) {
+          ev.stopPropagation();
+          const motivo = window.prompt('Motivo para devolver ' + f.codigo + ' a pendiente de facturar:');
+          if (motivo === null) return;
+          if (motivo.trim().length < 3) { mostrarMensaje('Escribe el motivo.', 'error'); return; }
+          b.disabled = true;
+          const r = await llamarBackend('noFacturableRevertir', { fila: f.fila, codigo: f.codigo, motivo: motivo.trim() });
+          if (!r || !r.ok) { b.disabled = false; mostrarMensaje((r && r.mensaje) || 'No se pudo revertir.', 'error'); return; }
+          mostrarMensaje(r.mensaje, 'exito');
+          noFact = null; cargar();
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
     function pintar() {
+      if ($('cboEstadoFact').value === 'N') { pintarNF(); return; }
       const desde = $('factDesde').value, hasta = $('factHasta').value;
       const bk = txt($('factBooking').value).replace(/\s+/g, '');
       const tipo = $('cboFiltroTipoFact').value;
