@@ -16,7 +16,8 @@ const FormUsuarios = {
     MAESTRO: 'Maestro — todo el sistema, Resultados y usuarios',
     TRANSPORTE: 'Transporte — Operaciones, Almacén, Mantenimiento y Maestros',
     FACTURACION: 'Facturación — Finanzas y Maestros',
-    MANTENIMIENTO: 'Mantenimiento — solo Mantenimiento'
+    MANTENIMIENTO: 'Mantenimiento — solo Mantenimiento (y atiende las incidencias de conductores)',
+    CONDUCTOR: 'Conductor — solo reporta fallas de su unidad desde el celular (contraseña inicial = su mismo usuario)'
   },
 
   _lista: [],
@@ -25,6 +26,7 @@ const FormUsuarios = {
   abrir: async function () {
     const self = this;
     const html = `
+      <div id="usrSolicitudes" style="display:none;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px 12px;margin-bottom:12px;"></div>
       <div class="usr-caja">
         <h3 id="usrTitulo" style="margin:0 0 10px;color:var(--azul-marino-oscuro);font-size:1rem;">Nuevo usuario</h3>
         <div class="usr-form">
@@ -119,6 +121,33 @@ const FormUsuarios = {
         limpiar();
       }
       pintar();
+      cargarSolicitudes();
+    };
+
+    // Solicitudes de "Olvidé mi contraseña" (las aprueba el maestro).
+    const cargarSolicitudes = async function () {
+      const caja = $('usrSolicitudes');
+      let r = null;
+      try { r = await llamarBackend('usuariosSolicitudes', {}); } catch (e) { r = null; }
+      const filas = (r && r.ok && r.filas) || [];
+      if (!filas.length) { caja.style.display = 'none'; return; }
+      caja.style.display = '';
+      caja.innerHTML = '<b style="color:#9a3412">🔑 Pidieron reiniciar su contraseña (' + filas.length + ')</b>' +
+        '<div style="font-size:.78rem;color:#7c2d12;margin:2px 0 8px">Al aprobar, su contraseña vuelve a ser su mismo usuario y deberá crear una nueva al entrar.</div>' +
+        filas.map(function (f) {
+          return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap"><span style="flex:1;min-width:220px"><b>' + esc(f.usuario) + '</b> · ' + esc(f.nombre) + ' · <span style="color:#64748b">' + esc(f.fecha) + '</span></span>' +
+            '<button class="boton-primario" type="button" data-ap="' + esc(f.usuario) + '" style="padding:4px 10px;font-size:.78rem">Aprobar</button>' +
+            '<button class="boton-secundario" type="button" data-re="' + esc(f.usuario) + '" style="padding:4px 10px;font-size:.78rem">Rechazar</button></div>';
+        }).join('');
+      caja.querySelectorAll('[data-ap],[data-re]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          b.disabled = true;
+          const aprobar = !!b.dataset.ap;
+          const r2 = await llamarBackend('usuariosAtenderSolicitud', { usuario: b.dataset.ap || b.dataset.re, aprobar: aprobar });
+          mostrarMensaje((r2 && r2.mensaje) || 'No se pudo atender.', r2 && r2.ok ? 'exito' : 'error');
+          await cargar();
+        });
+      });
     };
 
     protegerClic($('usrGrabar'), async function () {
