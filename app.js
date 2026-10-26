@@ -340,9 +340,22 @@ const Sesion = {
       '<p class="login-ayuda">Sistema de Servicios de Transporte</p>' +
       '<div class="campo"><label>Usuario</label><input type="text" id="loginUsuario" autocomplete="username" autocapitalize="none" spellcheck="false"></div>' +
       '<div class="campo"><label>Contraseña</label><input type="password" id="loginClave" autocomplete="current-password"></div>' +
-      '<button class="boton-primario login-btn" id="loginBtn" type="button">Ingresar</button>');
+      '<button class="boton-primario login-btn" id="loginBtn" type="button">Ingresar</button>' +
+      '<a href="#" id="loginOlvide" style="display:block;text-align:center;margin-top:12px;font-size:.9rem;color:#1c3a5e;">¿Olvidaste tu contraseña?</a>');
     const err = ov.querySelector('#loginError');
     if (aviso) err.textContent = aviso;
+    // v88: pedir reinicio de contraseña (lo aprueba gerencia).
+    ov.querySelector('#loginOlvide').addEventListener('click', async function (ev) {
+      ev.preventDefault();
+      const usuario = ov.querySelector('#loginUsuario').value.trim().toLowerCase();
+      if (!usuario) { err.style.color = ''; err.textContent = 'Escribe primero tu USUARIO arriba y vuelve a tocar "¿Olvidaste tu contraseña?".'; ov.querySelector('#loginUsuario').focus(); return; }
+      err.textContent = 'Enviando…';
+      try {
+        const r = await llamarBackend('pedirResetClave', { usuario: usuario });
+        err.style.color = '#166534';
+        err.textContent = (r && r.mensaje) || 'Solicitud enviada.';
+      } catch (e) { err.style.color = ''; err.textContent = 'Error de conexión: ' + e.message; }
+    });
     const btn = ov.querySelector('#loginBtn');
     const ingresar = async function () {
       const usuario = ov.querySelector('#loginUsuario').value.trim();
