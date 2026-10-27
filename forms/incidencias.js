@@ -72,6 +72,7 @@ const FormIncConductor = {
 
   abrir: async function (opts) {
     this._modoPanel = !!(opts && opts.panel);
+    this._volverA = (opts && opts.volver) || 'tablero';
     let app = document.getElementById('incApp');
     if (!app) {
       app = document.createElement('div'); app.id = 'incApp';
@@ -115,11 +116,11 @@ const FormIncConductor = {
     const d = Sesion.datos() || {};
     const self = this;
     document.getElementById('incApp').innerHTML = '<div class="top"><b>🚛 ' + esc(String(d.nombre || d.usuario || '').split(' ')[0]) + '</b>' +
-      (self._modoPanel ? '<button type="button" id="incCerrar">✕ Volver al tablero</button>' : '<button type="button" id="incClave">🔑 Clave</button><button type="button" id="incSalir">Salir</button>') +
+      (self._modoPanel ? '<button type="button" id="incCerrar">✕ ' + (self._volverA === 'inicio' ? 'Volver al inicio' : 'Volver al tablero') + '</button>' : '<button type="button" id="incClave">🔑 Clave</button><button type="button" id="incSalir">Salir</button>') +
       '</div><div class="cont">' + html + '</div>';
     const app = document.getElementById('incApp'); app.scrollTop = 0;
     if (self._modoPanel) {
-      app.querySelector('#incCerrar').addEventListener('click', function () { self.cerrar(); FormIncTablero.abrir(); });
+      app.querySelector('#incCerrar').addEventListener('click', function () { self.cerrar(); if (self._volverA !== 'inicio') FormIncTablero.abrir(); });
       return app;
     }
     app.querySelector('#incSalir').addEventListener('click', function () { document.getElementById('btn-cerrar-sesion') ? document.getElementById('btn-cerrar-sesion').click() : location.reload(); });
@@ -490,4 +491,8 @@ const FormIncTablero = {
 document.addEventListener('DOMContentLoaded', function () {
   const b = document.getElementById('btn-incidencias');
   if (b) b.addEventListener('click', function () { FormIncTablero.abrir(); });
+  const rf = document.getElementById('btn-reportar-falla');
+  if (rf) rf.addEventListener('click', function () {
+    FormIncConductor.abrir({ panel: true, volver: 'inicio' }).then(function () { FormIncConductor._r = {}; FormIncConductor._paso1(); });
+  });
 });
