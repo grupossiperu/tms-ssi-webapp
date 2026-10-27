@@ -135,118 +135,149 @@ const FormIncConductor = {
       '<button class="grande" id="incRep" style="background:#dc2626">🚨 REPORTAR UNA FALLA</button>' +
       '<button class="grande" id="incMis" style="background:#1c3a5e">📋 MIS REPORTES</button>' +
       '<p class="ayuda" style="text-align:center">Si algo falla en tu tracto o carreta, repórtalo aquí. El mecánico lo verá al instante.</p>');
-    app.querySelector('#incRep').addEventListener('click', function () { self._r = {}; self._paso1(); });
+    app.querySelector('#incRep').addEventListener('click', function () { if (self._r && self._r.lista && self._r.lista.length && self._r.km) self._lista(); else { self._r = {}; self._paso1(); } });
     app.querySelector('#incMis').addEventListener('click', function () { self._mis(); });
   },
 
+  /* Paso 1: unidades del día (tracto + km y carreta). Se piden UNA sola vez. */
   _paso1: function () {
     const self = this, r = self._r, cfg = self._cfg || {};
-    const placasDe = t => (t === 'CARRETA' ? cfg.carretas : cfg.tractos) || [];
-    const sug = t => (t === 'CARRETA' ? cfg.carreta : cfg.tracto) || '';
-    const app = self._pintar('<button class="atras" id="a">◀ Inicio</button><div class="paso">PASO 1 DE 4</div><h2>¿En qué unidad es la falla?</h2>' +
-      '<div class="grid"><button class="op' + (r.tipoUnidad === 'TRACTO' ? ' sel' : '') + '" data-t="TRACTO"><span class="ic">🚛</span>TRACTO<small style="font-weight:600;color:#64748b">' + esc(sug('TRACTO')) + '</small></button>' +
-      '<button class="op' + (r.tipoUnidad === 'CARRETA' ? ' sel' : '') + '" data-t="CARRETA"><span class="ic">🧊</span>CARRETA<small style="font-weight:600;color:#64748b">' + esc(sug('CARRETA')) + '</small></button></div>' +
-      '<div id="p1det" style="display:' + (r.tipoUnidad ? '' : 'none') + '">' +
-      '<label class="l">Placa</label><select class="t" id="pl"></select>' +
-      '<label class="l">Kilometraje del tracto <span id="kmOpc" style="font-weight:500;color:#64748b"></span></label><input class="t" id="km" type="number" inputmode="numeric" placeholder="Ej. 631500">' +
-      '<div class="ayuda" id="kmAy"></div><div class="err" id="e"></div>' +
-      '<button class="grande" id="sig" style="background:#1c3a5e">SIGUIENTE ▶</button></div>');
+    const opts = (lista, sel) => lista.map(p => '<option' + (p === sel ? ' selected' : '') + '>' + esc(p) + '</option>').join('');
+    const tr = r.tracto || cfg.tracto || '', ca = r.carreta !== undefined ? r.carreta : (cfg.carreta || '');
+    const app = self._pintar('<button class="atras" id="a">◀ Inicio</button><div class="paso">PASO 1 · TUS UNIDADES</div><h2>¿Con qué unidades estás?</h2>' +
+      '<label class="l">🚛 Placa del TRACTO</label><select class="t" id="pt"><option value="">— Elige —</option>' + opts(cfg.tractos || [], tr) + '</select>' +
+      '<label class="l">📍 Kilometraje del tracto</label><input class="t" id="km" type="number" inputmode="numeric" placeholder="Ej. 631500" value="' + esc(r.km || '') + '">' +
+      '<div class="ayuda" id="kmAy"></div>' +
+      '<label class="l">🧊 Placa de la CARRETA</label><select class="t" id="pc"><option value="">— Sin carreta —</option>' + opts(cfg.carretas || [], ca) + '</select>' +
+      '<div class="err" id="e"></div><button class="grande" id="sig" style="background:#1c3a5e">SIGUIENTE ▶</button>');
     app.querySelector('#a').addEventListener('click', () => self._inicio());
-    const elegir = function (t) {
-      r.tipoUnidad = t;
-      app.querySelectorAll('[data-t]').forEach(b => b.classList.toggle('sel', b.dataset.t === t));
-      const lista = placasDe(t), s = r.placa && lista.indexOf(r.placa) >= 0 ? r.placa : sug(t);
-      app.querySelector('#pl').innerHTML = '<option value="">— Elige la placa —</option>' + lista.map(p => '<option' + (p === s ? ' selected' : '') + '>' + esc(p) + '</option>').join('');
-      app.querySelector('#kmOpc').textContent = t === 'CARRETA' ? '(si lo sabes)' : '';
-      app.querySelector('#p1det').style.display = '';
-      ayudaKm();
-    };
-    const ayudaKm = function () {
-      const p = app.querySelector('#pl').value, tr = r.tipoUnidad === 'CARRETA' ? (cfg.tracto || '') : p;
-      const k = (cfg.km || {})[tr];
-      app.querySelector('#kmAy').textContent = k ? 'Último registrado del tracto ' + tr + ': ' + Number(k).toLocaleString('en-US') + ' km' : '';
-    };
-    app.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => elegir(b.dataset.t)));
-    app.querySelector('#pl').addEventListener('change', ayudaKm);
-    if (r.tipoUnidad) { elegir(r.tipoUnidad); if (r.km) app.querySelector('#km').value = r.km; }
+    const ayuda = function () { const p = app.querySelector('#pt').value, k = (cfg.km || {})[p]; app.querySelector('#kmAy').textContent = k ? 'Último registrado de ' + p + ': ' + Number(k).toLocaleString('en-US') + ' km' : ''; };
+    app.querySelector('#pt').addEventListener('change', ayuda); ayuda();
     app.querySelector('#sig').addEventListener('click', function () {
-      const p = app.querySelector('#pl').value, km = Number(app.querySelector('#km').value) || 0, e = app.querySelector('#e');
-      if (!p) { e.textContent = 'Elige la placa.'; return; }
-      if (r.tipoUnidad === 'TRACTO' && !(km > 0)) { e.textContent = 'Escribe el kilometraje que marca el tablero.'; app.querySelector('#km').focus(); return; }
-      r.placa = p; r.km = km || '';
-      self._paso2();
+      const pt = app.querySelector('#pt').value, km = Number(app.querySelector('#km').value) || 0, e = app.querySelector('#e');
+      if (!pt) { e.textContent = 'Elige la placa del tracto.'; return; }
+      if (!(km > 0)) { e.textContent = 'Escribe el kilometraje que marca el tablero.'; app.querySelector('#km').focus(); return; }
+      r.tracto = pt; r.km = km; r.carreta = app.querySelector('#pc').value; r.lista = r.lista || [];
+      self._lista();
     });
   },
 
-  _paso2: function () {
+  /* Lista de fallas de este reporte: se agregan varias y se envían juntas. */
+  _lista: function (errores) {
     const self = this, r = self._r;
-    const sist = INC_CATALOGO[r.tipoUnidad];
-    const app = self._pintar('<button class="atras" id="a">◀ Atrás</button><div class="paso">PASO 2 DE 4 · ' + esc(r.tipoUnidad + ' ' + r.placa) + '</div><h2>¿Qué parte está fallando?</h2>' +
+    r.lista = r.lista || [];
+    const fila = function (f, i) {
+      const u = INC_URGENCIAS.filter(z => z[0] === f.urgencia)[0] || INC_URGENCIAS[2];
+      return '<div class="card" style="border-left-color:' + u[3] + '">' +
+        '<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><div style="font-weight:800;font-size:1.05rem">' + f.icono + ' ' + esc(f.sistema) + ' › ' + esc(f.componente) + '</div>' +
+        '<div style="color:#475569">' + (f.tipoUnidad === 'CARRETA' ? '🧊 Carreta ' : '🚛 Tracto ') + esc(f.placa) + ' · ' + u[1] + ' ' + u[0] + (f.foto ? ' · 📷 con foto' : '') + '</div>' +
+        (f.comentario ? '<div style="color:#334155">💬 ' + esc(f.comentario) + '</div>' : '') +
+        (errores && errores[i] ? '<div style="color:#b91c1c;font-weight:700">⚠ No se envió: ' + esc(errores[i]) + '</div>' : '') + '</div>' +
+        '<button type="button" data-q="' + i + '" style="border:2px solid #fca5a5;background:#fff;color:#b91c1c;border-radius:12px;padding:8px 12px;font-weight:800">✕ Quitar</button></div></div>';
+    };
+    const n = r.lista.length;
+    const app = self._pintar('<button class="atras" id="a">◀ Inicio</button>' +
+      '<div class="card" style="border-left-color:#1c3a5e;display:flex;align-items:center;gap:8px"><div style="flex:1"><b>🚛 ' + esc(r.tracto) + '</b> · ' + Number(r.km).toLocaleString('en-US') + ' km' +
+      (r.carreta ? '<br><b>🧊 ' + esc(r.carreta) + '</b>' : '<br><span style="color:#64748b">Sin carreta</span>') + '</div><button type="button" id="cu" style="border:2px solid #cbd5e1;background:#fff;border-radius:12px;padding:8px 12px;font-weight:700">✏️ Cambiar</button></div>' +
+      '<h2>' + (n ? 'Fallas a reportar (' + n + ')' : '¿Qué fallas tiene tu unidad?') + '</h2>' +
+      (n ? r.lista.map(fila).join('') : '<p class="ayuda" style="font-size:1rem">Agrega una por una todas las fallas. Al final tocas ENVIAR y se mandan todas juntas.</p>') +
+      '<button class="grande" id="add" style="background:#dc2626">➕ AGREGAR ' + (n ? 'OTRA ' : 'UNA ') + 'FALLA</button>' +
+      (n ? '<div class="err" id="e"></div><button class="grande" id="env" style="background:#16a34a">✅ ENVIAR ' + (n === 1 ? 'LA FALLA' : 'LAS ' + n + ' FALLAS') + '</button>' : ''));
+    app.querySelector('#a').addEventListener('click', () => self._inicio());
+    app.querySelector('#cu').addEventListener('click', () => self._paso1());
+    app.querySelector('#add').addEventListener('click', function () { r.f = { tipoUnidad: 'TRACTO' }; self._paso2(); });
+    app.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', function () { r.lista.splice(Number(b.dataset.q), 1); self._lista(); }));
+    const env = app.querySelector('#env');
+    if (env) env.addEventListener('click', async function () {
+      env.disabled = true; app.querySelector('#add').disabled = true;
+      const pendientes = r.lista.slice(), quedan = [], errs = [], hechos = [];
+      for (let i = 0; i < pendientes.length; i++) {
+        const f = pendientes[i];
+        env.textContent = 'Enviando ' + (i + 1) + ' de ' + pendientes.length + '… (no cierres)';
+        let resp = null;
+        try { resp = await llamarBackend('incReportar', { tipoUnidad: f.tipoUnidad, placa: f.placa, km: r.km, sistema: f.sistema, componente: f.componente, urgencia: f.urgencia, comentario: f.comentario, foto: f.foto || '' }); }
+        catch (x) { resp = { ok: false, mensaje: 'Sin conexión' }; }
+        if (resp && resp.ok) hechos.push(Object.assign({ reincidencia: resp.reincidencia }, f));
+        else { quedan.push(f); errs.push((resp && resp.mensaje) || 'Error'); }
+      }
+      r.lista = quedan;
+      if (quedan.length) { self._lista(errs); const e = document.querySelector('#incApp #e'); if (e) e.textContent = hechos.length + ' enviada(s). ' + quedan.length + ' no se pudo(ieron) enviar: revisa tu señal y toca ENVIAR otra vez.'; return; }
+      self._listo(hechos);
+    });
+  },
+
+  /* Agregar falla: unidad (tracto/carreta) y sistema. */
+  _paso2: function () {
+    const self = this, r = self._r, f = r.f;
+    const sist = INC_CATALOGO[f.tipoUnidad];
+    const pill = (t, ic, placa) => '<button class="op' + (f.tipoUnidad === t ? ' sel' : '') + '" data-t="' + t + '" style="min-height:64px;flex-direction:row"><span class="ic" style="font-size:1.6rem">' + ic + '</span>' + t + '<small style="color:#64748b">' + esc(placa) + '</small></button>';
+    const app = self._pintar('<button class="atras" id="a">◀ Volver a la lista</button><div class="paso">AGREGAR FALLA · 1 DE 3</div>' +
+      (r.carreta ? '<div class="grid" style="margin-bottom:12px">' + pill('TRACTO', '🚛', r.tracto) + pill('CARRETA', '🧊', r.carreta) + '</div>' : '') +
+      '<h2>¿Qué parte del ' + (f.tipoUnidad === 'CARRETA' ? 'la carreta' : 'tracto') + ' falla?</h2>' +
       '<div class="grid">' + sist.map((s, i) => '<button class="op" data-i="' + i + '"><span class="ic">' + s[1] + '</span>' + esc(s[0]) + '</button>').join('') + '</div>');
-    app.querySelector('#a').addEventListener('click', () => self._paso1());
+    app.querySelector('#a').addEventListener('click', () => self._lista());
+    app.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', function () { f.tipoUnidad = b.dataset.t; self._paso2(); }));
     app.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', function () {
-      const s = sist[Number(b.dataset.i)]; r.sistema = s[0]; r.icono = s[1];
-      if (s[2].length === 1) { r.componente = s[2][0]; self._paso4(); } else self._paso3(s);
+      const s = sist[Number(b.dataset.i)]; f.sistema = s[0]; f.icono = s[1];
+      if (s[2].length === 1) { f.componente = s[2][0]; self._paso4(); } else self._paso3(s);
     }));
   },
 
   _paso3: function (s) {
-    const self = this, r = self._r;
-    const app = self._pintar('<button class="atras" id="a">◀ Atrás</button><div class="paso">PASO 3 DE 4 · ' + s[1] + ' ' + esc(s[0]) + '</div><h2>¿Qué le pasa?</h2>' +
+    const self = this, f = self._r.f;
+    const app = self._pintar('<button class="atras" id="a">◀ Atrás</button><div class="paso">AGREGAR FALLA · 2 DE 3 · ' + s[1] + ' ' + esc(s[0]) + '</div><h2>¿Qué le pasa?</h2>' +
       '<div class="lista">' + s[2].map((c, i) => '<button class="op" data-i="' + i + '" style="width:100%">' + esc(c) + '</button>').join('') +
       '<button class="op" data-i="-1" style="width:100%">❓ OTRO (lo escribo)</button></div>');
     app.querySelector('#a').addEventListener('click', () => self._paso2());
     app.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', function () {
-      const i = Number(b.dataset.i); r.componente = i < 0 ? 'OTRO' : s[2][i]; self._paso4();
+      const i = Number(b.dataset.i); f.componente = i < 0 ? 'OTRO' : s[2][i]; self._paso4();
     }));
   },
 
   _paso4: function () {
-    const self = this, r = self._r;
-    const app = self._pintar('<button class="atras" id="a">◀ Atrás</button><div class="paso">PASO 4 DE 4 · ' + esc(r.placa) + ' · ' + esc(r.sistema) + ' › ' + esc(r.componente) + '</div>' +
+    const self = this, r = self._r, f = r.f;
+    const app = self._pintar('<button class="atras" id="a">◀ Atrás</button><div class="paso">AGREGAR FALLA · 3 DE 3 · ' + esc(f.sistema) + ' › ' + esc(f.componente) + '</div>' +
       '<h2>¿Qué tan urgente es?</h2>' +
-      INC_URGENCIAS.map(u => '<button class="urg" data-u="' + u[0] + '" style="' + (r.urgencia === u[0] ? 'border-color:' + u[3] + ';background:#fff7ed' : '') + '"><span class="ic">' + u[1] + '</span><span>' + u[0] + '<small>' + u[2] + '</small></span></button>').join('') +
+      INC_URGENCIAS.map(u => '<button class="urg" data-u="' + u[0] + '" style="' + (f.urgencia === u[0] ? 'border-color:' + u[3] + ';background:#fff7ed' : '') + '"><span class="ic">' + u[1] + '</span><span>' + u[0] + '<small>' + u[2] + '</small></span></button>').join('') +
       '<label class="l">📷 Foto de la falla (opcional)</label>' +
       '<label class="grande" style="background:#475569;cursor:pointer;margin:0" for="foto">📷 TOMAR FOTO</label><input type="file" id="foto" accept="image/*" capture="environment" style="display:none">' +
       '<div class="foto-prev" id="fp"></div>' +
-      '<label class="l">✍️ Cuéntanos qué pasa ' + (r.componente === 'OTRO' ? '(obligatorio)' : '(opcional)') + '</label>' +
-      '<textarea class="t" id="com" rows="3" placeholder="Puedes usar el micrófono 🎤 del teclado para dictar">' + esc(r.comentario || '') + '</textarea>' +
+      '<label class="l">✍️ Cuéntanos qué pasa ' + (f.componente === 'OTRO' ? '(obligatorio)' : '(opcional)') + '</label>' +
+      '<textarea class="t" id="com" rows="3" placeholder="Puedes usar el micrófono 🎤 del teclado para dictar">' + esc(f.comentario || '') + '</textarea>' +
       '<div class="err" id="e"></div>' +
-      '<button class="grande" id="env" style="background:#16a34a">✅ ENVIAR REPORTE</button>');
+      '<button class="grande" id="ok" style="background:#1c3a5e">➕ AGREGAR A LA LISTA</button>');
     app.querySelector('#a').addEventListener('click', () => self._paso2());
     app.querySelectorAll('[data-u]').forEach(b => b.addEventListener('click', function () {
-      r.urgencia = b.dataset.u;
+      f.urgencia = b.dataset.u;
       app.querySelectorAll('[data-u]').forEach(x => { const u = INC_URGENCIAS.filter(z => z[0] === x.dataset.u)[0]; x.style.borderColor = x === b ? u[3] : 'transparent'; x.style.background = x === b ? '#fff7ed' : '#fff'; });
     }));
-    if (r.foto) app.querySelector('#fp').innerHTML = '<img src="' + r.foto + '">';
+    if (f.foto) app.querySelector('#fp').innerHTML = '<img src="' + f.foto + '">';
     app.querySelector('#foto').addEventListener('change', async function () {
-      const f = this.files && this.files[0]; if (!f) return;
+      const fl = this.files && this.files[0]; if (!fl) return;
       app.querySelector('#fp').textContent = 'Preparando foto…';
-      try { r.foto = await _incComprimir(f); app.querySelector('#fp').innerHTML = '<img src="' + r.foto + '"><div class="ayuda">Foto lista ✔ (puedes tomar otra para cambiarla)</div>'; }
-      catch (e) { r.foto = ''; app.querySelector('#fp').textContent = 'No se pudo leer la foto. Intenta otra vez.'; }
+      try { f.foto = await _incComprimir(fl); app.querySelector('#fp').innerHTML = '<img src="' + f.foto + '"><div class="ayuda">Foto lista ✔ (puedes tomar otra para cambiarla)</div>'; }
+      catch (e) { f.foto = ''; app.querySelector('#fp').textContent = 'No se pudo leer la foto. Intenta otra vez.'; }
     });
-    app.querySelector('#env').addEventListener('click', async function () {
-      const e = app.querySelector('#e'), btn = this;
-      r.comentario = app.querySelector('#com').value.trim();
-      if (!r.urgencia) { e.textContent = 'Toca qué tan urgente es (rojo, naranja o verde).'; return; }
-      if (r.componente === 'OTRO' && r.comentario.length < 3) { e.textContent = 'Escribe qué está fallando.'; app.querySelector('#com').focus(); return; }
-      e.textContent = ''; btn.disabled = true; btn.textContent = 'Enviando… (no cierres)';
-      try {
-        const resp = await llamarBackend('incReportar', { tipoUnidad: r.tipoUnidad, placa: r.placa, km: r.km, sistema: r.sistema, componente: r.componente, urgencia: r.urgencia, comentario: r.comentario, foto: r.foto || '' });
-        if (!resp || !resp.ok) { e.textContent = (resp && resp.mensaje) || 'No se pudo enviar. Intenta de nuevo.'; btn.disabled = false; btn.textContent = '✅ ENVIAR REPORTE'; return; }
-        self._listo(resp);
-      } catch (x) { e.textContent = 'Sin conexión. Revisa tu señal e intenta de nuevo.'; btn.disabled = false; btn.textContent = '✅ ENVIAR REPORTE'; }
+    app.querySelector('#ok').addEventListener('click', function () {
+      const e = app.querySelector('#e');
+      f.comentario = app.querySelector('#com').value.trim();
+      if (!f.urgencia) { e.textContent = 'Toca qué tan urgente es (rojo, naranja o verde).'; return; }
+      if (f.componente === 'OTRO' && f.comentario.length < 3) { e.textContent = 'Escribe qué está fallando.'; app.querySelector('#com').focus(); return; }
+      f.placa = f.tipoUnidad === 'CARRETA' ? r.carreta : r.tracto;
+      r.lista.push(f); r.f = null;
+      self._lista();
     });
   },
 
-  _listo: function (resp) {
-    const self = this;
-    const app = self._pintar('<div style="text-align:center;font-size:4.5rem;margin-top:20px">✅</div><h2 style="text-align:center">¡Reporte enviado!</h2>' +
-      '<p style="text-align:center;font-size:1.05rem">' + esc(resp.mensaje || '') + '</p>' +
-      (resp.reincidencia ? '<p style="text-align:center;font-weight:800;color:#b91c1c">⚠️ Falla REPETIDA: ya estaba reportada y aún no se arregla. Se le dio más prioridad.</p>' : '') +
-      '<button class="grande" id="otra" style="background:#dc2626">🚨 REPORTAR OTRA FALLA</button><button class="grande" id="ini" style="background:#1c3a5e">🏠 INICIO</button>');
-    app.querySelector('#otra').addEventListener('click', function () { const r = self._r; self._r = { tipoUnidad: r.tipoUnidad, placa: r.placa, km: r.km }; self._paso2(); });
-    app.querySelector('#ini').addEventListener('click', () => self._inicio());
+  _listo: function (hechos) {
+    const self = this, r = self._r;
+    const rep = hechos.filter(h => h.reincidencia).length;
+    const app = self._pintar('<div style="text-align:center;font-size:4.5rem;margin-top:20px">✅</div><h2 style="text-align:center">¡' + (hechos.length === 1 ? 'Falla enviada' : hechos.length + ' fallas enviadas') + '!</h2>' +
+      '<p style="text-align:center;font-size:1.05rem">El mecánico ya las puede ver.</p>' +
+      (rep ? '<p style="text-align:center;font-weight:800;color:#b91c1c">⚠️ ' + rep + ' ya estaba(n) reportada(s) y aún no se arreglan: se marcaron como REPETIDAS y suben de prioridad.</p>' : '') +
+      '<button class="grande" id="otra" style="background:#dc2626">🚨 REPORTAR MÁS FALLAS</button><button class="grande" id="ini" style="background:#1c3a5e">🏠 INICIO</button>');
+    app.querySelector('#otra').addEventListener('click', function () { r.lista = []; self._lista(); });
+    app.querySelector('#ini').addEventListener('click', () => { self._r = {}; self._inicio(); });
   },
 
   _mis: async function () {
