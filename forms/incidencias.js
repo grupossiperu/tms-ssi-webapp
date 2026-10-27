@@ -70,7 +70,8 @@ function _incComprimir(file) {
 const FormIncConductor = {
   _cfg: null, _r: {},
 
-  abrir: async function () {
+  abrir: async function (opts) {
+    this._modoPanel = !!(opts && opts.panel);
     let app = document.getElementById('incApp');
     if (!app) {
       app = document.createElement('div'); app.id = 'incApp';
@@ -112,9 +113,15 @@ const FormIncConductor = {
   cerrar: function () { const a = document.getElementById('incApp'); if (a) a.style.display = 'none'; document.body.style.overflow = ''; },
   _pintar: function (html) {
     const d = Sesion.datos() || {};
+    const self = this;
     document.getElementById('incApp').innerHTML = '<div class="top"><b>🚛 ' + esc(String(d.nombre || d.usuario || '').split(' ')[0]) + '</b>' +
-      '<button type="button" id="incClave">🔑 Clave</button><button type="button" id="incSalir">Salir</button></div><div class="cont">' + html + '</div>';
+      (self._modoPanel ? '<button type="button" id="incCerrar">✕ Volver al tablero</button>' : '<button type="button" id="incClave">🔑 Clave</button><button type="button" id="incSalir">Salir</button>') +
+      '</div><div class="cont">' + html + '</div>';
     const app = document.getElementById('incApp'); app.scrollTop = 0;
+    if (self._modoPanel) {
+      app.querySelector('#incCerrar').addEventListener('click', function () { self.cerrar(); FormIncTablero.abrir(); });
+      return app;
+    }
     app.querySelector('#incSalir').addEventListener('click', function () { document.getElementById('btn-cerrar-sesion') ? document.getElementById('btn-cerrar-sesion').click() : location.reload(); });
     app.querySelector('#incClave').addEventListener('click', function () { FormIncConductor.cerrar(); FormUsuarios.cambiarMiClave(); const t = setInterval(function () { if (!document.querySelector('#overlay-panel')) { clearInterval(t); FormIncConductor.abrir(); } }, 700); });
     return app;
@@ -257,8 +264,37 @@ const FormIncConductor = {
         '<div style="color:#475569">' + esc(f.tipoUnidad) + ' ' + esc(f.placa) + ' · ' + esc(f.fecha) + '</div>' +
         '<span class="chip" style="background:' + es[2] + ';color:' + es[1] + '">' + es[0] + (f.estado === 'PROGRAMADA' && f.fechaProgramada ? ' para ' + esc(f.fechaProgramada) : '') + '</span>' +
         (f.reincidencias ? '<span class="chip" style="background:#fee2e2;color:#b91c1c">Repetida ×' + (f.reincidencias + 1) + '</span>' : '') +
-        (f.estado === 'RESUELTA' ? '<div style="margin-top:4px;color:#166534">✔ ' + esc(f.trabajo) + '</div>' : '') + '</div>';
+        (f.estado === 'RESUELTA' ? '<div style="margin-top:4px;color:#166534">✔ ' + esc(f.trabajo) + '</div>' : '') +
+        (f.puedeEliminar ? '<button type="button" data-del="' + esc(f.id) + '" style="margin-top:8px;background:#fff;border:2px solid #fca5a5;color:#b91c1c;border-radius:12px;padding:8px 14px;font-size:1rem;font-weight:800">🗑 Eliminar este reporte</button>' : '') + '</div>';
     }).join('');
+    l.querySelectorAll('[data-del]').forEach(function (b) { b.addEventListener('click', function () { self._eliminar(b.dataset.del); }); });
+  },
+
+  /** Confirmación grande para eliminar un reporte (el maestro escribe el motivo). */
+  _eliminar: function (id) {
+    const self = this;
+    const maestro = (Sesion.datos() || {}).rol === 'MAESTRO';
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:950;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:18px;padding:20px;width:min(440px,100%);text-align:center">' +
+      '<div style="font-size:3rem">🗑</div><h3 style="margin:6px 0 10px;font-size:1.25rem">¿Eliminar este reporte?</h3>' +
+      '<p style="color:#475569;margin:0 0 12px">Úsalo solo si te equivocaste al registrarlo.</p>' +
+      (maestro ? '<textarea data-m rows="2" placeholder="Motivo (obligatorio)" style="width:100%;box-sizing:border-box;font-size:1rem;padding:10px;border:2px solid #cbd5e1;border-radius:12px"></textarea>' : '') +
+      '<div data-e style="color:#b91c1c;font-weight:700;min-height:1.2em;margin:6px 0"></div>' +
+      '<button data-si style="display:block;width:100%;border:none;border-radius:14px;padding:16px;font-size:1.15rem;font-weight:800;background:#dc2626;color:#fff;margin-bottom:10px">SÍ, ELIMINAR</button>' +
+      '<button data-no style="display:block;width:100%;border:2px solid #cbd5e1;border-radius:14px;padding:14px;font-size:1.1rem;font-weight:800;background:#fff;color:#1c3a5e">NO, VOLVER</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('[data-no]').addEventListener('click', () => ov.remove());
+    ov.querySelector('[data-si]').addEventListener('click', async function () {
+      const m = ov.querySelector('[data-m]') ? ov.querySelector('[data-m]').value.trim() : '';
+      if (maestro && m.length < 3) { ov.querySelector('[data-e]').textContent = 'Escribe el motivo.'; return; }
+      this.disabled = true; this.textContent = 'Eliminando…';
+      let r = null;
+      try { r = await llamarBackend('incEliminar', { id: id, motivo: m }); } catch (e) { r = null; }
+      if (!r || !r.ok) { this.disabled = false; this.textContent = 'SÍ, ELIMINAR'; ov.querySelector('[data-e]').textContent = (r && r.mensaje) || 'No se pudo eliminar. Revisa tu señal.'; return; }
+      ov.remove();
+      self._mis();
+    });
   }
 };
 
@@ -299,6 +335,8 @@ const FormIncTablero = {
         <div class="campo"><label>Desde</label><input type="date" id="itDesde"></div>
         <div class="campo"><label>Hasta</label><input type="date" id="itHasta"></div>
         <button class="boton-secundario" id="itRec" type="button">↻ Actualizar</button>
+        <button class="boton-primario" id="itNueva" type="button" style="display:none;background:#dc2626;border-color:#dc2626">🚨 Registrar falla</button>
+        <button class="boton-secundario" id="itMias" type="button" style="display:none">📋 Mis reportes</button>
       </div>
       <div class="it-lista" id="itLista">Cargando…</div>
       <div class="it-top" id="itTop"></div>
@@ -309,6 +347,8 @@ const FormIncTablero = {
       self._ms = { placa: crearMultiSelect($('msItPlaca'), { onChange: () => self._pintar() }), cond: crearMultiSelect($('msItCond'), { onChange: () => self._pintar() }), sis: crearMultiSelect($('msItSis'), { onChange: () => self._pintar() }) };
       ['itEst', 'itPri', 'itDesde', 'itHasta'].forEach(id => $(id).addEventListener('change', () => self._pintar()));
       $('itRec').addEventListener('click', () => self._cargar());
+      $('itNueva').addEventListener('click', () => { cerrarPanel(); FormIncConductor.abrir({ panel: true }).then(() => { FormIncConductor._r = {}; FormIncConductor._paso1(); }); });
+      $('itMias').addEventListener('click', () => { cerrarPanel(); FormIncConductor.abrir({ panel: true }).then(() => FormIncConductor._mis()); });
       $('itCerrar').addEventListener('click', cerrarPanel);
       await self._cargar();
     }, { ancho: true });
@@ -318,7 +358,9 @@ const FormIncTablero = {
     const self = this, $ = id => self._raiz.querySelector('#' + id);
     const r = await llamarBackend('incTablero', {});
     if (!respuestaValida(r)) { $('itLista').textContent = (r && r.mensaje) || 'No se pudo cargar.'; return; }
-    self._filas = r.filas || []; self._puede = !!r.puedeAtender; self._yo = r.usuario;
+    self._filas = r.filas || []; self._puede = !!r.puedeAtender; self._yo = r.usuario; self._maestro = !!r.esMaestro;
+    $('itNueva').style.display = self._puede ? '' : 'none';
+    $('itMias').style.display = self._puede ? '' : 'none';
     const u = k => Array.from(new Set(self._filas.map(f => f[k]).filter(Boolean))).sort();
     self._ms.placa.setOpciones(u('placa')); self._ms.cond.setOpciones(u('conductor')); self._ms.sis.setOpciones(u('sistema'));
     self._pintar();
@@ -363,6 +405,8 @@ const FormIncTablero = {
     const acc = !self._puede ? '' : abierta
       ? '<button class="boton-secundario" data-acc="PROGRAMAR" data-i="' + i + '">📅 Programar</button><button class="boton-primario" data-acc="RESOLVER" data-i="' + i + '" style="background:#16a34a;border-color:#16a34a">✔ Resuelta</button><button class="boton-secundario" data-acc="DESCARTAR" data-i="' + i + '">Descartar</button>'
       : '<button class="boton-secundario" data-acc="REABRIR" data-i="' + i + '">↺ Reabrir</button>';
+    const extra = '<button class="boton-secundario" data-acc="OBSERVAR" data-i="' + i + '">💬 Observación</button>' +
+      (self._maestro ? '<button class="boton-secundario" data-acc="ELIMINAR" data-i="' + i + '" style="color:#b91c1c;border-color:#fca5a5">🗑 Eliminar</button>' : '');
     return '<div class="it-card' + (abierta ? '' : ' cerr') + '" style="border-left-color:' + (abierta ? INC_COLOR[f.prioridad] : '#94a3b8') + '"><div>' +
       (abierta ? '<span class="it-chip" style="background:' + INC_COLOR[f.prioridad] + ';color:#fff">' + esc(f.prioridad) + '</span>' : '') +
       (f.reincidencias ? '<span class="it-chip" style="background:#fee2e2;color:#b91c1c">⚠ REPETIDA ×' + (f.reincidencias + 1) + '</span>' : '') +
@@ -375,7 +419,7 @@ const FormIncTablero = {
       (f.estado === 'RESUELTA' || f.estado === 'DESCARTADA' ? '<div class="it-s" style="color:#166534">✔ ' + esc(f.trabajo) + ' · ' + esc(f.resueltoPor) + ' · ' + esc(f.fechaResolucion) + (f.kmResolucion ? ' · ' + Number(f.kmResolucion).toLocaleString('en-US') + ' km' : '') + '</div>' : '') +
       '<div style="margin-top:4px">' + (f.fotos || []).map((x, j) => '<button class="boton-secundario" style="font-size:.7rem;padding:2px 8px" data-foto="' + esc(x.id) + '">📷 Foto ' + (j + 1) + '</button> ').join('') +
       '<button class="boton-secundario" style="font-size:.7rem;padding:2px 8px" data-hist="' + i + '">Historial (' + (f.historial || []).length + ')</button></div>' +
-      '</div><div class="it-acc">' + acc + '</div><div class="it-hist" id="ith' + i + '">' + hist + '</div></div>';
+      '</div><div class="it-acc">' + acc + extra + '</div><div class="it-hist" id="ith' + i + '">' + hist + '</div></div>';
   },
 
   _dlg: function (titulo, cuerpo, ok, alOk) {
@@ -400,9 +444,18 @@ const FormIncTablero = {
     if (acc === 'RESOLVER') cuerpo = '<label>¿Qué trabajo se hizo?</label><textarea data-t rows="3" ' + inp + '></textarea><label>Kilometraje al resolver' + (f.tipoUnidad === 'CARRETA' ? ' (opcional)' : '') + '</label><input type="number" data-k ' + inp + ' placeholder="' + (f.km || '') + '"><label>Resuelto por</label><input data-r value="' + esc(self._yo || '') + '" ' + inp + '><p style="font-size:.75rem;color:#64748b">Las fotos de esta incidencia se borrarán de Drive.</p>';
     if (acc === 'DESCARTAR') cuerpo = '<label>Motivo (ej. no es falla, duplicado)</label><textarea data-t rows="2" ' + inp + '></textarea>';
     if (acc === 'REABRIR') cuerpo = '<label>Motivo para reabrir</label><textarea data-t rows="2" ' + inp + '></textarea>';
-    const txt = { PROGRAMAR: 'Programar', RESOLVER: 'Marcar resuelta', DESCARTAR: 'Descartar', REABRIR: 'Reabrir' }[acc];
+    if (acc === 'OBSERVAR') cuerpo = '<label>Observación (queda en el historial con tu nombre)</label><textarea data-t rows="3" ' + inp + '></textarea>';
+    if (acc === 'ELIMINAR') cuerpo = '<p style="font-size:.82rem;color:#475569;margin:0 0 8px">Se quita de la lista (queda registrado quién y por qué) y se borran sus fotos.</p><label>Motivo</label><textarea data-t rows="2" ' + inp + '></textarea>';
+    const txt = { PROGRAMAR: 'Programar', RESOLVER: 'Marcar resuelta', DESCARTAR: 'Descartar', REABRIR: 'Reabrir', OBSERVAR: 'Agregar observación', ELIMINAR: 'Eliminar' }[acc];
     self._dlg(txt + ': ' + titulo, cuerpo, txt, async function (ov) {
       const q = s => { const x = ov.querySelector(s); return x ? x.value.trim() : ''; };
+      if (acc === 'OBSERVAR' || acc === 'ELIMINAR') {
+        const r0 = await llamarBackend(acc === 'OBSERVAR' ? 'incObservar' : 'incEliminar', { id: f.id, texto: q('[data-t]'), motivo: q('[data-t]') });
+        if (!r0 || !r0.ok) return (r0 && r0.mensaje) || 'No se pudo guardar.';
+        mostrarMensaje(r0.mensaje, 'exito');
+        await self._cargar();
+        return '';
+      }
       const fp = q('[data-f]');
       const datos = { id: f.id, accion: acc, fechaProgramada: fp ? fp.split('-').reverse().join('/') : '', responsable: q('[data-r]'), resueltoPor: q('[data-r]'), nota: q('[data-n]'), trabajo: q('[data-t]'), km: q('[data-k]') };
       const r = await llamarBackend('incActualizar', datos);
