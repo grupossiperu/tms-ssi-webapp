@@ -116,7 +116,7 @@ const FormIncConductor = {
     const d = Sesion.datos() || {};
     const self = this;
     document.getElementById('incApp').innerHTML = '<div class="top"><b>🚛 ' + esc(String(d.nombre || d.usuario || '').split(' ')[0]) + '</b>' +
-      (self._modoPanel ? '<button type="button" id="incCerrar">✕ ' + (self._volverA === 'inicio' ? 'Volver al inicio' : 'Volver al tablero') + '</button>' : '<button type="button" id="incClave">🔑 Clave</button><button type="button" id="incSalir">Salir</button>') +
+      (self._modoPanel ? '<button type="button" id="incCerrar">✕ ' + (self._volverA === 'inicio' ? 'Volver al inicio' : 'Volver al tablero') + '</button>' : '<button type="button" id="incSalir">Salir</button>') +
       '</div><div class="cont">' + html + '</div>';
     const app = document.getElementById('incApp'); app.scrollTop = 0;
     if (self._modoPanel) {
@@ -124,7 +124,6 @@ const FormIncConductor = {
       return app;
     }
     app.querySelector('#incSalir').addEventListener('click', function () { document.getElementById('btn-cerrar-sesion') ? document.getElementById('btn-cerrar-sesion').click() : location.reload(); });
-    app.querySelector('#incClave').addEventListener('click', function () { FormIncConductor.cerrar(); FormUsuarios.cambiarMiClave(); const t = setInterval(function () { if (!document.querySelector('#overlay-panel')) { clearInterval(t); FormIncConductor.abrir(); } }, 700); });
     return app;
   },
 

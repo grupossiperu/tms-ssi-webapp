@@ -58,7 +58,13 @@ const FormUsuarios = {
     const $ = function (id) { return raiz.querySelector('#' + id); };
     let editando = null;
 
-    const ayudaRol = function () { $('usrRolAyuda').textContent = self.ROLES_TEXTO[$('usrRol').value] || ''; };
+    const ayudaRol = function () {
+      const esCond = $('usrRol').value === 'CONDUCTOR';
+      $('usrClave').parentNode.style.display = esCond ? 'none' : '';
+      if (esCond) $('usrClave').value = '';
+      $('usrRolAyuda').textContent = (self.ROLES_TEXTO[$('usrRol').value] || '') +
+        (esCond ? ' Contraseña fija: inicial del usuario + su DNI (de PERSONAL). No la puede cambiar; al guardar se restablece.' : '');
+    };
     $('usrRol').addEventListener('change', ayudaRol);
 
     const limpiar = function () {
@@ -158,7 +164,7 @@ const FormUsuarios = {
       if (!editando) {
         const r = await llamarBackend('usuariosGrabar', { nuevo: true, usuario: usuario, nombre: nombre, rol: rol, clave: clave, activo: true });
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo crear el usuario.', 'error'); return; }
-        mostrarMensaje(r.mensaje + '\nEntréguele su usuario y la contraseña temporal.', 'exito');
+        mostrarMensaje(rol === 'CONDUCTOR' ? r.mensaje : r.mensaje + '\nEntréguele su usuario y la contraseña temporal.', 'exito');
       } else {
         if (clave && clave.length < 6) { mostrarMensaje('La contraseña temporal debe tener al menos 6 caracteres.', 'error'); return; }
         const r = await llamarBackend('usuariosGrabar', { usuario: editando.usuario, nombre: nombre, rol: rol, activo: $('usrActivo').checked, desbloquear: $('usrDesbloquear').checked });
@@ -181,6 +187,7 @@ const FormUsuarios = {
   /** Cambiar mi contraseña (cualquier usuario con sesión). */
   cambiarMiClave: function () {
     const d = Sesion.datos() || {};
+    if (d.rol === 'CONDUCTOR') { mostrarMensaje('La contraseña de los conductores es fija y no se puede cambiar.', 'info'); return; }
     const html = `
       <div style="max-width:380px;margin:0 auto;">
         <p style="font-size:.85rem;color:#64748b;margin-top:0;">Usuario: <strong>${esc(d.usuario || '')}</strong>. La contraseña nueva debe tener mínimo 8 caracteres, con letras y números, y no contener su usuario.</p>
