@@ -571,8 +571,7 @@ const FormDeposito = {
         .sort((x, y) => (fechaDe(y['FECHA SOLICITUD'] || y['FECHA']) || 0) - (fechaDe(x['FECHA SOLICITUD'] || x['FECHA']) || 0));
       const r = resumenDe(fila);
       const cont = raiz.querySelector('#depVistaDetalle');
-      cont.innerHTML =
-        '<div style="margin-bottom:10px;"><button type="button" class="boton-secundario" id="detVolver">← Volver</button></div>' +
+      const cabHtml =
         '<div class="dep-cab">' +
           '<span>Servicio: <b>' + ddmm(f['FECHA DE PROGRAMACION']) + '</b></span>' +
           '<span>Cliente: <b>' + esc(f['CLIENTE PARA FACTURACIÓN']) + '</b></span>' +
@@ -582,7 +581,10 @@ const FormDeposito = {
           '<span>A depositar: <b>' + soles(montoBase(f)) + '</b></span>' +
           '<span>Adicionales: <b>' + soles(lista.filter(a => estadoAdic(a) === 'DEPOSITADO').reduce((s2, a) => s2 + numero(a['MONTO']), 0)) + '</b></span>' +
           (r.pendiente > 0 ? '<span>Pendientes (registros antiguos): <b>' + soles(r.pendiente) + '</b></span>' : '') +
-        '</div>' +
+        '</div>';
+      cont.innerHTML =
+        '<div style="margin-bottom:10px;"><button type="button" class="boton-secundario" id="detVolver">← Volver</button></div>' +
+        cabHtml +
         '<div class="dep-nuevo">' +
           '<div class="fila1">' +
             '<div class="campo"><label>Depositado por</label><select id="nvPersona"><option value="">Seleccione…</option>' +
@@ -604,6 +606,7 @@ const FormDeposito = {
             '<button type="button" class="boton-primario" id="nvRegistrar">Guardar adicional</button>' +
           '</div>' +
         '</div>' +
+        '<div style="margin-top:12px">' + cabHtml + '</div>' +
         '<table class="tabla-lista dep-tabla" id="detTabla">' +
           '<colgroup><col style="width:9%"><col style="width:13%"><col style="width:8%"><col style="width:13%"><col style="width:10%"><col style="width:18%"><col style="width:19%"><col style="width:10%"></colgroup>' +
           '<thead><tr><th>Fecha</th><th>Motivo</th><th>Monto</th><th>Depositado por</th><th>Estado</th><th>Depósito</th><th>Observación</th><th>Acciones</th></tr></thead>' +
