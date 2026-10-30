@@ -29,6 +29,7 @@ const FormDeposito = {
   MEDIOS_NUEVOS: ['YAPE', 'TRANSFERENCIA'],
 
   abrir: async function () {
+    this._editar = null;
     const html = `
       <style>
         .dep-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -482,8 +483,24 @@ const FormDeposito = {
       if (!a['ID']) return '';
       if (e === 'SOLICITADO') return '<div class="dep-acciones"><button type="button" class="dep-mini verde ac-aprobar">Aprobar</button><button type="button" class="dep-mini rojo ac-rechazar">Rechazar</button></div>';
       if (e === 'APROBADO') return '<div class="dep-acciones"><button type="button" class="dep-mini verde ac-depositar">Registrar depósito</button><button type="button" class="dep-mini rojo ac-rechazar">Rechazar</button></div>';
-      if (e === 'DEPOSITADO') return '<div class="dep-acciones"><button type="button" class="dep-mini rojo ac-anular">Anular</button></div>';
+      if (e === 'DEPOSITADO') return '<div class="dep-acciones">' +
+        (esMaestro() ? '<button type="button" class="dep-mini ac-editar" style="border-color:#1c3a5e;color:#1c3a5e">Editar</button>' : '') +
+        '<button type="button" class="dep-mini rojo ac-anular">Anular</button></div>';
       return '';
+    };
+    const esMaestro = function () {
+      return typeof Sesion !== 'undefined' && Sesion.datos && (Sesion.datos() || {}).rol === 'MAESTRO';
+    };
+    /** Datos del adicional (todo su grupo/LOTE) para cargarlos en el formulario y corregirlos. */
+    const datosParaEditar = function (a) {
+      const lote = a['LOTE'];
+      const grupo = lote ? adicionales.filter(x => x['LOTE'] === lote && estadoAdic(x) === 'DEPOSITADO') : [a];
+      const mot = motivosDe(a) || [{ motivo: mayus(a['MOTIVO']), monto: numero(a['MONTO']), observacion: a['OBSERVACION'] || '' }];
+      return {
+        id: a['ID'], fila: Number(a['FILA SERVICIO']), persona: mayus(a['PERSONA']),
+        motivos: mot.map(m => ({ motivo: mayus(m.motivo), monto: numero(m.monto), observacion: m.observacion || '' })),
+        depositos: grupo.map(x => ({ medio: mayus(x['MEDIO']), operacion: String(x['N° OPERACION'] || ''), monto: numero(x['MONTO']) }))
+      };
     };
     const conectarAcciones = function (tr, a, columnas) {
       const b1 = tr.querySelector('.ac-aprobar');
@@ -492,6 +509,13 @@ const FormDeposito = {
       if (b1) b1.addEventListener('click', function (ev) { ev.stopPropagation(); aprobar(a['ID']); });
       if (b2) b2.addEventListener('click', function (ev) { ev.stopPropagation(); rechazar(a['ID']); });
       if (b3) b3.addEventListener('click', function (ev) { ev.stopPropagation(); mostrarFormDeposito(tr, a['ID'], columnas); });
+      const b5 = tr.querySelector('.ac-editar');
+      if (b5) b5.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        self._editar = datosParaEditar(a);
+        if (self._filaDetalle && Number(self._filaDetalle) === self._editar.fila) pintarDetalle(self._editar.fila);
+        else abrirDetalle(self._editar.fila, columnas === 9 ? 'adicionales' : 'servicios');
+      });
       const b4 = tr.querySelector('.ac-anular');
       if (b4) b4.addEventListener('click', async function (ev) {
         ev.stopPropagation();
@@ -607,6 +631,7 @@ const FormDeposito = {
 
       cont.querySelector('#detVolver').addEventListener('click', function () {
         self._filaDetalle = null;
+        self._editar = null;
         mostrarVista(self._volverA === 'adicionales' ? 'adicionales' : 'servicios');
         if (self._volverA === 'adicionales') pintarAdicionales(); else pintarServicios();
       });
@@ -689,11 +714,57 @@ const FormDeposito = {
         }
         const tDep = depositos.reduce((acc, d) => acc + d.monto, 0), tMot = motivos.reduce((acc, m) => acc + m.monto, 0);
         if (Math.abs(tDep - tMot) > 0.009) { mostrarMensaje('No cuadra: los motivos suman ' + soles(tMot) + ' y los depósitos ' + soles(tDep) + '.', 'error'); return; }
-        const r = await llamarBackend('agregarAdicionales', { fila: fila, depositadoPor: persona, motivos: motivos, depositos: depositos });
-        if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
+        let r;
+        if (edit) {
+          const motivoCambio = cont.querySelector('#nvMotivoCambio').value.trim();
+          if (!motivoCambio) { mostrarMensaje('Indique el motivo del cambio.', 'error'); cont.querySelector('#nvMotivoCambio').focus(); return; }
+          r = await llamarBackend('editarAdicional', { id: edit.id, motivoCambio: motivoCambio, depositadoPor: persona, motivos: motivos, depositos: depositos });
+        } else {
+          r = await llamarBackend('agregarAdicionales', { fila: fila, depositadoPor: persona, motivos: motivos, depositos: depositos });
+        }
+        if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); if (edit && r && r.anulado) { self._editar = null; await cargarTodo(); } return; }
+        self._editar = null;
         mostrarMensaje(r.mensaje, 'exito');
         await cargarTodo();
       });
+
+      // Modo edición (solo MAESTRO): carga el adicional en el formulario.
+      const edit = (self._editar && self._editar.fila === Number(fila)) ? self._editar : null;
+      if (!edit) self._editar = null;
+      if (edit) {
+        const opcion = function (sel, valor, texto) {
+          if (valor && !Array.from(sel.options).some(o => o.value === valor)) { const o = document.createElement('option'); o.value = valor; o.textContent = texto || valor; sel.appendChild(o); }
+          sel.value = valor;
+        };
+        opcion(cont.querySelector('#nvPersona'), edit.persona);
+        tbMot.innerHTML = '';
+        edit.motivos.forEach(function (m) {
+          const tr = agregarFilaMotivo();
+          opcion(tr.querySelector('.nm-motivo'), m.motivo);
+          tr.querySelector('.nm-monto').value = m.monto ? m.monto.toFixed(2) : '';
+          tr.querySelector('.nm-obs').value = m.observacion || '';
+        });
+        tbDep.innerHTML = '';
+        edit.depositos.forEach(function (d) {
+          const tr = agregarFilaDeposito();
+          opcion(tr.querySelector('.nd-medio'), d.medio);
+          tr.querySelector('.nd-op').value = d.operacion || '';
+          tr.querySelector('.nd-monto').value = d.monto ? d.monto.toFixed(2) : '';
+        });
+        totalNuevo();
+        const caja = cont.querySelector('.dep-nuevo');
+        caja.style.borderColor = '#f59e0b'; caja.style.background = '#fffbeb';
+        const aviso = document.createElement('div');
+        aviso.style.cssText = 'display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:.85rem';
+        aviso.innerHTML = '<div style="flex:1;min-width:260px"><b>✎ Editando adicional</b> — corrige los datos y escribe el motivo del cambio. El registro anterior quedará anulado con esa nota.' +
+          '<div class="campo" style="margin-top:6px"><label>Motivo del cambio (obligatorio)</label><input type="text" id="nvMotivoCambio" autocomplete="off" placeholder="Ej.: se corrigió el N° de operación"></div></div>' +
+          '<button type="button" class="boton-secundario" id="nvCancelarEd" style="padding:8px 14px">Cancelar edición</button>';
+        caja.insertBefore(aviso, caja.firstChild);
+        cont.querySelector('#nvRegistrar').textContent = 'Guardar cambios';
+        cont.querySelector('#nvCancelarEd').addEventListener('click', function () { self._editar = null; pintarDetalle(fila); });
+        caja.scrollIntoView({ block: 'start' });
+        cont.querySelector('#nvMotivoCambio').focus();
+      }
       refrescarSnapshot();
     };
 
