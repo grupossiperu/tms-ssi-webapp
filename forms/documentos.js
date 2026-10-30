@@ -9,6 +9,9 @@
 
 const FormDocumentos = {
   _tipos: [
+    { clave: 'GENERALES', etiqueta: 'Generales', campoClave: 'EMPRESA', tituloClave: 'Empresa', campos: [
+      { campo: 'EMPRESA', etiqueta: 'Empresa' }
+    ] },
     { clave: 'CONDUCTORES', etiqueta: 'Conductores', campoClave: 'DNI', tituloClave: 'DNI', campos: [
       { campo: 'NOMBRE', etiqueta: 'Nombres y Apellidos' },
       { campo: 'DNI', etiqueta: 'N° DNI' },
@@ -25,6 +28,7 @@ const FormDocumentos = {
   _tipoActual: 'CONDUCTORES',
   _entidades: [],
   _mostrarAgregar: false,
+  _verBajas: false,
 
   abrir: function (tipoInicial) {
     this._tipoActual = tipoInicial || 'CONDUCTORES';
@@ -43,9 +47,20 @@ const FormDocumentos = {
       const activo = t.clave === self._tipoActual ? ' activo' : '';
       return '<button type="button" class="tab-documentos' + activo + '" data-tipo="' + t.clave + '">' + t.etiqueta + '</button>';
     }).join('');
+    if (this._tipoActual === 'GENERALES') {
+      return '' +
+        '<div class="tabs-documentos">' + tabs + '</div>' +
+        '<p style="margin:4px 0 10px;color:#475569;font-size:.85rem">Documentos de la empresa (Transportes SSI S.A.C.): SCTR y pólizas.</p>' +
+        '<div id="formAgregarEntidad"></div>' +
+        '<div id="listaEntidadesDocs">Cargando...</div>' +
+        '<div class="panel-footer" style="margin-top:16px; justify-content:flex-end;">' +
+          '<button type="button" class="boton-secundario" id="btnVolverMenuDocs">Volver al menú</button>' +
+        '</div>';
+    }
     return '' +
       '<div class="tabs-documentos">' + tabs + '</div>' +
       '<div class="barra-filtros">' +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:.85rem;align-self:flex-end;margin-bottom:8px"><input type="checkbox" id="chkVerBajas"' + (this._verBajas ? ' checked' : '') + '> Mostrar dados de baja</label>' +
         '<div class="campo"><label>Buscar</label><input type="text" id="buscarEntidad" placeholder="Nombre, DNI o placa..."></div>' +
         '<button type="button" class="boton-secundario" id="btnRecargarDocs">Recargar</button>' +
         '<button type="button" class="boton-primario" id="btnAgregarEntidad">+ Agregar</button>' +
@@ -66,13 +81,15 @@ const FormDocumentos = {
         actualizarPanel('Documentos', self._plantillaLista(), function (r) { self._wireLista(r); });
       });
     });
+    raiz.querySelector('#btnVolverMenuDocs').addEventListener('click', function () { cerrarPanel(); });
+    if (this._tipoActual === 'GENERALES') { this._cargar(raiz); return; }
     raiz.querySelector('#btnRecargarDocs').addEventListener('click', function () { self._cargar(raiz); });
     raiz.querySelector('#btnAgregarEntidad').addEventListener('click', function () {
       self._mostrarAgregar = !self._mostrarAgregar;
       self._renderFormAgregar(raiz);
     });
     raiz.querySelector('#buscarEntidad').addEventListener('input', function () { self._renderLista(raiz); });
-    raiz.querySelector('#btnVolverMenuDocs').addEventListener('click', function () { cerrarPanel(); });
+    raiz.querySelector('#chkVerBajas').addEventListener('change', function () { self._verBajas = this.checked; self._renderLista(raiz); });
     this._renderFormAgregar(raiz);
     this._cargar(raiz);
   },
@@ -113,6 +130,12 @@ const FormDocumentos = {
     const resp = await llamarBackend('listarDocumentos', { tipoEntidad: this._tipoActual });
     if (!resp.ok) { cont.textContent = 'Error al cargar.'; mostrarMensaje(resp.mensaje || 'Error al cargar documentos.', 'error'); return; }
     this._entidades = resp.entidades || [];
+    if (this._tipoActual === 'GENERALES') {
+      const ent = this._entidades[0];
+      cont.innerHTML = ent ? this._tablaDocs(ent) : '<p>No hay registro de la empresa.</p>';
+      if (ent) this._wireFilas(cont, ent);
+      return;
+    }
     this._renderLista(raiz);
   },
 
@@ -133,6 +156,7 @@ const FormDocumentos = {
   },
 
   _badgeEstado: function (estado, texto) {
+    if (estado === 'BAJA') return '<span class="badge-doc" style="background:#e2e8f0;color:#475569">' + texto + '</span>';
     const clases = { OK: 'ok', POR_VENCER: 'por-vencer', VENCIDO: 'vencido', PENDIENTE: 'pendiente' };
     return '<span class="badge-doc ' + (clases[estado] || 'pendiente') + '">' + texto + '</span>';
   },
@@ -142,6 +166,7 @@ const FormDocumentos = {
     const info = this._tipoInfo();
     const filtro = (raiz.querySelector('#buscarEntidad').value || '').trim().toUpperCase();
     let filas = this._entidades;
+    if (!this._verBajas) filas = filas.filter(function (f) { return !f._baja; });
     if (filtro) {
       filas = filas.filter(function (f) {
         return info.campos.some(function (c) { return String(f[c.campo] || '').toUpperCase().indexOf(filtro) !== -1; });
@@ -151,10 +176,10 @@ const FormDocumentos = {
     if (!filas.length) { cont.innerHTML = '<p>No hay registros.</p>'; return; }
     const tituloCol = info.clave === 'CONDUCTORES' ? 'Nombre' : 'Placa';
     const filasHtml = filas.map(function (f) {
-      const r = self._resumenEntidad(f._documentos || []);
+      const r = f._baja ? { estado: 'BAJA', texto: 'Dado de baja' } : self._resumenEntidad(f._documentos || []);
       const nombreMostrar = info.clave === 'CONDUCTORES' ? (f.NOMBRE || '-') : (f.PLACA || '-');
       const subMostrar = info.clave === 'CONDUCTORES' ? ('DNI ' + (f.DNI || '-')) : '';
-      return '<tr data-fila="' + f._fila + '">' +
+      return '<tr data-fila="' + f._fila + '"' + (f._baja ? ' style="opacity:.6"' : '') + '>' +
         '<td>' + nombreMostrar + (subMostrar ? ' <span style="color:#66707d;font-size:.8rem;">(' + subMostrar + ')</span>' : '') + '</td>' +
         '<td>' + self._badgeEstado(r.estado, r.texto) + '</td>' +
         '</tr>';
@@ -177,6 +202,19 @@ const FormDocumentos = {
   },
 
   _plantillaDetalle: function (entidad) {
+    const baja = entidad._baja;
+    const aviso = baja
+      ? '<div style="margin:0 0 10px;padding:8px 12px;border-radius:8px;background:#f1f5f9;color:#334155;font-size:.85rem"><b>Dado de baja</b> el ' + (entidad['FECHA BAJA'] || '') + ' — ' + (entidad['MOTIVO BAJA'] || '') + '. Ya no se le piden documentos ni genera avisos.</div>'
+      : '';
+    const ctlBaja = baja
+      ? '<button type="button" class="boton-secundario" id="btnReactivar">Reactivar</button>'
+      : '<span id="cajaBaja" style="display:inline-flex;gap:6px;align-items:center"><button type="button" class="boton-secundario" id="btnBaja" style="border-color:#b91c1c;color:#b91c1c">Dar de baja</button></span>';
+    return aviso + this._tablaDocs(entidad) +
+      '<div class="panel-footer" style="margin-top:16px;display:flex;gap:8px;justify-content:space-between">' +
+        '<button type="button" class="boton-secundario" id="btnVolverLista">Volver a la lista</button>' + ctlBaja + '</div>';
+  },
+
+  _tablaDocs: function (entidad) {
     const self = this;
     const filas = (entidad._documentos || []).map(function (d) {
       const fechaISO = d.fechaVencimiento ? self._aInputDate(d.fechaVencimiento) : '';
@@ -188,9 +226,7 @@ const FormDocumentos = {
         '<td>' + adj + '<br><input type="file" class="input-archivo-doc" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp"></td>' +
         '</tr>';
     }).join('');
-    return '' +
-      '<table class="tabla-lista"><thead><tr><th>Estado</th><th>Descripción</th><th>Fecha de vencimiento</th><th>Adjuntos</th></tr></thead><tbody>' + filas + '</tbody></table>' +
-      '<div class="panel-footer" style="margin-top:16px;"><button type="button" class="boton-secundario" id="btnVolverLista">Volver a la lista</button></div>';
+    return '<table class="tabla-lista"><thead><tr><th>Estado</th><th>Descripción</th><th>Fecha de vencimiento</th><th>Adjuntos</th></tr></thead><tbody>' + filas + '</tbody></table>';
   },
 
   _aInputDate: function (valor) {
@@ -204,6 +240,32 @@ const FormDocumentos = {
     raiz.querySelector('#btnVolverLista').addEventListener('click', function () {
       actualizarPanel('Documentos', self._plantillaLista(), function (r) { self._wireLista(r); });
     });
+    const enviarBaja = async function (baja, motivo) {
+      const resp = await llamarBackend('darBajaDocumentos', { tipoEntidad: self._tipoActual, fila: entidad._fila, baja: baja, motivo: motivo });
+      if (!resp || !resp.ok) { mostrarMensaje((resp && resp.mensaje) || 'No se pudo guardar.', 'error'); return; }
+      mostrarMensaje(resp.mensaje, 'exito');
+      self._recargarEntidadYRedetallar(entidad);
+    };
+    const bBaja = raiz.querySelector('#btnBaja');
+    if (bBaja) bBaja.addEventListener('click', function () {
+      const caja = raiz.querySelector('#cajaBaja');
+      caja.innerHTML = '<input type="text" id="txtMotivoBaja" placeholder="Motivo (ej.: ya no trabaja / unidad vendida)" style="min-width:280px">' +
+        '<button type="button" class="boton-primario" id="btnBajaOk" style="background:#b91c1c">Confirmar baja</button>';
+      caja.querySelector('#txtMotivoBaja').focus();
+      caja.querySelector('#btnBajaOk').addEventListener('click', function () {
+        const m = caja.querySelector('#txtMotivoBaja').value.trim();
+        if (!m) { mostrarMensaje('Indique el motivo de la baja.', 'error'); return; }
+        this.disabled = true;
+        enviarBaja(true, m);
+      });
+    });
+    const bRe = raiz.querySelector('#btnReactivar');
+    if (bRe) bRe.addEventListener('click', function () { this.disabled = true; enviarBaja(false, ''); });
+    this._wireFilas(raiz, entidad);
+  },
+
+  _wireFilas: function (raiz, entidad) {
+    const self = this;
     Array.prototype.forEach.call(raiz.querySelectorAll('tr[data-clave]'), function (tr) {
       const clave = tr.getAttribute('data-clave');
       const inputFecha = tr.querySelector('.input-fecha-doc');
@@ -246,6 +308,11 @@ const FormDocumentos = {
   },
 
   _recargarEntidadYRedetallar: async function (entidadVieja) {
+    if (this._tipoActual === 'GENERALES') {
+      const self = this;
+      actualizarPanel('Documentos', this._plantillaLista(), function (r) { self._wireLista(r); });
+      return;
+    }
     const resp = await llamarBackend('listarDocumentos', { tipoEntidad: this._tipoActual });
     if (!resp.ok) return;
     this._entidades = resp.entidades || [];
