@@ -226,7 +226,7 @@ const FormLiquidacionConductores = {
     const td = function (v, al, cls, extra) { return paraCorreo ? '<td ' + st.td(al, extra) + '>' + v + '</td>' : '<td class="' + (al === 'left' ? 'i ' : al === 'center' ? 'c ' : '') + (cls || '') + '">' + v + '</td>'; };
     const m = n => n ? self._m(n) : '';
     const g = n => n ? self._m(n) : '';
-    let h = paraCorreo ? '<table style="border-collapse:collapse">' : '<table class="lq-t"><colgroup><col style="width:8.5%"><col style="width:4.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:4%"><col style="width:3.8%"><col style="width:3.8%"><col><col><col><col><col><col style="width:5.5%"><col><col><col><col><col><col><col><col><col><col style="width:6.5%"></colgroup>';
+    let h = paraCorreo ? '<table style="border-collapse:collapse">' : '<table class="lq-t"><colgroup><col style="width:8.5%"><col style="width:4.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:4%"><col style="width:3.8%"><col style="width:3.8%"><col><col><col><col><col><col style="width:5.5%"><col><col><col><col><col><col><col><col><col style="width:6.5%"></colgroup>';
     h += '<thead><tr>' + cols.map(th).join('') + '</tr></thead><tbody>';
     vis.forEach(function (f) {
       const b = f.totalBono;
