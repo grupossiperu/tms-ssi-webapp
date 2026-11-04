@@ -38,7 +38,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th>Tiempo en planta</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -119,7 +119,9 @@ const FormDatosViaje = {
           <td>${f['DESTINO 1'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
+          <td class="dv-retiro" style="text-align:center;cursor:pointer;">${self._celdaH(self._calc(f).enRetiro)}</td>
           <td class="dv-planta" style="text-align:center;cursor:pointer;">${self._celdaPlanta(f)}</td>
+          <td class="dv-puerto" style="text-align:center;cursor:pointer;">${self._celdaH(self._calc(f).enPuerto)}</td>
           <td style="text-align:center;">
             ${completo
               ? '<span class="badge-datos completo" title="Clic para revisar el seguimiento">Completo</span>'
@@ -130,9 +132,8 @@ const FormDatosViaje = {
           ev.stopPropagation();
           self._abrirSeguimiento(f._fila, f);
         });
-        tr.querySelector('.dv-planta').addEventListener('click', function (ev) {
-          ev.stopPropagation();
-          self._abrirTiempos(f);
+        tr.querySelectorAll('.dv-planta, .dv-retiro, .dv-puerto').forEach(function (td) {
+          td.addEventListener('click', function (ev) { ev.stopPropagation(); self._abrirTiempos(f); });
         });
 
         tbody.appendChild(tr);
@@ -255,12 +256,17 @@ const FormDatosViaje = {
     const extra = enPlanta === null ? null : Math.max(0, Math.round((enPlanta - libres) * 100) / 100);
     const cobrado = (f._sc || []).filter(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
     return { cita: cita, llegada: this._fecha(f._llegadaPlanta), salida: sal, enPlanta: enPlanta, libres: libres, extra: extra, cobrado: cobrado,
-      llegPuerto: this._fecha(f._llegadaPuerto), salPuerto: this._fecha(f._salidaPuerto) };
+      llegPuerto: this._fecha(f._llegadaPuerto), salPuerto: this._fecha(f._salidaPuerto),
+      enPlantaReal: this._horas(this._fecha(f._llegadaPlanta), sal),
+      enPuerto: this._horas(this._fecha(f._llegadaPuerto), this._fecha(f._salidaPuerto)),
+      retVacio: this._fecha(f._retiroVacio), salVacio: this._fecha(f._salidaVacio),
+      enRetiro: this._horas(this._fecha(f._retiroVacio), this._fecha(f._salidaVacio)) };
   },
+  _celdaH: function (h) { return h === null || h === undefined ? '<span style="color:#94a3b8">—</span>' : '<b>' + h.toFixed(1) + ' h</b>'; },
   _celdaPlanta: function (f) {
     const c = this._calc(f);
-    if (c.enPlanta === null) return '<span style="color:#94a3b8">—</span>';
-    let h = '<b>' + c.enPlanta.toFixed(1) + ' h</b>';
+    if (c.enPlantaReal === null && c.enPlanta === null) return '<span style="color:#94a3b8">—</span>';
+    let h = this._celdaH(c.enPlantaReal);
     if (c.cobrado.length) h += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>';
     else if (c.extra > 0) h += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">+' + c.extra.toFixed(1) + ' h extra</span>';
     return h;
@@ -283,12 +289,20 @@ const FormDatosViaje = {
         <span>Código: <b>${esc(f['CODIGO SERVICIO'] || '')}</b></span><span>Conductor: <b>${esc(f['CONDUCTOR'] || '')}</b> (${esc(f['PLACA TRACTO'] || '')})</span>
         <span>Destino: <b>${esc(f['DESTINO 1'] || '')}</b></span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px">
+          <b style="color:#1c3a5e">En retiro (depósito)</b>
+          <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+            ${fila('Retiro vacío', self._fh(c.retVacio))}${fila('Salida del depósito', self._fh(c.salVacio))}
+            ${fila('Tiempo total en retiro', c.enRetiro === null ? '—' : c.enRetiro.toFixed(2) + ' h')}
+          </table>
+        </div>
         <div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px">
           <b style="color:#1c3a5e">En planta</b>
           <table style="width:100%;border-collapse:collapse;font-size:.85rem">
             ${fila('Posicionamiento (cita)', self._fh(c.cita))}${fila('Llegada a planta', self._fh(c.llegada))}${fila('Salida de planta', self._fh(c.salida))}
-            ${fila('Horas en planta (desde la cita)', c.enPlanta === null ? '—' : c.enPlanta.toFixed(2) + ' h')}
+            ${fila('Tiempo total en planta (llegada → salida)', c.enPlantaReal === null ? '—' : c.enPlantaReal.toFixed(2) + ' h')}
+            ${fila('Horas desde la cita', c.enPlanta === null ? '—' : c.enPlanta.toFixed(2) + ' h')}
             ${fila('Horas libres del cliente', c.libres + ' h')}
             ${fila('Horas extra', c.extra === null ? '—' : c.extra.toFixed(2) + ' h', c.extra > 0 ? 'color:#b91c1c;font-size:1rem' : 'color:#166534')}
           </table>
@@ -297,7 +311,7 @@ const FormDatosViaje = {
           <b style="color:#1c3a5e">En puerto</b>
           <table style="width:100%;border-collapse:collapse;font-size:.85rem">
             ${fila('Llegada a cola de puerto', self._fh(c.llegPuerto))}${fila('Salida de puerto', self._fh(c.salPuerto))}
-            ${fila('Horas en puerto', enPuerto === null ? '—' : enPuerto.toFixed(2) + ' h')}
+            ${fila('Tiempo total en puerto (cola → salida)', enPuerto === null ? '—' : enPuerto.toFixed(2) + ' h')}
           </table>
         </div>
       </div>
@@ -374,7 +388,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th>Tiempo en planta</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>
