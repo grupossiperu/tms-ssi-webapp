@@ -262,7 +262,11 @@ const FormDatosViaje = {
       retVacio: this._fecha(f._retiroVacio), salVacio: this._fecha(f._salidaVacio),
       enRetiro: this._horas(this._fecha(f._retiroVacio), this._fecha(f._salidaVacio)) };
   },
-  _celdaH: function (h) { return h === null || h === undefined ? '<span style="color:#94a3b8">—</span>' : '<b>' + h.toFixed(1) + ' h</b>'; },
+  _celdaH: function (h) {
+    if (h === null || h === undefined) return '<span style="color:#94a3b8">—</span>';
+    if (h < 0 || h > 200) return '<span title="Las fechas del seguimiento parecen mal digitadas (sale ' + h.toFixed(1) + ' h). Revisa el año, mes y día." style="display:inline-block;padding:1px 6px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:.7rem;font-weight:700">⚠ revisar</span>';
+    return '<b>' + h.toFixed(1) + ' h</b>';
+  },
   _celdaPlanta: function (f) {
     const c = this._calc(f);
     if (c.enPlantaReal === null && c.enPlanta === null) return '<span style="color:#94a3b8">—</span>';
