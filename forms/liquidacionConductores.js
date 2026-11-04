@@ -3,8 +3,8 @@
  * -------------------------------------------------------------------------
  * Finanzas > "Liquidación de conductores". Sale del CONSOLIDADO.
  * Por viaje: peajes (peaje + S.D.C.F. + adicional), viático, llanta, cochera,
- * lavado, otros (con motivo), bono, feriado y dominical = TOTAL GASTOS;
- * depositado + extras = TOTAL DEPÓSITO; TOTAL BONO = gastos − depósito.
+ * lavado, otros (con motivo), feriado y dominical = COSTO DEL VIAJE (sin bono);
+ * depositado + depósitos adicionales = TOTAL DEPÓSITO; TOTAL BONO = costo + bono − depósito.
  * Por quincena (01-15 / 16-fin de mes): PENDIENTE → LIQUIDADO → DEPOSITADO.
  * Maestros y facturación pueden corregir montos (se graban en el consolidado
  * con huella), liquidar, marcar depositado y reabrir.
@@ -101,7 +101,8 @@ const FormLiquidacionConductores = {
     self._puede = !!r.puedeEditar;
     self._liqs = r.liquidaciones || [];
     self._filas = (r.filas || []).map(function (f) {
-      f.gastos = f.peajes + f.viatico + f.llanta + f.cochera + f.lavado + f.otros + f.bono + f.feriado + f.dominical;
+      f.costo = f.peajes + f.viatico + f.llanta + f.cochera + f.lavado + f.otros + f.feriado + f.dominical;
+      f.gastos = f.costo + f.bono;
       f.totalDep = f.depositado + f.extras;
       f.totalBono = Math.round((f.gastos - f.totalDep) * 100) / 100;
       return f;
@@ -140,7 +141,7 @@ const FormLiquidacionConductores = {
   },
   _suma: function (lista) {
     return lista.reduce(function (a, f) {
-      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'gastos', 'depositado', 'extras', 'totalDep', 'totalBono', 'km'].forEach(k => { a[k] = (a[k] || 0) + (f[k] || 0); });
+      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'costo', 'gastos', 'depositado', 'extras', 'totalDep', 'totalBono', 'km'].forEach(k => { a[k] = (a[k] || 0) + (f[k] || 0); });
       a.n = (a.n || 0) + 1; return a;
     }, {});
   },
@@ -153,7 +154,7 @@ const FormLiquidacionConductores = {
     if (!cond) { self._pintarResumen(vis); _refrescarSnapshotFormulario(); return; }
     const t = self._suma(vis);
     let h = '<div class="lq-wrap">' + self._tablaHtml(vis, false) + '</div>' +
-      '<div class="lq-res"><div><span>Total gastos</span><b>S/ ' + self._m(t.gastos) + '</b></div><div><span>Total depósito (depositado + extras)</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
+      '<div class="lq-res"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito (depositado + depósitos adicionales)</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
       '<div><span>Viajes</span><b>' + (t.n || 0) + '</b></div><div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>';
     // Acciones: liquidar la quincena (pendientes)
     const pend = vis.filter(f => f.liqEstado === 'PENDIENTE');
@@ -189,13 +190,13 @@ const FormLiquidacionConductores = {
     vis.forEach(f => { const k = f.conductor + '|' + f.quincena + '|' + (f.liqId || 'P'); (g[k] = g[k] || []).push(f); });
     const filas = Object.keys(g).map(k => {
       const l = g[k]; const s = self._suma(l); const f0 = l[0]; const liq = f0.liqId ? self._liq(f0.liqId) : null;
-      return { conductor: f0.conductor, quincena: f0.quincena, estado: f0.liqEstado, liq: liq, n: s.n, gastos: liq ? liq.gastos : s.gastos, totalDep: liq ? liq.totalDep : s.totalDep, totalBono: liq ? liq.totalBono : s.totalBono };
+      return { conductor: f0.conductor, quincena: f0.quincena, estado: f0.liqEstado, liq: liq, n: s.n, costo: liq ? (liq.gastos || 0) - (s.bono || 0) : s.costo, totalDep: liq ? liq.totalDep : s.totalDep, totalBono: liq ? liq.totalBono : s.totalBono };
     }).sort((a, b) => a.conductor.localeCompare(b.conductor) || String(b.quincena).localeCompare(String(a.quincena)));
-    const t = filas.reduce((a, r) => { a.n += r.n; a.g += r.gastos; a.d += r.totalDep; a.b += r.totalBono; return a; }, { n: 0, g: 0, d: 0, b: 0 });
+    const t = filas.reduce((a, r) => { a.n += r.n; a.g += r.costo; a.d += r.totalDep; a.b += r.totalBono; return a; }, { n: 0, g: 0, d: 0, b: 0 });
     $('lqCuerpo').innerHTML = '<div class="lq-wrap"><table class="lq-t"><colgroup><col style="width:24%"><col style="width:12%"><col style="width:6%"><col><col><col><col style="width:11%"><col style="width:15%"></colgroup>' +
-      '<thead><tr><th>Conductor</th><th>Quincena</th><th>Viajes</th><th>Total gastos</th><th class="dep">Total depósito</th><th class="res">Total bono</th><th>Estado</th><th></th></tr></thead><tbody>' +
+      '<thead><tr><th>Conductor</th><th>Quincena</th><th>Viajes</th><th>Costo del viaje</th><th class="dep">Total depósito</th><th class="res">Total bono</th><th>Estado</th><th></th></tr></thead><tbody>' +
       (filas.length ? filas.map(r => '<tr class="clic" data-c="' + esc(r.conductor) + '" data-q="' + r.quincena + '"><td class="i"><b>' + esc(r.conductor) + '</b></td><td class="c">' + self._qTxt(r.quincena) + '</td><td class="c">' + r.n +
-        '</td><td>S/ ' + self._m(r.gastos) + '</td><td class="depT">S/ ' + self._m(r.totalDep) + '</td>' + self._bonoTd(r.totalBono) +
+        '</td><td>S/ ' + self._m(r.costo) + '</td><td class="depT">S/ ' + self._m(r.totalDep) + '</td>' + self._bonoTd(r.totalBono) +
         '<td class="c"><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : r.estado) + '</span>' + (r.liq && r.estado === 'DEPOSITADO' ? '<span class="lq-mot">' + esc(r.liq.fechaDep || '') + ' · op. ' + esc(r.liq.operacion || '') + '</span>' : '') + '</td>' +
         '<td class="c">' + (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Depositar</button>' : '') + '<button class="lq-btn">Ver ›</button></td></tr>').join('')
         : '<tr><td colspan="8" class="c" style="color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>') +
@@ -211,8 +212,8 @@ const FormLiquidacionConductores = {
   _tablaHtml: function (vis, paraCorreo) {
     const self = this, t = self._suma(vis);
     const conAcc = !paraCorreo;
-    const cols = ['CONDUCTOR', 'PLACA', 'DESTINO', 'FECHA DEL SERVICIO', 'N° DE VIÁTICO', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'BONO', 'FERIADO', 'DOMINICAL', 'TOTAL GASTOS',
-      'MONTO DEPOSITADO', 'EXTRAS', 'TOTAL DEPÓSITO', 'TOTAL BONO'].concat(conAcc ? ['ESTADO'] : []);
+    const cols = ['CONDUCTOR', 'PLACA', 'DESTINO', 'FECHA DEL SERVICIO', 'N° DE VIÁTICO', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE',
+      'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO'].concat(conAcc ? ['ESTADO'] : []);
     const st = paraCorreo ? {
       th: 'style="background:#bcd3ee;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"',
       thd: 'style="background:#d7e8c9;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"',
@@ -230,7 +231,7 @@ const FormLiquidacionConductores = {
       h += '<tr>' + td(condCel, 'left') + td(esc(f.placa), 'center') + td(esc(f.destino), 'left') + td(self._f(f.fecha), 'center') + td(esc(f.nroViatico), 'center') +
         td(m(f.peajes), 'right') + td(m(f.viatico), 'right') + td(m(f.llanta), 'right') + td(m(f.cochera), 'right') + td(m(f.lavado), 'right') +
         td(m(f.otros) + (f.otros && f.motivoOtros ? (paraCorreo ? '<br><span style="font-size:8pt;color:#555">' + esc(f.motivoOtros) + '</span>' : '<span class="lq-mot">' + esc(f.motivoOtros) + '</span>') : ''), 'right') +
-        td(m(f.bono), 'right') + td(m(f.feriado), 'right') + td(m(f.dominical), 'right') + td(self._m(f.gastos), 'right', 'tot', 'font-weight:bold;background:#f1f5f9') +
+        td(m(f.feriado), 'right') + td(m(f.dominical), 'right') + td(m(f.bono), 'right') + td(self._m(f.costo), 'right', 'tot', 'font-weight:bold;background:#f1f5f9') +
         td(m(f.depositado), 'right', 'dep') + td(m(f.extras), 'right', 'dep') + td(self._m(f.totalDep), 'right', 'depT', 'font-weight:bold;background:#e6f2dc') +
         td('S/ ' + self._m(b), 'right', b > 0 ? 'bono' : 'neg', 'color:#b45309;font-weight:bold;background:#fff3e0') +
         (conAcc ? '<td class="c"><span class="lq-est ' + f.liqEstado + '">' + (f.liqEstado === 'LIQUIDADO' ? 'POR DEPOSITAR' : f.liqEstado) + '</span>' +
@@ -239,7 +240,7 @@ const FormLiquidacionConductores = {
     if (!vis.length) h += '<tr><td colspan="' + cols.length + '" style="text-align:center;color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>';
     const tf = function (v, al) { return paraCorreo ? '<td ' + st.td(al || 'right', 'font-weight:bold;background:#e9eef5') + '>' + v + '</td>' : '<td>' + v + '</td>'; };
     h += '</tbody><tfoot><tr>' + (paraCorreo ? '<td colspan="5" ' + st.td('right', 'font-weight:bold;background:#e9eef5') + '>TOTAL (' + (t.n || 0) + ' viajes)</td>' : '<td colspan="5" class="i">TOTAL (' + (t.n || 0) + ' viajes)</td>') +
-      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'gastos', 'depositado', 'extras', 'totalDep'].map(k => tf(self._m(t[k]))).join('') +
+      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'feriado', 'dominical', 'bono', 'costo', 'depositado', 'extras', 'totalDep'].map(k => tf(self._m(t[k]))).join('') +
       tf('S/ ' + self._m(t.totalBono)) + (conAcc ? '<td></td>' : '') + '</tr></tfoot></table>';
     return h;
   },
@@ -255,8 +256,8 @@ const FormLiquidacionConductores = {
     const vis = self._vis();
     if (!vis.length) { mostrarMensaje('No hay viajes para copiar.', 'error'); return; }
     const html = '<p style="font-family:Calibri,Arial;font-size:11pt"><b>' + esc(self._titulo()) + '</b></p>' + self._tablaHtml(vis, true);
-    const txt = vis.map(f => [f.conductor, f.placa, f.destino, self._f(f.fecha), f.nroViatico, f.peajes, f.viatico, f.llanta, f.cochera, f.lavado, f.otros, f.bono, f.feriado, f.dominical,
-      f.gastos.toFixed(2), f.depositado, f.extras, f.totalDep.toFixed(2), f.totalBono.toFixed(2)].join('\t')).join('\n');
+    const txt = vis.map(f => [f.conductor, f.placa, f.destino, self._f(f.fecha), f.nroViatico, f.peajes, f.viatico, f.llanta, f.cochera, f.lavado, f.otros, f.feriado, f.dominical, f.bono,
+      f.costo.toFixed(2), f.depositado, f.extras, f.totalDep.toFixed(2), f.totalBono.toFixed(2)].join('\t')).join('\n');
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]);
       mostrarMensaje('Liquidación copiada (' + vis.length + ' viaje(s)). Pégala en el correo o en Excel con Ctrl+V.', 'exito');
@@ -275,12 +276,12 @@ const FormLiquidacionConductores = {
     const self = this, vis = self._vis();
     if (!vis.length) { mostrarMensaje('No hay viajes para exportar.', 'error'); return; }
     const enc = ['CONDUCTOR', 'PLACA', 'CLIENTE', 'DESTINO', 'FECHA DEL SERVICIO', 'QUINCENA', 'CÓDIGO', 'N° DE VIÁTICO', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS',
-      'BONO', 'FERIADO', 'DOMINICAL', 'TOTAL GASTOS', 'MONTO DEPOSITADO', 'EXTRAS', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO', 'MODIFICADO POR'];
+      'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE', 'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO', 'MODIFICADO POR'];
     const n = x => Math.round((Number(x) || 0) * 100) / 100;
     const filas = vis.map(f => [f.conductor, f.placa, f.cliente, f.destino, self._f(f.fecha), self._qTxt(f.quincena), f.clave, f.nroViatico, n(f.peajes), n(f.viatico), n(f.llanta), n(f.cochera), n(f.lavado), n(f.otros), f.motivoOtros || '',
-      n(f.bono), n(f.feriado), n(f.dominical), n(f.gastos), n(f.depositado), n(f.extras), n(f.totalDep), n(f.totalBono), f.liqEstado === 'LIQUIDADO' ? 'POR DEPOSITAR' : f.liqEstado, f.modPor ? f.modPor + ' ' + (f.modFecha || '') : '']);
+      n(f.feriado), n(f.dominical), n(f.bono), n(f.costo), n(f.depositado), n(f.extras), n(f.totalDep), n(f.totalBono), f.liqEstado === 'LIQUIDADO' ? 'POR DEPOSITAR' : f.liqEstado, f.modPor ? f.modPor + ' ' + (f.modFecha || '') : '']);
     const t = self._suma(vis);
-    filas.push(['TOTAL (' + vis.length + ' viajes)', '', '', '', '', '', '', '', n(t.peajes), n(t.viatico), n(t.llanta), n(t.cochera), n(t.lavado), n(t.otros), '', n(t.bono), n(t.feriado), n(t.dominical), n(t.gastos), n(t.depositado), n(t.extras), n(t.totalDep), n(t.totalBono), '', '']);
+    filas.push(['TOTAL (' + vis.length + ' viajes)', '', '', '', '', '', '', '', n(t.peajes), n(t.viatico), n(t.llanta), n(t.cochera), n(t.lavado), n(t.otros), '', n(t.feriado), n(t.dominical), n(t.bono), n(t.costo), n(t.depositado), n(t.extras), n(t.totalDep), n(t.totalBono), '', '']);
     const nombre = 'Liquidacion_' + (self._raiz.querySelector('#lqCond').value || 'conductores').replace(/\s+/g, '_') + '_' + (self._raiz.querySelector('#lqQuin').value || 'todas') + '.xlsx';
     try {
       const X = await self._cargarXlsx();
@@ -305,7 +306,7 @@ const FormLiquidacionConductores = {
     w.document.write('<html><head><title>Liquidación</title><style>@page{size:A4 landscape;margin:10mm} body{font-family:Calibri,Arial}</style></head><body>' +
       '<h3 style="margin:0 0 4px">TRANSPORTES SSI S.A.C. — ' + esc(self._titulo()) + '</h3>' +
       self._tablaHtml(vis, true) +
-      '<p style="font-size:11pt;margin-top:10px"><b>Total gastos:</b> S/ ' + self._m(t.gastos) + ' &nbsp; · &nbsp; <b>Total depósito:</b> S/ ' + self._m(t.totalDep) +
+      '<p style="font-size:11pt;margin-top:10px"><b>Costo de los viajes:</b> S/ ' + self._m(t.costo) + ' &nbsp; · &nbsp; <b>Bono:</b> S/ ' + self._m(t.bono) + ' &nbsp; · &nbsp; <b>Total depósito:</b> S/ ' + self._m(t.totalDep) +
       ' &nbsp; · &nbsp; <b>TOTAL BONO:</b> S/ ' + self._m(t.totalBono) + '</p>' +
       '<table style="margin-top:40px;width:100%;font-size:10pt"><tr><td style="text-align:center">______________________<br>Conductor</td><td style="text-align:center">______________________<br>Transportes SSI</td></tr></table>' +
       '<script>window.onload=function(){window.print();}<\/script></body></html>');
@@ -344,7 +345,7 @@ const FormLiquidacionConductores = {
     const t = self._suma(vs);
     self._dlg('Liquidar quincena ' + self._qTxt(q),
       '<p style="margin:0 0 8px"><b>' + esc(cond) + '</b> · ' + vs.length + ' viaje(s)</p>' +
-      '<div class="lq-res" style="grid-template-columns:repeat(3,1fr)"><div><span>Total gastos</span><b>S/ ' + self._m(t.gastos) + '</b></div><div><span>Total depósito</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
+      '<div class="lq-res" style="grid-template-columns:repeat(3,1fr)"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
       '<div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>' +
       '<label style="margin-top:10px">Observación (opcional)</label><input data-obs maxlength="200">' +
       '<p class="nota">Al liquidar, estos viajes quedan revisados y pasan a "Por depositar". Ya no se pueden corregir salvo que se reabra la quincena.</p>',
@@ -564,7 +565,7 @@ Object.assign(FormLiquidacionConductores, {
     const ws = wb.addWorksheet('Liquidaciones', { views: [{ showGridLines: false }] });
     ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } };
     const cols = [['QUINCENA', 15], ['FECHA', 11], ['PLACA', 9], ['CLIENTE', 11], ['DESTINO', 20], ['CÓDIGO', 15], ['N° VIÁTICO', 10], ['KM', 8], ['PEAJES', 10], ['VIÁTICO', 10], ['LLANTA', 9], ['COCHERA', 9],
-      ['LAVADO', 9], ['OTROS', 9], ['MOTIVO OTROS', 22], ['BONO', 9], ['FERIADO', 9], ['DOMINICAL', 10], ['TOTAL GASTOS', 12], ['MONTO DEPOSITADO', 12], ['EXTRAS', 9], ['TOTAL DEPÓSITO', 12], ['TOTAL BONO', 12], ['ESTADO', 15]];
+      ['LAVADO', 9], ['OTROS', 9], ['MOTIVO OTROS', 22], ['FERIADO', 9], ['DOMINICAL', 10], ['BONO', 9], ['COSTO DEL VIAJE', 12], ['MONTO DEPOSITADO', 12], ['DEPÓSITOS ADICIONALES', 12], ['TOTAL DEPÓSITO', 12], ['TOTAL BONO', 12], ['ESTADO', 15]];
     const NC = cols.length;
     cols.forEach((c, i) => { ws.getColumn(i + 1).width = c[1]; });
     const numCols = [8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23];
@@ -592,7 +593,7 @@ Object.assign(FormLiquidacionConductores, {
       hr.height = 28; r++;
       lista.forEach(function (f) {
         const v = [self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
-          n2(f.bono), n2(f.feriado), n2(f.dominical), n2(f.gastos), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), (self._EST_TXT[f.liqEstado] || f.liqEstado) + (f.modPor ? ' · ✎ ' + f.modPor : '')];
+          n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), (self._EST_TXT[f.liqEstado] || f.liqEstado) + (f.modPor ? ' · ✎ ' + f.modPor : '')];
         const row = ws.getRow(r);
         v.forEach((x, i) => {
           const cel = row.getCell(i + 1); cel.value = x; cel.border = borde; cel.font = { size: 9 };
@@ -606,7 +607,7 @@ Object.assign(FormLiquidacionConductores, {
       });
       const tr = ws.getRow(r);
       tr.getCell(1).value = 'TOTAL ' + cond; ws.mergeCells(r, 1, r, 7);
-      const tv = { 8: s.km, 9: s.peajes, 10: s.viatico, 11: s.llanta, 12: s.cochera, 13: s.lavado, 14: s.otros, 16: s.bono, 17: s.feriado, 18: s.dominical, 19: s.gastos, 20: s.depositado, 21: s.extras, 22: s.totalDep, 23: s.totalBono };
+      const tv = { 8: s.km, 9: s.peajes, 10: s.viatico, 11: s.llanta, 12: s.cochera, 13: s.lavado, 14: s.otros, 16: s.feriado, 17: s.dominical, 18: s.bono, 19: s.costo, 20: s.depositado, 21: s.extras, 22: s.totalDep, 23: s.totalBono };
       for (let i = 1; i <= NC; i++) {
         const cel = tr.getCell(i); cel.border = borde; cel.font = { bold: true, size: 10 }; cel.fill = relleno('FFE9EEF5');
         if (tv[i] !== undefined) { cel.value = n2(tv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
@@ -623,7 +624,7 @@ Object.assign(FormLiquidacionConductores, {
     // Total general
     ws.mergeCells(r, 1, r, 7);
     const gr = ws.getRow(r); gr.getCell(1).value = 'TOTAL GENERAL (' + vis.length + ' viajes · ' + nombres.length + ' conductores)';
-    const gv = { 8: t.km, 9: t.peajes, 10: t.viatico, 11: t.llanta, 12: t.cochera, 13: t.lavado, 14: t.otros, 16: t.bono, 17: t.feriado, 18: t.dominical, 19: t.gastos, 20: t.depositado, 21: t.extras, 22: t.totalDep, 23: t.totalBono };
+    const gv = { 8: t.km, 9: t.peajes, 10: t.viatico, 11: t.llanta, 12: t.cochera, 13: t.lavado, 14: t.otros, 16: t.feriado, 17: t.dominical, 18: t.bono, 19: t.costo, 20: t.depositado, 21: t.extras, 22: t.totalDep, 23: t.totalBono };
     for (let i = 1; i <= NC; i++) {
       const cel = gr.getCell(i); cel.border = borde; cel.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } }; cel.fill = relleno(AZ);
       if (gv[i] !== undefined) { cel.value = n2(gv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
@@ -640,7 +641,7 @@ Object.assign(FormLiquidacionConductores, {
     d.getCell('A2').font = { size: 10, color: { argb: 'FF475569' } };
     const porEst = { PENDIENTE: 0, LIQUIDADO: 0, DEPOSITADO: 0 }, viajesEst = { PENDIENTE: 0, LIQUIDADO: 0, DEPOSITADO: 0 };
     vis.forEach(f => { porEst[f.liqEstado] = (porEst[f.liqEstado] || 0) + f.totalBono; viajesEst[f.liqEstado] = (viajesEst[f.liqEstado] || 0) + 1; });
-    const kpis = [['Conductores', nombres.length, '0'], ['Viajes', vis.length, '0'], ['Km recorridos', t.km || 0, '#,##0'], ['Total gastos (S/)', t.gastos, '#,##0.00'],
+    const kpis = [['Conductores', nombres.length, '0'], ['Viajes', vis.length, '0'], ['Km recorridos', t.km || 0, '#,##0'], ['Costo de los viajes (S/)', t.costo, '#,##0.00'],
       ['Total depósito (S/)', t.totalDep, '#,##0.00'], ['Total bono (S/)', t.totalBono, '#,##0.00'], ['Por depositar (S/)', porEst.LIQUIDADO, '#,##0.00'], ['Depositado (S/)', porEst.DEPOSITADO, '#,##0.00']];
     kpis.forEach((k, i) => {
       const a = d.getCell(4, i + 1), b = d.getCell(5, i + 1);
@@ -661,22 +662,22 @@ Object.assign(FormLiquidacionConductores, {
       fr++;
     };
     // Resumen por conductor
-    const resumen = nombres.map(c => { const l = grupos[c], s = self._suma(l); return [c, l.length, n2(s.km), n2(s.gastos), n2(s.totalDep), n2(s.totalBono), Array.from(new Set(l.map(f => self._EST_TXT[f.liqEstado]))).join(' / '), l.length ? n2((s.km || 0) / l.length) : 0]; })
+    const resumen = nombres.map(c => { const l = grupos[c], s = self._suma(l); return [c, l.length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono), Array.from(new Set(l.map(f => self._EST_TXT[f.liqEstado]))).join(' / '), l.length ? n2((s.km || 0) / l.length) : 0]; })
       .sort((a, b) => b[5] - a[5]);
-    const totR = ['TOTAL', vis.length, n2(t.km), n2(t.gastos), n2(t.totalDep), n2(t.totalBono), '', vis.length ? n2((t.km || 0) / vis.length) : 0]; totR._tot = true;
-    tabla('Resumen por conductor', ['Conductor', 'Viajes', 'Km', 'Total gastos', 'Total depósito', 'Total bono', 'Estado', 'Km por viaje'], resumen.concat([totR]), [null, '0', '#,##0', '#,##0.00', '#,##0.00', '#,##0.00', null, '#,##0']);
+    const totR = ['TOTAL', vis.length, n2(t.km), n2(t.costo), n2(t.totalDep), n2(t.totalBono), '', vis.length ? n2((t.km || 0) / vis.length) : 0]; totR._tot = true;
+    tabla('Resumen por conductor', ['Conductor', 'Viajes', 'Km', 'Costo del viaje', 'Total depósito', 'Total bono', 'Estado', 'Km por viaje'], resumen.concat([totR]), [null, '0', '#,##0', '#,##0.00', '#,##0.00', '#,##0.00', null, '#,##0']);
     // Gastos por concepto
     const conceptos = [['Peajes', t.peajes], ['Viático', t.viatico], ['Llanta', t.llanta], ['Cochera', t.cochera], ['Lavado', t.lavado], ['Otros', t.otros], ['Bono', t.bono], ['Feriado', t.feriado], ['Dominical', t.dominical]];
     const tg = t.gastos || 1;
-    const cf = conceptos.map(c => [c[0], n2(c[1] || 0), (c[1] || 0) / tg]); const cft = ['TOTAL GASTOS', n2(t.gastos), 1]; cft._tot = true;
+    const cf = conceptos.map(c => [c[0], n2(c[1] || 0), (c[1] || 0) / tg]); const cft = ['TOTAL (costo + bono)', n2(t.gastos), 1]; cft._tot = true;
     tabla('Gastos por concepto', ['Concepto', 'Monto (S/)', '% del total'], cf.concat([cft]), [null, '#,##0.00', '0.0%']);
     // Estado de pago
     const ef = ['PENDIENTE', 'LIQUIDADO', 'DEPOSITADO'].map(e => [self._EST_TXT[e], viajesEst[e] || 0, n2(porEst[e] || 0)]);
     tabla('Estado de pago', ['Estado', 'Viajes', 'Total bono (S/)'], ef, [null, '0', '#,##0.00'], NAR);
     // Destinos más frecuentes
     const gd = self._agrupar(vis, f => f.destino);
-    const dest = Object.keys(gd).map(k => [k, gd[k].length, n2(self._suma(gd[k]).km), n2(self._suma(gd[k]).gastos)]).sort((a, b) => b[1] - a[1] || b[2] - a[2]).slice(0, 15);
-    tabla('Viajes más frecuentes (destino)', ['Destino', 'Viajes', 'Km', 'Gastos (S/)'], dest, [null, '0', '#,##0', '#,##0.00'], VER);
+    const dest = Object.keys(gd).map(k => [k, gd[k].length, n2(self._suma(gd[k]).km), n2(self._suma(gd[k]).costo)]).sort((a, b) => b[1] - a[1] || b[2] - a[2]).slice(0, 15);
+    tabla('Viajes más frecuentes (destino)', ['Destino', 'Viajes', 'Km', 'Costo (S/)'], dest, [null, '0', '#,##0', '#,##0.00'], VER);
     // Clientes con mayor frecuencia
     const gc = self._agrupar(vis, f => f.cliente);
     const cli = Object.keys(gc).map(k => [k, gc[k].length, gc[k].length / (vis.length || 1), n2(self._suma(gc[k]).km)]).sort((a, b) => b[1] - a[1]).slice(0, 15);
@@ -688,7 +689,7 @@ Object.assign(FormLiquidacionConductores, {
     const graf = [
       self._grafBarras('Total bono por conductor (S/)', porBono.map(x => x[0]), [{ nombre: 'Total bono', color: '#f59e0b', datos: porBono.map(x => x[5]) }], S),
       self._grafBarras('Gastos por concepto (S/)', conceptos.map(c => c[0]), [{ nombre: 'Monto', color: '#3b82f6', datos: conceptos.map(c => c[1] || 0) }], S),
-      self._grafBarras('Depositado vs gastos por conductor (S/)', porBono.map(x => x[0]), [{ nombre: 'Total depósito', color: '#16a34a', datos: porBono.map(x => x[4]) }, { nombre: 'Total gastos', color: '#1c3a5e', datos: porBono.map(x => x[3]) }], S),
+      self._grafBarras('Depositado vs costo del viaje por conductor (S/)', porBono.map(x => x[0]), [{ nombre: 'Total depósito', color: '#16a34a', datos: porBono.map(x => x[4]) }, { nombre: 'Costo del viaje', color: '#1c3a5e', datos: porBono.map(x => x[3]) }], S),
       self._grafDona('Estado de pago (total bono S/)', ef.map(e => e[0] + ' · ' + e[1] + ' viajes'), ef.map(e => e[2]), ['#f59e0b', '#3b82f6', '#16a34a'], S),
       self._grafBarras('Viajes por conductor', resumen.slice().sort((a, b) => b[1] - a[1]).map(x => x[0]), [{ nombre: 'Viajes', color: '#6366f1', datos: resumen.slice().sort((a, b) => b[1] - a[1]).map(x => x[1]) }], N),
       self._grafBarras('Kilómetros recorridos por conductor', resumen.slice().sort((a, b) => b[2] - a[2]).map(x => x[0]), [{ nombre: 'Km', color: '#0ea5e9', datos: resumen.slice().sort((a, b) => b[2] - a[2]).map(x => x[2]) }], N),
@@ -719,14 +720,14 @@ Object.assign(FormLiquidacionConductores, {
   /** Respaldo sin gráficos (si ExcelJS no carga). */
   _excelSimple: async function (sel) {
     const self = this, X = await self._cargarXlsx(), n2 = x => Math.round((Number(x) || 0) * 100) / 100;
-    const enc = ['CONDUCTOR', 'QUINCENA', 'FECHA', 'PLACA', 'CLIENTE', 'DESTINO', 'CÓDIGO', 'N° VIÁTICO', 'KM', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS', 'BONO', 'FERIADO', 'DOMINICAL', 'TOTAL GASTOS', 'MONTO DEPOSITADO', 'EXTRAS', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO'];
+    const enc = ['CONDUCTOR', 'QUINCENA', 'FECHA', 'PLACA', 'CLIENTE', 'DESTINO', 'CÓDIGO', 'N° VIÁTICO', 'KM', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE', 'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO'];
     const filas = sel.vis.map(f => [f.conductor, self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
-      n2(f.bono), n2(f.feriado), n2(f.dominical), n2(f.gastos), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), self._EST_TXT[f.liqEstado] || f.liqEstado]);
+      n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), self._EST_TXT[f.liqEstado] || f.liqEstado]);
     const g = self._agrupar(sel.vis, f => f.conductor);
-    const res = Object.keys(g).sort().map(c => { const s = self._suma(g[c]); return [c, g[c].length, n2(s.km), n2(s.gastos), n2(s.totalDep), n2(s.totalBono)]; });
+    const res = Object.keys(g).sort().map(c => { const s = self._suma(g[c]); return [c, g[c].length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono)]; });
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([[self._periodoTxt(sel)], [], enc].concat(filas)), 'Liquidaciones');
-    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Resumen por conductor'], [], ['Conductor', 'Viajes', 'Km', 'Total gastos', 'Total depósito', 'Total bono']].concat(res)), 'Dashboard');
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Resumen por conductor'], [], ['Conductor', 'Viajes', 'Km', 'Costo del viaje', 'Total depósito', 'Total bono']].concat(res)), 'Dashboard');
     X.writeFile(wb, 'Liquidaciones_' + sel.qd + '.xlsx');
     mostrarMensaje('Excel generado sin gráficos (no cargó el componente de gráficos).', 'exito');
   }
