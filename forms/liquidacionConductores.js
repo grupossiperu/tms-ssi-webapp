@@ -26,11 +26,12 @@ const FormLiquidacionConductores = {
       <style>
         .lq-barra { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:end; margin-bottom:8px; }
         .lq-barra .campo { margin:0; min-width:140px; }
-        .lq-wrap { max-height:calc(74vh - 250px); min-height:160px; overflow:auto; border:1px solid #e1e6ec; border-radius:10px; }
-        .lq-t { width:100%; table-layout:fixed; border-collapse:collapse; font-size:.68rem; }
-        .lq-t th { background:#bcd3ee; color:#1c3a5e; font-size:.62rem; padding:5px 3px; position:sticky; top:0; z-index:1; text-align:center; border:1px solid #9fb9d9; }
+        .lq-wrap { max-height:calc(74vh - 250px); min-height:160px; overflow-y:auto; overflow-x:hidden; border:1px solid #e1e6ec; border-radius:10px; }
+        .lq-t th.gl { background:#dbeafe; border-color:#a5c4ea; } .lq-t td.gl { background:#f5f9ff; color:#1e3a8a; }
+        .lq-t { width:100%; table-layout:fixed; border-collapse:collapse; font-size:.62rem; }
+        .lq-t th { background:#bcd3ee; color:#1c3a5e; font-size:.56rem; padding:4px 2px; position:sticky; top:0; z-index:1; text-align:center; border:1px solid #9fb9d9; }
         .lq-t th.dep { background:#d7e8c9; border-color:#b6cfa1; } .lq-t th.res { background:#ffd8a8; border-color:#f5b76b; }
-        .lq-t td { padding:4px 3px; border-bottom:1px solid #eef2f7; text-align:right; overflow-wrap:anywhere; }
+        .lq-t td { padding:3px 2px; border-bottom:1px solid #eef2f7; text-align:right; overflow-wrap:anywhere; }
         .lq-t td.i { text-align:left; } .lq-t td.c { text-align:center; }
         .lq-t td.tot { font-weight:800; background:#f1f5f9; } .lq-t td.dep { background:#f3f9ee; } .lq-t td.depT { font-weight:800; background:#e6f2dc; }
         .lq-t td.bono { color:#b45309; font-weight:800; background:#fff3e0; } .lq-t td.neg { color:#166534; font-weight:800; }
@@ -141,7 +142,7 @@ const FormLiquidacionConductores = {
   },
   _suma: function (lista) {
     return lista.reduce(function (a, f) {
-      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'costo', 'gastos', 'depositado', 'extras', 'totalDep', 'totalBono', 'km'].forEach(k => { a[k] = (a[k] || 0) + (f[k] || 0); });
+      ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'bono', 'feriado', 'dominical', 'costo', 'gastos', 'depositado', 'extras', 'totalDep', 'totalBono', 'km', 'glTracto', 'glGenset'].forEach(k => { a[k] = (a[k] || 0) + (f[k] || 0); });
       a.n = (a.n || 0) + 1; return a;
     }, {});
   },
@@ -212,23 +213,26 @@ const FormLiquidacionConductores = {
   _tablaHtml: function (vis, paraCorreo) {
     const self = this, t = self._suma(vis);
     const conAcc = !paraCorreo;
-    const cols = ['CONDUCTOR', 'PLACA', 'DESTINO', 'FECHA DEL SERVICIO', 'N° DE VIÁTICO', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE',
+    const cols = ['CONDUCTOR', 'PLACA', 'DESTINO', 'PRODUCTO', 'FECHA DEL SERVICIO', 'N° DE VIÁTICO', 'GL TRACTO', 'GL GENSET', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE',
       'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO'].concat(conAcc ? ['ESTADO'] : []);
     const st = paraCorreo ? {
       th: 'style="background:#bcd3ee;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"',
       thd: 'style="background:#d7e8c9;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"',
+      thg: 'style="background:#dbeafe;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"',
       thr: 'style="background:#ffd8a8;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"',
       td: function (al, extra) { return 'style="border:1px solid #c9d3df;padding:3px 6px;font-family:Calibri,Arial;font-size:10pt;text-align:' + al + ';' + (extra || '') + '"'; }
     } : null;
-    const th = function (c, i) { const cls = i >= 15 && i <= 17 ? 'dep' : i === 18 ? 'res' : ''; return paraCorreo ? '<th ' + (cls === 'dep' ? st.thd : cls === 'res' ? st.thr : st.th) + '>' + c + '</th>' : '<th class="' + cls + '">' + c + '</th>'; };
+    const th = function (c, i) { const cls = i >= 18 && i <= 20 ? 'dep' : i === 21 ? 'res' : i === 6 || i === 7 ? 'gl' : ''; return paraCorreo ? '<th ' + (cls === 'dep' ? st.thd : cls === 'res' ? st.thr : cls === 'gl' ? st.thg : st.th) + '>' + c + '</th>' : '<th class="' + cls + '">' + c + '</th>'; };
     const td = function (v, al, cls, extra) { return paraCorreo ? '<td ' + st.td(al, extra) + '>' + v + '</td>' : '<td class="' + (al === 'left' ? 'i ' : al === 'center' ? 'c ' : '') + (cls || '') + '">' + v + '</td>'; };
     const m = n => n ? self._m(n) : '';
-    let h = paraCorreo ? '<table style="border-collapse:collapse">' : '<table class="lq-t"><colgroup><col style="width:9%"><col style="width:5%"><col style="width:7%"><col style="width:5.5%"><col style="width:4.5%"><col><col><col><col><col><col style="width:6%"><col><col><col><col><col><col><col><col><col style="width:7%"></colgroup>';
+    const g = n => n ? self._m(n) : '';
+    let h = paraCorreo ? '<table style="border-collapse:collapse">' : '<table class="lq-t"><colgroup><col style="width:8.5%"><col style="width:4.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:4%"><col style="width:3.8%"><col style="width:3.8%"><col><col><col><col><col><col style="width:5.5%"><col><col><col><col><col><col><col><col><col><col style="width:6.5%"></colgroup>';
     h += '<thead><tr>' + cols.map(th).join('') + '</tr></thead><tbody>';
     vis.forEach(function (f) {
       const b = f.totalBono;
       const condCel = esc(f.conductor) + (!paraCorreo && f.modPor ? '<span class="lq-mod" title="Última corrección">✎ ' + esc(f.modPor) + ' · ' + esc(f.modFecha || '') + '</span>' : '');
-      h += '<tr>' + td(condCel, 'left') + td(esc(f.placa), 'center') + td(esc(f.destino), 'left') + td(self._f(f.fecha), 'center') + td(esc(f.nroViatico), 'center') +
+      h += '<tr>' + td(condCel, 'left') + td(esc(f.placa), 'center') + td(esc(f.destino), 'left') + td(esc(f.producto || ''), 'left') + td(self._f(f.fecha), 'center') + td(esc(f.nroViatico), 'center') +
+        td(g(f.glTracto), 'right', 'gl') + td(g(f.glGenset), 'right', 'gl') +
         td(m(f.peajes), 'right') + td(m(f.viatico), 'right') + td(m(f.llanta), 'right') + td(m(f.cochera), 'right') + td(m(f.lavado), 'right') +
         td(m(f.otros) + (f.otros && f.motivoOtros ? (paraCorreo ? '<br><span style="font-size:8pt;color:#555">' + esc(f.motivoOtros) + '</span>' : '<span class="lq-mot">' + esc(f.motivoOtros) + '</span>') : ''), 'right') +
         td(m(f.feriado), 'right') + td(m(f.dominical), 'right') + td(m(f.bono), 'right') + td(self._m(f.costo), 'right', 'tot', 'font-weight:bold;background:#f1f5f9') +
@@ -239,7 +243,8 @@ const FormLiquidacionConductores = {
     });
     if (!vis.length) h += '<tr><td colspan="' + cols.length + '" style="text-align:center;color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>';
     const tf = function (v, al) { return paraCorreo ? '<td ' + st.td(al || 'right', 'font-weight:bold;background:#e9eef5') + '>' + v + '</td>' : '<td>' + v + '</td>'; };
-    h += '</tbody><tfoot><tr>' + (paraCorreo ? '<td colspan="5" ' + st.td('right', 'font-weight:bold;background:#e9eef5') + '>TOTAL (' + (t.n || 0) + ' viajes)</td>' : '<td colspan="5" class="i">TOTAL (' + (t.n || 0) + ' viajes)</td>') +
+    h += '</tbody><tfoot><tr>' + (paraCorreo ? '<td colspan="6" ' + st.td('right', 'font-weight:bold;background:#e9eef5') + '>TOTAL (' + (t.n || 0) + ' viajes)</td>' : '<td colspan="6" class="i">TOTAL (' + (t.n || 0) + ' viajes)</td>') +
+      tf(self._m(t.glTracto || 0)) + tf(self._m(t.glGenset || 0)) +
       ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'feriado', 'dominical', 'bono', 'costo', 'depositado', 'extras', 'totalDep'].map(k => tf(self._m(t[k]))).join('') +
       tf('S/ ' + self._m(t.totalBono)) + (conAcc ? '<td></td>' : '') + '</tr></tfoot></table>';
     return h;
@@ -256,7 +261,7 @@ const FormLiquidacionConductores = {
     const vis = self._vis();
     if (!vis.length) { mostrarMensaje('No hay viajes para copiar.', 'error'); return; }
     const html = '<p style="font-family:Calibri,Arial;font-size:11pt"><b>' + esc(self._titulo()) + '</b></p>' + self._tablaHtml(vis, true);
-    const txt = vis.map(f => [f.conductor, f.placa, f.destino, self._f(f.fecha), f.nroViatico, f.peajes, f.viatico, f.llanta, f.cochera, f.lavado, f.otros, f.feriado, f.dominical, f.bono,
+    const txt = vis.map(f => [f.conductor, f.placa, f.destino, f.producto || '', self._f(f.fecha), f.nroViatico, f.glTracto || 0, f.glGenset || 0, f.peajes, f.viatico, f.llanta, f.cochera, f.lavado, f.otros, f.feriado, f.dominical, f.bono,
       f.costo.toFixed(2), f.depositado, f.extras, f.totalDep.toFixed(2), f.totalBono.toFixed(2)].join('\t')).join('\n');
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]);
@@ -275,18 +280,18 @@ const FormLiquidacionConductores = {
   _excel: async function () {
     const self = this, vis = self._vis();
     if (!vis.length) { mostrarMensaje('No hay viajes para exportar.', 'error'); return; }
-    const enc = ['CONDUCTOR', 'PLACA', 'CLIENTE', 'DESTINO', 'FECHA DEL SERVICIO', 'QUINCENA', 'CÓDIGO', 'N° DE VIÁTICO', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS',
+    const enc = ['CONDUCTOR', 'PLACA', 'CLIENTE', 'DESTINO', 'PRODUCTO', 'FECHA DEL SERVICIO', 'QUINCENA', 'CÓDIGO', 'N° DE VIÁTICO', 'GL TRACTO', 'GL GENSET', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS',
       'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE', 'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO', 'MODIFICADO POR'];
     const n = x => Math.round((Number(x) || 0) * 100) / 100;
-    const filas = vis.map(f => [f.conductor, f.placa, f.cliente, f.destino, self._f(f.fecha), self._qTxt(f.quincena), f.clave, f.nroViatico, n(f.peajes), n(f.viatico), n(f.llanta), n(f.cochera), n(f.lavado), n(f.otros), f.motivoOtros || '',
+    const filas = vis.map(f => [f.conductor, f.placa, f.cliente, f.destino, f.producto || '', self._f(f.fecha), self._qTxt(f.quincena), f.clave, f.nroViatico, n(f.glTracto), n(f.glGenset), n(f.peajes), n(f.viatico), n(f.llanta), n(f.cochera), n(f.lavado), n(f.otros), f.motivoOtros || '',
       n(f.feriado), n(f.dominical), n(f.bono), n(f.costo), n(f.depositado), n(f.extras), n(f.totalDep), n(f.totalBono), f.liqEstado === 'LIQUIDADO' ? 'POR DEPOSITAR' : f.liqEstado, f.modPor ? f.modPor + ' ' + (f.modFecha || '') : '']);
     const t = self._suma(vis);
-    filas.push(['TOTAL (' + vis.length + ' viajes)', '', '', '', '', '', '', '', n(t.peajes), n(t.viatico), n(t.llanta), n(t.cochera), n(t.lavado), n(t.otros), '', n(t.feriado), n(t.dominical), n(t.bono), n(t.costo), n(t.depositado), n(t.extras), n(t.totalDep), n(t.totalBono), '', '']);
+    filas.push(['TOTAL (' + vis.length + ' viajes)', '', '', '', '', '', '', '', '', n(t.glTracto), n(t.glGenset), n(t.peajes), n(t.viatico), n(t.llanta), n(t.cochera), n(t.lavado), n(t.otros), '', n(t.feriado), n(t.dominical), n(t.bono), n(t.costo), n(t.depositado), n(t.extras), n(t.totalDep), n(t.totalBono), '', '']);
     const nombre = 'Liquidacion_' + (self._raiz.querySelector('#lqCond').value || 'conductores').replace(/\s+/g, '_') + '_' + (self._raiz.querySelector('#lqQuin').value || 'todas') + '.xlsx';
     try {
       const X = await self._cargarXlsx();
       const ws = X.utils.aoa_to_sheet([[self._titulo()], []].concat([enc], filas));
-      ws['!cols'] = enc.map((c, i) => ({ wch: i === 0 ? 34 : i === 3 || i === 14 ? 24 : 12 }));
+      ws['!cols'] = enc.map((c, i) => ({ wch: i === 0 ? 34 : i === 3 || i === 17 ? 24 : 12 }));
       const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Liquidación');
       X.writeFile(wb, nombre);
     } catch (e) {
@@ -565,10 +570,10 @@ Object.assign(FormLiquidacionConductores, {
     const ws = wb.addWorksheet('Liquidaciones', { views: [{ showGridLines: false }] });
     ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } };
     const cols = [['QUINCENA', 15], ['FECHA', 11], ['PLACA', 9], ['CLIENTE', 11], ['DESTINO', 20], ['CÓDIGO', 15], ['N° VIÁTICO', 10], ['KM', 8], ['PEAJES', 10], ['VIÁTICO', 10], ['LLANTA', 9], ['COCHERA', 9],
-      ['LAVADO', 9], ['OTROS', 9], ['MOTIVO OTROS', 22], ['FERIADO', 9], ['DOMINICAL', 10], ['BONO', 9], ['COSTO DEL VIAJE', 12], ['MONTO DEPOSITADO', 12], ['DEPÓSITOS ADICIONALES', 12], ['TOTAL DEPÓSITO', 12], ['TOTAL BONO', 12], ['ESTADO', 15]];
+      ['LAVADO', 9], ['OTROS', 9], ['MOTIVO OTROS', 22], ['FERIADO', 9], ['DOMINICAL', 10], ['BONO', 9], ['COSTO DEL VIAJE', 12], ['MONTO DEPOSITADO', 12], ['DEPÓSITOS ADICIONALES', 12], ['TOTAL DEPÓSITO', 12], ['TOTAL BONO', 12], ['PRODUCTO', 14], ['GL TRACTO', 10], ['GL GENSET', 10], ['ESTADO', 15]];
     const NC = cols.length;
     cols.forEach((c, i) => { ws.getColumn(i + 1).width = c[1]; });
-    const numCols = [8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23];
+    const numCols = [8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26];
     let r = 1;
     ws.mergeCells(r, 1, r, NC); ws.getCell(r, 1).value = 'TRANSPORTES SSI S.A.C. — LIQUIDACIÓN DE CONDUCTORES';
     ws.getCell(r, 1).font = { bold: true, size: 15, color: { argb: AZ } }; r++;
@@ -593,7 +598,7 @@ Object.assign(FormLiquidacionConductores, {
       hr.height = 28; r++;
       lista.forEach(function (f) {
         const v = [self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
-          n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), (self._EST_TXT[f.liqEstado] || f.liqEstado) + (f.modPor ? ' · ✎ ' + f.modPor : '')];
+          n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), f.producto || '', n2(f.glTracto), n2(f.glGenset), (self._EST_TXT[f.liqEstado] || f.liqEstado) + (f.modPor ? ' · ✎ ' + f.modPor : '')];
         const row = ws.getRow(r);
         v.forEach((x, i) => {
           const cel = row.getCell(i + 1); cel.value = x; cel.border = borde; cel.font = { size: 9 };
@@ -601,13 +606,13 @@ Object.assign(FormLiquidacionConductores, {
           if (i === 18) { cel.font = { size: 9, bold: true }; cel.fill = relleno(GRIS); }
           if (i === 21) { cel.font = { size: 9, bold: true }; cel.fill = relleno('FFE6F2DC'); }
           if (i === 22) { cel.font = { size: 9, bold: true, color: { argb: 'FFB45309' } }; cel.fill = relleno('FFFFF3E0'); }
-          if (i === 4 || i === 14 || i === 23) cel.alignment = { wrapText: true, vertical: 'middle' };
+          if (i === 4 || i === 14 || i === 23 || i === 26) cel.alignment = { wrapText: true, vertical: 'middle' };
         });
         r++;
       });
       const tr = ws.getRow(r);
       tr.getCell(1).value = 'TOTAL ' + cond; ws.mergeCells(r, 1, r, 7);
-      const tv = { 8: s.km, 9: s.peajes, 10: s.viatico, 11: s.llanta, 12: s.cochera, 13: s.lavado, 14: s.otros, 16: s.feriado, 17: s.dominical, 18: s.bono, 19: s.costo, 20: s.depositado, 21: s.extras, 22: s.totalDep, 23: s.totalBono };
+      const tv = { 8: s.km, 9: s.peajes, 10: s.viatico, 11: s.llanta, 12: s.cochera, 13: s.lavado, 14: s.otros, 16: s.feriado, 17: s.dominical, 18: s.bono, 19: s.costo, 20: s.depositado, 21: s.extras, 22: s.totalDep, 23: s.totalBono, 25: s.glTracto || 0, 26: s.glGenset || 0 };
       for (let i = 1; i <= NC; i++) {
         const cel = tr.getCell(i); cel.border = borde; cel.font = { bold: true, size: 10 }; cel.fill = relleno('FFE9EEF5');
         if (tv[i] !== undefined) { cel.value = n2(tv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
@@ -624,7 +629,7 @@ Object.assign(FormLiquidacionConductores, {
     // Total general
     ws.mergeCells(r, 1, r, 7);
     const gr = ws.getRow(r); gr.getCell(1).value = 'TOTAL GENERAL (' + vis.length + ' viajes · ' + nombres.length + ' conductores)';
-    const gv = { 8: t.km, 9: t.peajes, 10: t.viatico, 11: t.llanta, 12: t.cochera, 13: t.lavado, 14: t.otros, 16: t.feriado, 17: t.dominical, 18: t.bono, 19: t.costo, 20: t.depositado, 21: t.extras, 22: t.totalDep, 23: t.totalBono };
+    const gv = { 8: t.km, 9: t.peajes, 10: t.viatico, 11: t.llanta, 12: t.cochera, 13: t.lavado, 14: t.otros, 16: t.feriado, 17: t.dominical, 18: t.bono, 19: t.costo, 20: t.depositado, 21: t.extras, 22: t.totalDep, 23: t.totalBono, 25: t.glTracto || 0, 26: t.glGenset || 0 };
     for (let i = 1; i <= NC; i++) {
       const cel = gr.getCell(i); cel.border = borde; cel.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } }; cel.fill = relleno(AZ);
       if (gv[i] !== undefined) { cel.value = n2(gv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
@@ -720,9 +725,9 @@ Object.assign(FormLiquidacionConductores, {
   /** Respaldo sin gráficos (si ExcelJS no carga). */
   _excelSimple: async function (sel) {
     const self = this, X = await self._cargarXlsx(), n2 = x => Math.round((Number(x) || 0) * 100) / 100;
-    const enc = ['CONDUCTOR', 'QUINCENA', 'FECHA', 'PLACA', 'CLIENTE', 'DESTINO', 'CÓDIGO', 'N° VIÁTICO', 'KM', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE', 'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'ESTADO'];
+    const enc = ['CONDUCTOR', 'QUINCENA', 'FECHA', 'PLACA', 'CLIENTE', 'DESTINO', 'CÓDIGO', 'N° VIÁTICO', 'KM', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE', 'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'PRODUCTO', 'GL TRACTO', 'GL GENSET', 'ESTADO'];
     const filas = sel.vis.map(f => [f.conductor, self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
-      n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), self._EST_TXT[f.liqEstado] || f.liqEstado]);
+      n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), f.producto || '', n2(f.glTracto), n2(f.glGenset), self._EST_TXT[f.liqEstado] || f.liqEstado]);
     const g = self._agrupar(sel.vis, f => f.conductor);
     const res = Object.keys(g).sort().map(c => { const s = self._suma(g[c]); return [c, g[c].length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono)]; });
     const wb = X.utils.book_new();
