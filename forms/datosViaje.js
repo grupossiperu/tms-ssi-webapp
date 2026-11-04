@@ -38,7 +38,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th>Tiempo en planta</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -119,6 +119,7 @@ const FormDatosViaje = {
           <td>${f['DESTINO 1'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
+          <td class="dv-planta" style="text-align:center;cursor:pointer;">${self._celdaPlanta(f)}</td>
           <td style="text-align:center;">
             ${completo
               ? '<span class="badge-datos completo" title="Clic para revisar el seguimiento">Completo</span>'
@@ -127,7 +128,11 @@ const FormDatosViaje = {
 
         tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
           ev.stopPropagation();
-          self._abrirSeguimiento(f._fila);
+          self._abrirSeguimiento(f._fila, f);
+        });
+        tr.querySelector('.dv-planta').addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          self._abrirTiempos(f);
         });
 
         tbody.appendChild(tr);
@@ -150,9 +155,10 @@ const FormDatosViaje = {
     cargar();
   },
 
-  _abrirSeguimiento: async function (filaServicio) {
+  _abrirSeguimiento: async function (filaServicio, servicio) {
     const self = this;
     const seguimiento = await llamarBackend('obtenerSeguimiento', { fila: filaServicio });
+    const cita = servicio ? self._cita(servicio) : null;
 
     function aDatetimeLocal(v) {
       if (!v) return '';
@@ -183,6 +189,7 @@ const FormDatosViaje = {
 
     const html = `
       <div class="fila-campos">
+        <div class="campo"><label>Posicionamiento (cita)</label><input type="text" value="${cita ? self._fh(cita) : 'Sin fecha de posicionamiento'}" disabled style="background:#eef4fb;font-weight:600"></div>
         ${campos.map(function (c) {
           const valor = c.tipo === 'datetime-local' ? aDatetimeLocal(seguimiento[c.col]) : (seguimiento[c.col] || '');
           return `<div class="campo"><label>${c.label}</label><input type="${c.tipo}" id="${c.id}" value="${valor}"${c.tipo === 'number' ? ' step="0.5" min="0"' : ''}></div>`;
@@ -212,6 +219,129 @@ const FormDatosViaje = {
     });
   },
 
+  /** Fecha+hora de la cita (posicionamiento 1) como Date local. */
+  _cita: function (f) {
+    const fv = f['FECHA DE POSICIONAMIENTO 1'];
+    if (!fv) return null;
+    const d = new Date(fv);
+    if (isNaN(d.getTime())) return null;
+    let hh = 0, mm = 0;
+    const h = f['HORA DE POSICIONAMIENTO 1'];
+    const m = String(h || '').match(/(\d{1,2}):(\d{2})/);
+    if (m) { hh = +m[1]; mm = +m[2]; }
+    else if (h) { const dh = new Date(h); if (!isNaN(dh.getTime())) { hh = dh.getUTCHours(); mm = dh.getUTCMinutes(); } }
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm);
+  },
+  _fecha: function (v) { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; },
+  _fh: function (d) {
+    if (!d) return '—';
+    const p = n => String(n).padStart(2, '0');
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  },
+  _horas: function (a, b) { return (a && b) ? Math.round((b - a) / 36000) / 100 : null; },
+  _calc: function (f) {
+    const cita = this._cita(f), sal = this._fecha(f._salidaPlanta);
+    const enPlanta = this._horas(cita, sal);
+    const libres = Number(f._horasLibres) >= 0 ? Number(f._horasLibres) : 7;
+    const extra = enPlanta === null ? null : Math.max(0, Math.round((enPlanta - libres) * 100) / 100);
+    const cobrado = (f._sc || []).filter(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
+    return { cita: cita, llegada: this._fecha(f._llegadaPlanta), salida: sal, enPlanta: enPlanta, libres: libres, extra: extra, cobrado: cobrado,
+      llegPuerto: this._fecha(f._llegadaPuerto), salPuerto: this._fecha(f._salidaPuerto) };
+  },
+  _celdaPlanta: function (f) {
+    const c = this._calc(f);
+    if (c.enPlanta === null) return '<span style="color:#94a3b8">—</span>';
+    let h = '<b>' + c.enPlanta.toFixed(1) + ' h</b>';
+    if (c.cobrado.length) h += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>';
+    else if (c.extra > 0) h += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">+' + c.extra.toFixed(1) + ' h extra</span>';
+    return h;
+  },
+
+  /** Ventana: tiempos en planta / puerto y registro de sobrecosto. */
+  _abrirTiempos: function (f) {
+    const self = this;
+    const c = self._calc(f);
+    const enPuerto = self._horas(c.llegPuerto, c.salPuerto);
+    const fila = (k, v, st) => '<tr><td style="padding:5px 8px;color:#475569">' + k + '</td><td style="padding:5px 8px;font-weight:600;' + (st || '') + '">' + v + '</td></tr>';
+    const MOT = { 'HORAS EXTRAS PLANTA': 'Horas extras en planta', 'HORAS EXTRAS PUERTO': 'Horas extras en puerto', 'PERNOCTE': 'Pernocte' };
+    const scHtml = (f._sc || []).length
+      ? '<table class="tabla-lista" style="margin-top:6px"><thead><tr><th>Código</th><th>Motivo</th><th>Cantidad</th><th>Total</th><th>Observación</th></tr></thead><tbody>' +
+        f._sc.map(x => '<tr><td>' + esc(x.codigo) + '</td><td>' + esc(x.tipo) + '</td><td>' + (x.cantidad || '') + '</td><td>' + esc(x.moneda) + ' ' + Number(x.total || 0).toFixed(2) + '</td><td>' + esc(x.obs) + '</td></tr>').join('') + '</tbody></table>'
+      : '<p style="color:#94a3b8;margin:6px 0">Este servicio no tiene sobrecostos registrados.</p>';
+    const html = `
+      <div style="display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:10px;font-size:.85rem;color:#334155">
+        <span>Cliente: <b>${esc(f['CLIENTE PARA FACTURACIÓN'] || '')}</b></span><span>Booking: <b>${esc(f['BOOKING'] || '')}</b></span>
+        <span>Código: <b>${esc(f['CODIGO SERVICIO'] || '')}</b></span><span>Conductor: <b>${esc(f['CONDUCTOR'] || '')}</b> (${esc(f['PLACA TRACTO'] || '')})</span>
+        <span>Destino: <b>${esc(f['DESTINO 1'] || '')}</b></span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px">
+          <b style="color:#1c3a5e">En planta</b>
+          <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+            ${fila('Posicionamiento (cita)', self._fh(c.cita))}${fila('Llegada a planta', self._fh(c.llegada))}${fila('Salida de planta', self._fh(c.salida))}
+            ${fila('Horas en planta (desde la cita)', c.enPlanta === null ? '—' : c.enPlanta.toFixed(2) + ' h')}
+            ${fila('Horas libres del cliente', c.libres + ' h')}
+            ${fila('Horas extra', c.extra === null ? '—' : c.extra.toFixed(2) + ' h', c.extra > 0 ? 'color:#b91c1c;font-size:1rem' : 'color:#166534')}
+          </table>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px">
+          <b style="color:#1c3a5e">En puerto</b>
+          <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+            ${fila('Llegada a cola de puerto', self._fh(c.llegPuerto))}${fila('Salida de puerto', self._fh(c.salPuerto))}
+            ${fila('Horas en puerto', enPuerto === null ? '—' : enPuerto.toFixed(2) + ' h')}
+          </table>
+        </div>
+      </div>
+      <div style="margin-top:12px"><b style="color:#1c3a5e">Sobrecostos del servicio</b>${scHtml}</div>
+      <div id="dvFormSc" style="display:none;margin-top:12px;border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:10px 12px">
+        <b style="color:#92400e">Agregar sobrecosto</b>
+        <div class="fila-campos" style="margin-top:6px">
+          <div class="campo"><label>Motivo</label><select id="dvScMotivo">${Object.keys(MOT).map(k => '<option value="' + k + '">' + MOT[k] + '</option>').join('')}</select></div>
+          <div class="campo"><label id="dvScCantLbl">Horas</label><input type="number" id="dvScCant" step="0.5" min="0"></div>
+          <div class="campo"><label id="dvScPrecioLbl">Tarifa por hora (con IGV)</label><input type="number" id="dvScPrecio" step="0.01" min="0" placeholder="0.00"></div>
+          <div class="campo"><label>Moneda</label><select id="dvScMoneda"><option value="$">Dólares ($)</option><option value="S/">Soles (S/)</option></select></div>
+          <div class="campo" style="grid-column:1/-1"><label>Observación</label><input type="text" id="dvScObs" autocomplete="off"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+          <span id="dvScTotal" style="font-weight:700;color:#1c3a5e"></span>
+          <button class="boton-primario" id="dvScGrabar">Agregar al sobrecosto</button>
+        </div>
+      </div>
+      <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
+        <button class="boton-secundario" id="dvVolver">Volver a la lista</button>
+        <button class="boton-primario" id="dvAbrirSc" style="background:#b45309">+ Agregar sobrecosto</button>
+      </div>`;
+    actualizarPanel('Tiempo en planta y sobrecostos', html, function (raiz) {
+      const $ = id => raiz.querySelector('#' + id);
+      $('dvVolver').addEventListener('click', () => self._mostrarListaEnPanel());
+      const sugerida = function () {
+        const m = $('dvScMotivo').value;
+        $('dvScCantLbl').textContent = m === 'PERNOCTE' ? 'Noches' : 'Horas';
+        $('dvScPrecioLbl').textContent = m === 'PERNOCTE' ? 'Tarifa por noche (con IGV)' : 'Tarifa por hora (con IGV)';
+        if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = c.extra > 0 ? c.extra : ''; $('dvScObs').value = c.extra > 0 ? ('Cita ' + self._fh(c.cita) + ' · salida ' + self._fh(c.salida) + ' · ' + c.enPlanta.toFixed(2) + ' h en planta − ' + c.libres + ' h libres') : ''; }
+        else if (m === 'HORAS EXTRAS PUERTO') { $('dvScCant').value = ''; $('dvScObs').value = enPuerto !== null ? ('Cola puerto ' + self._fh(c.llegPuerto) + ' · salida ' + self._fh(c.salPuerto) + ' · ' + enPuerto.toFixed(2) + ' h en puerto') : ''; }
+        else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
+        total();
+      };
+      const total = function () {
+        const t = (Number($('dvScCant').value) || 0) * (Number($('dvScPrecio').value) || 0);
+        $('dvScTotal').textContent = t > 0 ? 'Total: ' + $('dvScMoneda').value + ' ' + t.toFixed(2) : '';
+      };
+      ['dvScCant', 'dvScPrecio', 'dvScMoneda'].forEach(id => $(id).addEventListener('input', total));
+      $('dvScMotivo').addEventListener('change', sugerida);
+      $('dvAbrirSc').addEventListener('click', function () { $('dvFormSc').style.display = ''; this.style.display = 'none'; sugerida(); $('dvScPrecio').focus(); });
+      protegerClic($('dvScGrabar'), async function () {
+        const d = { fila: f._fila, tipo: $('dvScMotivo').value, cantidad: Number($('dvScCant').value), precio: Number($('dvScPrecio').value), moneda: $('dvScMoneda').value, observacion: $('dvScObs').value };
+        if (!(d.cantidad > 0)) { mostrarMensaje('Ingrese la cantidad.', 'error'); return; }
+        if (!(d.precio > 0)) { mostrarMensaje('Ingrese la tarifa.', 'error'); return; }
+        const r = await llamarBackend('sobrecostoDesdePlanta', d);
+        if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
+        mostrarMensaje(r.mensaje, 'exito');
+        self._mostrarListaEnPanel();
+      });
+    });
+  },
+
   _mostrarListaEnPanel: function () {
     const self = this;
     const html = document.getElementById('cuerpo-panel');
@@ -235,7 +365,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th>Tiempo en planta</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>

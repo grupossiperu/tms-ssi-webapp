@@ -17,7 +17,7 @@ const FormClientes = {
     }
     const html = `
       <style>
-        .cli-form { display: grid; grid-template-columns: 110px minmax(0, 1fr) 130px 95px 110px 95px auto; gap: 0 12px; align-items: end; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px 2px; margin-bottom: 14px; }
+        .cli-form { display: grid; grid-template-columns: 110px minmax(0, 1fr) 130px 95px 110px 95px 95px auto; gap: 0 12px; align-items: end; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px 2px; margin-bottom: 14px; }
         .cli-form .acciones { display: flex; gap: 8px; margin-bottom: 12px; }
         .cli-tabla { width: 100%; table-layout: fixed; }
         .cli-tabla td, .cli-tabla th { padding: 7px 8px; }
@@ -33,15 +33,16 @@ const FormClientes = {
         <div class="campo"><label>Días crédito</label><input id="txtDiasCli" type="number" min="0" max="365" value="30"></div>
         <div class="campo"><label>Detracción</label><select id="selDetrCli"><option value="SI">Con detracción</option><option value="NO">Sin detracción</option></select></div>
         <div class="campo"><label>IGV</label><select id="selIgvCli"><option value="SI">Con IGV</option><option value="NO">Sin IGV</option></select></div>
+        <div class="campo"><label title="Horas libres en planta desde la cita; lo que pase se cobra como horas extra">H. libres planta</label><input id="txtHlCli" type="number" min="0" max="72" step="0.5" value="7"></div>
         <div class="acciones">
           <button class="boton-secundario" id="btnNuevoCli">Nuevo</button>
           <button class="boton-primario" id="btnGrabarCli">Agregar</button>
         </div>
       </div>
-      <div class="cli-ayuda">El código debe ser igual al que usas en los servicios (cliente para facturación). Días de crédito, detracción e IGV definen el vencimiento y lo que el cliente paga a SSI en Cobranzas. Haz clic en un cliente para corregirlo.</div>
+      <div class="cli-ayuda">El código debe ser igual al que usas en los servicios (cliente para facturación). Horas libres en planta: tiempo desde la cita que no se cobra (por defecto 7). Días de crédito, detracción e IGV definen el vencimiento y lo que el cliente paga a SSI en Cobranzas. Haz clic en un cliente para corregirlo.</div>
       <table class="tabla-lista cli-tabla" id="tablaClientes">
-        <colgroup><col style="width:120px"><col><col style="width:130px"><col style="width:90px"><col style="width:120px"><col style="width:90px"></colgroup>
-        <thead><tr><th>Código</th><th>Razón social</th><th>RUC</th><th>Crédito</th><th>Detracción</th><th>IGV</th></tr></thead>
+        <colgroup><col style="width:120px"><col><col style="width:130px"><col style="width:90px"><col style="width:120px"><col style="width:90px"><col style="width:100px"></colgroup>
+        <thead><tr><th>Código</th><th>Razón social</th><th>RUC</th><th>Crédito</th><th>Detracción</th><th>IGV</th><th>H. libres</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="panel-footer" style="padding-top:10px;">
@@ -55,14 +56,14 @@ const FormClientes = {
       function pintar() {
         $('tablaClientes').querySelector('tbody').innerHTML = clientes.length
           ? clientes.map(function (c) {
-              return '<tr data-fila="' + c.fila + '"><td><b>' + esc(c.codigo) + '</b></td><td>' + esc(c.razonSocial) + '</td><td>' + esc(c.ruc) + '</td><td>' + (c.diasCredito === undefined ? 30 : c.diasCredito) + ' días</td><td>' + (c.detraccion === false ? 'Sin detracción' : 'Con detracción') + '</td><td>' + (c.igv === false ? 'Sin IGV' : 'Con IGV') + '</td></tr>';
+              return '<tr data-fila="' + c.fila + '"><td><b>' + esc(c.codigo) + '</b></td><td>' + esc(c.razonSocial) + '</td><td>' + esc(c.ruc) + '</td><td>' + (c.diasCredito === undefined ? 30 : c.diasCredito) + ' días</td><td>' + (c.detraccion === false ? 'Sin detracción' : 'Con detracción') + '</td><td>' + (c.igv === false ? 'Sin IGV' : 'Con IGV') + '</td><td>' + (c.horasLibres === undefined ? 7 : c.horasLibres) + ' h</td></tr>';
             }).join('')
-          : '<tr><td colspan="6" style="text-align:center;color:#8b95a1;padding:16px;">Sin clientes.</td></tr>';
+          : '<tr><td colspan="7" style="text-align:center;color:#8b95a1;padding:16px;">Sin clientes.</td></tr>';
       }
       function limpiar() {
         filaEditando = 0;
         ['txtCodigoCli', 'txtRazonCli', 'txtRucCli'].forEach(function (id) { $(id).value = ''; });
-        $('txtDiasCli').value = 30; $('selDetrCli').value = 'SI'; $('selIgvCli').value = 'SI';
+        $('txtDiasCli').value = 30; $('selDetrCli').value = 'SI'; $('selIgvCli').value = 'SI'; $('txtHlCli').value = 7;
         $('btnGrabarCli').textContent = 'Agregar';
         _refrescarSnapshotFormulario();
       }
@@ -78,6 +79,7 @@ const FormClientes = {
         $('txtDiasCli').value = c.diasCredito === undefined ? 30 : c.diasCredito;
         $('selDetrCli').value = c.detraccion === false ? 'NO' : 'SI';
         $('selIgvCli').value = c.igv === false ? 'NO' : 'SI';
+        $('txtHlCli').value = c.horasLibres === undefined ? 7 : c.horasLibres;
         $('btnGrabarCli').textContent = 'Guardar cambios';
         _refrescarSnapshotFormulario();
       });
@@ -86,7 +88,7 @@ const FormClientes = {
       protegerClic($('btnGrabarCli'), async function () {
         const resp = await llamarBackend('grabarCliente', {
           fila: filaEditando, codigo: $('txtCodigoCli').value, razonSocial: $('txtRazonCli').value, ruc: $('txtRucCli').value,
-          diasCredito: $('txtDiasCli').value, detraccion: $('selDetrCli').value, igv: $('selIgvCli').value
+          diasCredito: $('txtDiasCli').value, detraccion: $('selDetrCli').value, igv: $('selIgvCli').value, horasLibres: $('txtHlCli').value
         });
         if (!resp || !resp.ok) { mostrarMensaje((resp && resp.mensaje) || 'No se pudo grabar el cliente.', 'error'); return; }
         const lista = await llamarBackend('listarClientes', {});
