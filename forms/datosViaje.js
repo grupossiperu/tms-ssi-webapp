@@ -159,6 +159,9 @@ const FormDatosViaje = {
     const self = this;
     const seguimiento = await llamarBackend('obtenerSeguimiento', { fila: filaServicio });
     const cita = servicio ? self._cita(servicio) : null;
+    const retiro = servicio ? self._fhDe(servicio, 'FECHA DE RETIRO', 'HORA DE RETIRO') : null;
+    const devol = servicio ? self._fhDe(servicio, 'FECHA DE DEVOLUCION', 'HORA DE DEVOLUCION') : null;
+    const ro = (lbl, d, txtVacio) => '<div class="campo"><label>' + lbl + '</label><input type="text" value="' + (d ? self._fh(d) : txtVacio) + '" disabled style="background:#eef4fb;font-weight:600"></div>';
 
     function aDatetimeLocal(v) {
       if (!v) return '';
@@ -189,7 +192,11 @@ const FormDatosViaje = {
 
     const html = `
       <div class="fila-campos">
-        <div class="campo"><label>Posicionamiento (cita)</label><input type="text" value="${cita ? self._fh(cita) : 'Sin fecha de posicionamiento'}" disabled style="background:#eef4fb;font-weight:600"></div>
+        ${ro('Retiro (cita)', retiro, 'Sin fecha de retiro')}
+        ${ro('Posicionamiento (cita)', cita, 'Sin fecha de posicionamiento')}
+        ${ro('Devolución (cita)', devol, 'Sin fecha de devolución')}
+      </div>
+      <div class="fila-campos">
         ${campos.map(function (c) {
           const valor = c.tipo === 'datetime-local' ? aDatetimeLocal(seguimiento[c.col]) : (seguimiento[c.col] || '');
           return `<div class="campo"><label>${c.label}</label><input type="${c.tipo}" id="${c.id}" value="${valor}"${c.tipo === 'number' ? ' step="0.5" min="0"' : ''}></div>`;
@@ -220,13 +227,15 @@ const FormDatosViaje = {
   },
 
   /** Fecha+hora de la cita (posicionamiento 1) como Date local. */
-  _cita: function (f) {
-    const fv = f['FECHA DE POSICIONAMIENTO 1'];
+  _cita: function (f) { return this._fhDe(f, 'FECHA DE POSICIONAMIENTO 1', 'HORA DE POSICIONAMIENTO 1'); },
+  /** Fecha + hora de dos columnas del servicio como Date local. */
+  _fhDe: function (f, colFecha, colHora) {
+    const fv = f[colFecha];
     if (!fv) return null;
     const d = new Date(fv);
     if (isNaN(d.getTime())) return null;
     let hh = 0, mm = 0;
-    const h = f['HORA DE POSICIONAMIENTO 1'];
+    const h = f[colHora];
     const m = String(h || '').match(/(\d{1,2}):(\d{2})/);
     if (m) { hh = +m[1]; mm = +m[2]; }
     else if (h) { const dh = new Date(h); if (!isNaN(dh.getTime())) { hh = dh.getUTCHours(); mm = dh.getUTCMinutes(); } }
