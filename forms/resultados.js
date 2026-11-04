@@ -9,11 +9,12 @@
  * Indicadores (para el período elegido, comparados con el período anterior
  * de la misma duración):
  *   - Servicios (sin contar cancelados), falsos fletes y cancelados.
- *   - Ingresos por tarifa en S/ (los dólares se convierten con el último
- *     tipo de cambio registrado) y su detalle en S/ y US$.
- *   - Gastos de viaje (columna TOTAL POR VIAJE: combustible + viático +
- *     peaje + cochera) y margen bruto (ingresos - gastos de viaje).
- *   - Galones de combustible (tracto + genset) y promedio por viaje.
+ *   - (04/11/2026) Ingresos = lo FACTURADO (viajes + sobrecostos + balanza,
+ *     valor de venta sin IGV) en S/ con el TC de cada factura, asignado al
+ *     servicio por su código (cobranzaDatos). Período = fecha del servicio.
+ *   - Gastos de viaje = costo del viaje + bono del CONSOLIDADO (liqDatos).
+ *   - Combustible = galones abastecidos registrados en el consolidado
+ *     (recargas con nota de venta, tracto + genset).
  * En vivo (sin importar el período): viajes en curso por etapa.
  *
  * También maneja el reloj de la página principal y el botón "Resultados".
@@ -265,8 +266,9 @@ const FormResultados = {
     const etiqueta = raiz.querySelector('#resHoraAct');
     if (!silencioso && etiqueta) etiqueta.textContent = 'Actualizando…';
     try {
-      const promesas = [llamarBackend('resultadosDatos', { token: self._token }), self._cargarChartJs()];
-      if (!self._tc) promesas.push(llamarBackend('validarTipoCambioRegistrado', {}).catch(function () { return null; }));
+      const promesas = [llamarBackend('resultadosDatos', { token: self._token }), self._cargarChartJs(),
+        llamarBackend('cobranzaDatos', {}).catch(function () { return null; }),
+        llamarBackend('liqDatos', {}).catch(function () { return null; })];
       const res = await Promise.all(promesas);
       if (!res[0] || !res[0].ok) {
         if (self._intervalo) { clearInterval(self._intervalo); self._intervalo = null; }
@@ -275,16 +277,13 @@ const FormResultados = {
         return;
       }
       self._filas = Array.isArray(res[0].filas) ? res[0].filas : [];
-      if (res[2] && res[2].tipoCambio) {
-        self._tc = Number(res[2].tipoCambio) || 0;
-        self._fechaTc = res[2].fecha ? self._ddmm(new Date(res[2].fecha)) : '';
-      }
+      await self._enriquecer(res[2], res[3]);
       if (!document.body.contains(raiz)) return;
       self._llenarClientes(raiz);
       self._render(raiz);
       if (etiqueta) {
         etiqueta.textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
-          ' · se actualiza solo cada minuto' + (self._tc ? ' · TC ' + self._tc.toFixed(3) + (self._fechaTc ? ' (' + self._fechaTc + ')' : '') : '');
+          ' · se actualiza solo cada minuto';
       }
     } catch (e) {
       if (etiqueta) etiqueta.textContent = 'Error al actualizar: ' + e.message;
@@ -315,11 +314,56 @@ const FormResultados = {
     });
   },
   _estado: function (f) { return String(f['ESTADO'] || 'PROGRAMADO').trim().toUpperCase() || 'PROGRAMADO'; },
-  _ingresoSoles: function (f) {
-    // Venta = tarifa base + tarifas de destinos adicionales (TARIFA 2).
-    const t = this._num(f['TARIFA 1']) + this._num(f['TARIFA 2']);
-    const esDolar = String(f['MONEDA TARIFA 1'] || '').trim().toUpperCase() === 'D';
-    return esDolar ? t * (this._tc || 0) : t;
+  _ingresoSoles: function (f) { return f._ing || 0; },
+  _tcCache: {},
+  /** Une a cada servicio lo facturado (S/), el gasto real del consolidado y los galones abastecidos. */
+  _enriquecer: async function (cob, liq) {
+    const self = this;
+    const porCod = {}, porBk = {};
+    self._filas.forEach(function (f) {
+      f._ing = 0; f._ingUsd = 0; f._ingPen = 0; f._fact = false; f._gasto = 0; f._gl = 0; f._cons = false;
+      const c = String(f['CODIGO SERVICIO'] || '').trim().toUpperCase(); if (c) porCod[c] = f;
+      const b = String(f['BOOKING'] || '').trim().toUpperCase() + '|' + String(f['N° CONTENEDOR'] || f['CONTENEDOR'] || '').trim().toUpperCase();
+      porBk[b] = f;
+    });
+    // Gasto y galones reales del consolidado
+    ((liq && liq.filas) || []).forEach(function (r) {
+      const f = porCod[String(r.codigo || '').trim().toUpperCase()];
+      if (!f) return;
+      f._gasto += Number(r.gastos) || 0; f._gl += (Number(r.glTracto) || 0) + (Number(r.glGenset) || 0); f._cons = true;
+    });
+    // Lo facturado
+    const facts = (cob && cob.facturas) || [];
+    const faltan = {};
+    const tcDetr = function (x) { const t = (x.detraccion > 0 && x.detraccionSoles > 0) ? x.detraccionSoles / x.detraccion : 0; return t > 2.5 && t < 5 ? t : 0; };
+    facts.forEach(function (x) { if (x.moneda === 'USD' && !tcDetr(x) && x.fecha && self._tcCache[x.fecha] === undefined) faltan[x.fecha] = 1; });
+    await Promise.all(Object.keys(faltan).map(function (iso) {
+      const p = iso.split('-');
+      return llamarBackend('tipoCambioDeFecha', { fecha: p[2] + '/' + p[1] + '/' + p[0] })
+        .then(function (t) { self._tcCache[iso] = (t && Number(t.tipoCambio || t.tc || t.valor)) || 0; })
+        .catch(function () { self._tcCache[iso] = 0; });
+    }));
+    let ultimoTc = 0;
+    facts.slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).forEach(function (x) {
+      if (tcDetr(x)) ultimoTc = tcDetr(x);
+    });
+    self._sinFacturaCod = 0;
+    facts.forEach(function (x) {
+      const valor = Number(x.valor) || 0;
+      if (!valor) return;
+      const servs = (x.servicios || []).map(function (sv) {
+        const c = String(sv.codigo || '').trim().toUpperCase().replace(/-(HEP|HEU|PER)$/, '');
+        return porCod[c] || porBk[String(sv.booking || '').trim().toUpperCase() + '|' + String(sv.contenedor || '').trim().toUpperCase()];
+      }).filter(Boolean);
+      if (!servs.length) { self._sinFacturaCod++; return; }
+      let tc = 1;
+      if (x.moneda === 'USD') tc = tcDetr(x) || self._tcCache[x.fecha] || ultimoTc;
+      const parte = valor / servs.length;
+      servs.forEach(function (f) {
+        f._ing += parte * tc; f._fact = true;
+        if (x.moneda === 'USD') f._ingUsd += parte; else f._ingPen += parte;
+      });
+    });
   },
 
   _rango: function (raiz) {
@@ -361,13 +405,14 @@ const FormResultados = {
   _metricas: function (filas) {
     const self = this;
     const validos = filas.filter(f => self._estado(f) !== 'CANCELADO');
-    let ingresos = 0, ingS = 0, ingD = 0, gastos = 0, galones = 0, viajesConGl = 0;
+    let ingresos = 0, ingS = 0, ingD = 0, gastos = 0, galones = 0, viajesConGl = 0, facturados = 0, conCons = 0;
     validos.forEach(function (f) {
-      const t = self._num(f['TARIFA 1']) + self._num(f['TARIFA 2']);
-      if (String(f['MONEDA TARIFA 1'] || '').trim().toUpperCase() === 'D') ingD += t; else ingS += t;
+      ingD += f._ingUsd || 0; ingS += f._ingPen || 0;
       ingresos += self._ingresoSoles(f);
-      gastos += self._num(f['TOTAL POR VIAJE']);
-      const g = self._num(f['GL TRACTO']) + self._num(f['GL GENERADOR']);
+      if (f._fact) facturados++;
+      gastos += f._gasto || 0;
+      if (f._cons) conCons++;
+      const g = f._gl || 0;
       if (g > 0) { galones += g; viajesConGl++; }
     });
     return {
@@ -375,7 +420,7 @@ const FormResultados = {
       falsos: filas.filter(f => self._estado(f) === 'FALSO FLETE').length,
       cancelados: filas.filter(f => self._estado(f) === 'CANCELADO').length,
       culminados: filas.filter(f => self._estado(f) === 'CULMINADO').length,
-      ingresos: ingresos, ingS: ingS, ingD: ingD, gastos: gastos,
+      ingresos: ingresos, ingS: ingS, ingD: ingD, gastos: gastos, facturados: facturados, conCons: conCons,
       margen: ingresos - gastos,
       galones: galones, glProm: viajesConGl ? galones / viajesConGl : 0
     };
@@ -419,16 +464,16 @@ const FormResultados = {
     raiz.querySelector('#resKpis').innerHTML =
       '<div class="res-kpi"><div class="k-tit">Servicios</div><div class="k-val">' + m.servicios + '</div>' +
         '<div class="k-sub">' + m.culminados + ' culminados · ' + self._ddmm(r.desde) + ' al ' + self._ddmm(r.hasta) + '</div>' + self._delta(m.servicios, mp.servicios) + '</div>' +
-      '<div class="res-kpi k-verde"><div class="k-tit">Ingresos (tarifas)</div><div class="k-val">' + self._soles(m.ingresos) + '</div>' +
-        '<div class="k-sub">US$ ' + m.ingD.toLocaleString('es-PE', { maximumFractionDigits: 0 }) + ' + S/ ' + m.ingS.toLocaleString('es-PE', { maximumFractionDigits: 0 }) + '</div>' + self._delta(m.ingresos, mp.ingresos) + '</div>' +
+      '<div class="res-kpi k-verde"><div class="k-tit">Ingresos (facturado)</div><div class="k-val">' + self._soles(m.ingresos) + '</div>' +
+        '<div class="k-sub">US$ ' + m.ingD.toLocaleString('es-PE', { maximumFractionDigits: 0 }) + ' + S/ ' + m.ingS.toLocaleString('es-PE', { maximumFractionDigits: 0 }) + ' sin IGV · ' + m.facturados + ' de ' + m.servicios + ' viajes facturados</div>' + self._delta(m.ingresos, mp.ingresos) + '</div>' +
       '<div class="res-kpi k-rojo"><div class="k-tit">Gastos de viaje</div><div class="k-val">' + self._soles(m.gastos) + '</div>' +
-        '<div class="k-sub">Combustible, viáticos, peajes y cochera</div>' + self._delta(m.gastos, mp.gastos, true) + '</div>' +
+        '<div class="k-sub">Costo del viaje + bono (consolidado) · ' + m.conCons + ' de ' + m.servicios + ' con consolidado</div>' + self._delta(m.gastos, mp.gastos, true) + '</div>' +
       '<div class="res-kpi k-morado"><div class="k-tit">Margen bruto</div><div class="k-val">' + self._soles(m.margen) + '</div>' +
         '<div class="k-sub">' + pctMargen.toFixed(1) + '% de los ingresos</div>' + self._delta(m.margen, mp.margen) + '</div>' +
-      '<div class="res-kpi k-naranja"><div class="k-tit">Ticket promedio</div><div class="k-val">' + self._soles(m.servicios ? m.ingresos / m.servicios : 0) + '</div>' +
-        '<div class="k-sub">Ingreso por servicio</div>' + self._delta(m.servicios ? m.ingresos / m.servicios : 0, mp.servicios ? mp.ingresos / mp.servicios : 0) + '</div>' +
+      '<div class="res-kpi k-naranja"><div class="k-tit">Ticket promedio</div><div class="k-val">' + self._soles(m.facturados ? m.ingresos / m.facturados : 0) + '</div>' +
+        '<div class="k-sub">Facturado por viaje facturado</div>' + self._delta(m.facturados ? m.ingresos / m.facturados : 0, mp.facturados ? mp.ingresos / mp.facturados : 0) + '</div>' +
       '<div class="res-kpi k-cian"><div class="k-tit">Combustible</div><div class="k-val">' + m.galones.toLocaleString('es-PE', { maximumFractionDigits: 0 }) + ' gl</div>' +
-        '<div class="k-sub">' + m.glProm.toFixed(1) + ' gl por viaje · ' + m.falsos + ' falsos fletes · ' + m.cancelados + ' cancelados</div>' + self._delta(m.galones, mp.galones, true) + '</div>';
+        '<div class="k-sub">Abastecido según consolidado · ' + m.glProm.toFixed(1) + ' gl por viaje · ' + m.falsos + ' falsos fletes · ' + m.cancelados + ' cancelados</div>' + self._delta(m.galones, mp.galones, true) + '</div>';
 
     // --------------- En curso (en vivo, sin filtro de fechas) ---------------
     const enCurso = base.filter(f => self.ETAPAS.indexOf(self._estado(f)) !== -1 || self._estado(f) === 'EN RUTA');
@@ -546,7 +591,7 @@ const FormResultados = {
 
     // 3) Ingresos y gastos por cliente
     const ingCli = agrupar(validos, 'CLIENTE PARA FACTURACIÓN', f => self._ingresoSoles(f));
-    const gasCli = agrupar(validos, 'CLIENTE PARA FACTURACIÓN', f => self._num(f['TOTAL POR VIAJE']));
+    const gasCli = agrupar(validos, 'CLIENTE PARA FACTURACIÓN', f => f._gasto || 0);
     const cliTop = top(ingCli, 10).map(p => p[0]);
     dibujar('gClientes', {
       type: 'bar',
@@ -583,8 +628,8 @@ const FormResultados = {
       return ex ? ex + ' (exportador)' : '';
     }), 10), '#e8890c');
 
-    const conGl = validos.filter(f => self._num(f['GL TRACTO']) + self._num(f['GL GENERADOR']) > 0);
-    const glDest = agrupar(conGl, 'DESTINO 1', f => self._num(f['GL TRACTO']) + self._num(f['GL GENERADOR']));
+    const conGl = validos.filter(f => (f._gl || 0) > 0);
+    const glDest = agrupar(conGl, 'DESTINO 1', f => f._gl || 0);
     const nDest = agrupar(conGl, 'DESTINO 1');
     const glProm = top(agrupar(conGl, 'DESTINO 1'), 10).map(p => [p[0], glDest[p[0]] / nDest[p[0]]]);
     horizontal('gGalones', glProm, '#ca8a04');
