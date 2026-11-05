@@ -133,7 +133,7 @@ const FormDatosViaje = {
           self._abrirSeguimiento(f._fila, f);
         });
         tr.querySelectorAll('.dv-planta, .dv-retiro, .dv-puerto').forEach(function (td) {
-          td.addEventListener('click', function (ev) { ev.stopPropagation(); self._abrirTiempos(f); });
+          td.addEventListener('click', function (ev) { ev.stopPropagation(); self._abrirSeguimiento(f._fila, f); });
         });
 
         tbody.appendChild(tr);
@@ -158,67 +158,164 @@ const FormDatosViaje = {
 
   _abrirSeguimiento: async function (filaServicio, servicio) {
     const self = this;
-    const seguimiento = await llamarBackend('obtenerSeguimiento', { fila: filaServicio });
-    const cita = servicio ? self._cita(servicio) : null;
-    const retiro = servicio ? self._fhDe(servicio, 'FECHA DE RETIRO', 'HORA DE RETIRO') : null;
-    const devol = servicio ? self._fhDe(servicio, 'FECHA DE DEVOLUCION', 'HORA DE DEVOLUCION') : null;
-    const ro = (lbl, d, txtVacio) => '<div class="campo"><label>' + lbl + '</label><input type="text" value="' + (d ? self._fh(d) : txtVacio) + '" disabled style="background:#eef4fb;font-weight:600"></div>';
+    const f = servicio || {};
+    const seguimiento = await llamarBackend('obtenerSeguimiento', { fila: filaServicio }) || {};
+    const cita = self._cita(f);
+    const retiro = self._fhDe(f, 'FECHA DE RETIRO', 'HORA DE RETIRO');
+    const devol = self._fhDe(f, 'FECHA DE DEVOLUCION', 'HORA DE DEVOLUCION');
+    const libres = Number(f._horasLibres) >= 0 ? Number(f._horasLibres) : 7;
 
     function aDatetimeLocal(v) {
       if (!v) return '';
-      let d;
-      if (v instanceof Date) d = v;
-      else {
-        const texto = String(v).trim();
-        if (texto === '') return '';
-        d = new Date(texto);
-      }
+      const d = v instanceof Date ? v : new Date(String(v).trim());
       if (isNaN(d.getTime())) return '';
       const pad = n => String(n).padStart(2, '0');
       return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
-
     const campos = [
-      { id: 'txtInicioRuta', col: 'INICIO RUTA', label: 'Inicio Ruta', tipo: 'datetime-local' },
-      { id: 'txtRetiroVacio', col: 'RETIRO VACIO', label: 'Retiro Vacío', tipo: 'datetime-local' },
-      { id: 'txtSalidaVacio', col: 'SALIDA VACIO', label: 'Salida Vacío', tipo: 'datetime-local' },
-      { id: 'txtMuertos1', col: 'T MUERTOS 1', label: 'T. Muertos 1 (horas)', tipo: 'number' },
-      { id: 'txtLlegadaPlanta', col: 'LLEGADA PLANTA', label: 'Llegada Planta', tipo: 'datetime-local' },
-      { id: 'txtSalidaPlanta', col: 'SALIDA PLANTA', label: 'Salida Planta', tipo: 'datetime-local' },
-      { id: 'txtMuertos2', col: 'T MUERTOS 2', label: 'T. Muertos 2 (horas)', tipo: 'number' },
-      { id: 'txtLlegadaColaPuerto', col: 'LLEGADA COLA PUERTO', label: 'Llegada Cola Puerto', tipo: 'datetime-local' },
-      { id: 'txtSalidaPuerto', col: 'SALIDA DE PUERTO', label: 'Salida de Puerto', tipo: 'datetime-local' },
-      { id: 'txtFinRuta', col: 'FIN DE RUTA', label: 'Fin de Ruta', tipo: 'datetime-local' }
+      { id: 'txtInicioRuta', col: 'INICIO RUTA', label: 'Inicio de ruta', tipo: 'datetime-local', etapa: 1 },
+      { id: 'txtRetiroVacio', col: 'RETIRO VACIO', label: 'Llegada al depósito (retiro vacío)', tipo: 'datetime-local', etapa: 1 },
+      { id: 'txtSalidaVacio', col: 'SALIDA VACIO', label: 'Salida del depósito', tipo: 'datetime-local', etapa: 1 },
+      { id: 'txtMuertos1', col: 'T MUERTOS 1', label: 'Tiempos muertos en ruta (h)', tipo: 'number', etapa: 2 },
+      { id: 'txtLlegadaPlanta', col: 'LLEGADA PLANTA', label: 'Llegada a planta', tipo: 'datetime-local', etapa: 2 },
+      { id: 'txtSalidaPlanta', col: 'SALIDA PLANTA', label: 'Salida de planta', tipo: 'datetime-local', etapa: 2 },
+      { id: 'txtMuertos2', col: 'T MUERTOS 2', label: 'Tiempos muertos en ruta (h)', tipo: 'number', etapa: 3 },
+      { id: 'txtLlegadaColaPuerto', col: 'LLEGADA COLA PUERTO', label: 'Llegada a cola de puerto', tipo: 'datetime-local', etapa: 3 },
+      { id: 'txtSalidaPuerto', col: 'SALIDA DE PUERTO', label: 'Salida de puerto', tipo: 'datetime-local', etapa: 3 },
+      { id: 'txtFinRuta', col: 'FIN DE RUTA', label: 'Fin de ruta', tipo: 'datetime-local', etapa: 3 }
     ];
+    const campo = function (c) {
+      const valor = c.tipo === 'datetime-local' ? aDatetimeLocal(seguimiento[c.col]) : (seguimiento[c.col] || '');
+      return '<div class="sg-campo"><label for="' + c.id + '">' + c.label + '</label><input type="' + c.tipo + '" id="' + c.id + '" value="' + valor + '"' + (c.tipo === 'number' ? ' step="0.5" min="0"' : '') + '></div>';
+    };
+    const etapa = function (n, icono, titulo, citaTxt, citaVal, idRes) {
+      return '<div class="sg-etapa"><div class="sg-cab"><span class="sg-num">' + n + '</span><span>' + icono + ' ' + titulo + '</span></div>' +
+        '<div class="sg-cita"><span>' + citaTxt + '</span><b>' + (citaVal ? self._fh(citaVal) : 'Sin dato') + '</b></div>' +
+        campos.filter(c => c.etapa === n).map(campo).join('') +
+        '<div class="sg-res" id="' + idRes + '">—</div></div>';
+    };
+    const MOT = { 'HORAS EXTRAS PLANTA': 'Horas extras en planta', 'HORAS EXTRAS PUERTO': 'Horas extras en puerto', 'PERNOCTE': 'Pernocte' };
+    const scHtml = (f._sc || []).length
+      ? '<table class="tabla-lista" style="margin-top:6px"><thead><tr><th>Código</th><th>Motivo</th><th>Cantidad</th><th>Total</th><th>Observación</th></tr></thead><tbody>' +
+        f._sc.map(x => '<tr><td>' + esc(x.codigo) + '</td><td>' + esc(x.tipo) + '</td><td>' + (x.cantidad || '') + '</td><td>' + esc(x.moneda) + ' ' + Number(x.total || 0).toFixed(2) + '</td><td>' + esc(x.obs) + '</td></tr>').join('') + '</tbody></table>'
+      : '<p style="color:#94a3b8;margin:6px 0 0">Aún no hay sobrecostos registrados para este servicio.</p>';
 
     const html = `
-      <div class="fila-campos">
-        ${ro('Retiro (cita)', retiro, 'Sin fecha de retiro')}
-        ${ro('Posicionamiento (cita)', cita, 'Sin fecha de posicionamiento')}
-        ${ro('Devolución (cita)', devol, 'Sin fecha de devolución')}
+      <style>
+        .sg-info { display:flex; flex-wrap:wrap; gap:4px 18px; background:#f1f5f9; border-radius:10px; padding:8px 12px; font-size:.84rem; color:#334155; margin-bottom:12px; }
+        .sg-etapas { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+        .sg-etapa { border:1px solid #dbe3ee; border-radius:12px; padding:10px 12px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+        .sg-cab { display:flex; align-items:center; gap:8px; font-weight:800; color:#1c3a5e; margin-bottom:8px; }
+        .sg-num { display:inline-flex; width:24px; height:24px; border-radius:50%; background:#1c3a5e; color:#fff; align-items:center; justify-content:center; font-size:.8rem; }
+        .sg-cita { display:flex; justify-content:space-between; background:#eef4fb; border-radius:8px; padding:6px 9px; font-size:.8rem; color:#475569; margin-bottom:8px; }
+        .sg-cita b { color:#1c3a5e; }
+        .sg-campo { margin-bottom:7px; }
+        .sg-campo label { display:block; font-size:.74rem; color:#64748b; font-weight:600; margin-bottom:2px; }
+        .sg-campo input { width:100%; box-sizing:border-box; }
+        .sg-res { margin-top:6px; border-top:1px dashed #dbe3ee; padding-top:7px; font-size:.84rem; color:#334155; }
+        .sg-res b { font-size:1rem; color:#1c3a5e; }
+        .sg-tag { display:inline-block; padding:1px 8px; border-radius:9px; font-size:.72rem; font-weight:700; margin-left:4px; }
+        .sg-fact { margin-top:14px; border:1px solid #fcd34d; background:#fffbeb; border-radius:12px; padding:10px 12px; }
+        .sg-sug { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+        .sg-sug button { border:1px solid #f59e0b; background:#fff; color:#92400e; border-radius:9px; padding:6px 10px; font-weight:700; cursor:pointer; }
+        .sg-sug button:hover { background:#fef3c7; }
+        @media (max-width: 900px) { .sg-etapas { grid-template-columns:1fr; } }
+      </style>
+      <div class="sg-info">
+        <span>Cliente: <b>${esc(f['CLIENTE PARA FACTURACIÓN'] || '')}</b></span><span>Booking: <b>${esc(f['BOOKING'] || '')}</b></span>
+        <span>Código: <b>${esc(f['CODIGO SERVICIO'] || '')}</b></span><span>Conductor: <b>${esc(f['CONDUCTOR'] || '')}</b> (${esc(f['PLACA TRACTO'] || '')})</span>
+        <span>Destino: <b>${esc(f['DESTINO 1'] || '')}</b></span><span>Horas libres en planta: <b>${libres} h</b></span>
       </div>
-      <div class="fila-campos">
-        ${campos.map(function (c) {
-          const valor = c.tipo === 'datetime-local' ? aDatetimeLocal(seguimiento[c.col]) : (seguimiento[c.col] || '');
-          return `<div class="campo"><label>${c.label}</label><input type="${c.tipo}" id="${c.id}" value="${valor}"${c.tipo === 'number' ? ' step="0.5" min="0"' : ''}></div>`;
-        }).join('')}
+      <div class="sg-etapas">
+        ${etapa(1, '📦', 'Retiro del contenedor', 'Cita de retiro', retiro, 'sgRes1')}
+        ${etapa(2, '🏭', 'Planta', 'Cita (posicionamiento)', cita, 'sgRes2')}
+        ${etapa(3, '⚓', 'Puerto y devolución', 'Cita de devolución', devol, 'sgRes3')}
+      </div>
+      <div class="sg-fact">
+        <b style="color:#92400e">💰 Por facturar al cliente (sobrecostos)</b>
+        <div id="sgSugerencias" class="sg-sug"></div>
+        <div style="margin-top:8px"><b style="color:#1c3a5e;font-size:.85rem">Ya registrados</b>${scHtml}</div>
+        <div id="dvFormSc" style="display:none;margin-top:10px;border-top:1px dashed #f59e0b;padding-top:10px">
+          <div class="fila-campos">
+            <div class="campo"><label>Motivo</label><select id="dvScMotivo">${Object.keys(MOT).map(k => '<option value="' + k + '">' + MOT[k] + '</option>').join('')}</select></div>
+            <div class="campo"><label id="dvScCantLbl">Horas</label><input type="number" id="dvScCant" step="0.5" min="0"></div>
+            <div class="campo"><label id="dvScPrecioLbl">Tarifa por hora (con IGV)</label><input type="number" id="dvScPrecio" step="0.01" min="0" placeholder="0.00"></div>
+            <div class="campo"><label>Moneda</label><select id="dvScMoneda"><option value="$">Dólares ($)</option><option value="S/">Soles (S/)</option></select></div>
+            <div class="campo" style="grid-column:1/-1"><label>Observación</label><input type="text" id="dvScObs" autocomplete="off"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+            <span id="dvScTotal" style="font-weight:700;color:#1c3a5e"></span>
+            <span><button class="boton-secundario" id="dvScCancelar">Cancelar</button> <button class="boton-primario" id="dvScGrabar">Agregar al sobrecosto</button></span>
+          </div>
+        </div>
       </div>
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <button class="boton-secundario" id="btnVolverSeguimiento">Volver a la lista</button>
-        <button class="boton-primario" id="btnGrabarSeguimiento">Grabar</button>
+        <button class="boton-primario" id="btnGrabarSeguimiento">Grabar seguimiento</button>
       </div>`;
 
     actualizarPanel('Seguimiento del Viaje', html, function (raiz) {
-      raiz.querySelector('#btnVolverSeguimiento').addEventListener('click', function () {
+      const $ = id => raiz.querySelector('#' + id);
+      const val = id => { const v = $(id).value; if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+      const hTxt = function (h) {
+        if (h === null) return '<span style="color:#94a3b8">falta completar</span>';
+        if (h < 0 || h > 200) return '<span class="sg-tag" style="background:#fef3c7;color:#92400e">⚠ revisa las fechas (' + h.toFixed(1) + ' h)</span>';
+        return '<b>' + h.toFixed(1) + ' h</b>';
+      };
+      const cobradoPlanta = (f._sc || []).some(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
+      const cobradoPuerto = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
+      let ctx = {};
+      const recalcular = function () {
+        const retV = val('txtRetiroVacio'), salV = val('txtSalidaVacio'), lleP = val('txtLlegadaPlanta'), salP = val('txtSalidaPlanta');
+        const cola = val('txtLlegadaColaPuerto'), salPu = val('txtSalidaPuerto');
+        const enRet = self._horas(retV, salV), enPl = self._horas(lleP, salP), desdeCita = self._horas(cita, salP), enPu = self._horas(cola, salPu);
+        const extra = desdeCita === null || desdeCita < 0 || desdeCita > 200 ? null : Math.max(0, Math.round((desdeCita - libres) * 100) / 100);
+        ctx = { salP: salP, enPl: enPl, desdeCita: desdeCita, extra: extra, cola: cola, salPu: salPu, enPu: enPu };
+        $('sgRes1').innerHTML = 'Tiempo en el depósito: ' + hTxt(enRet);
+        $('sgRes2').innerHTML = 'Tiempo en planta: ' + hTxt(enPl) +
+          '<br>Desde la cita: ' + hTxt(desdeCita) + (extra > 0 ? '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>' : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
+        $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu);
+        const sug = [];
+        if (extra > 0 && !cobradoPlanta) sug.push('<button data-m="HORAS EXTRAS PLANTA">+ Facturar ' + extra.toFixed(1) + ' h extra en planta</button>');
+        if (enPu !== null && enPu > 0 && enPu <= 200 && !cobradoPuerto) sug.push('<button data-m="HORAS EXTRAS PUERTO">+ Facturar horas extra en puerto (' + enPu.toFixed(1) + ' h en puerto)</button>');
+        sug.push('<button data-m="PERNOCTE">+ Facturar pernocte</button>');
+        $('sgSugerencias').innerHTML = (extra > 0 && !cobradoPlanta ? '<span style="width:100%;font-size:.82rem;color:#b91c1c">Este viaje pasó las horas libres en planta: revisa y aprueba el cobro.</span>' : '') + sug.join('');
+      };
+      campos.forEach(c => $(c.id).addEventListener('input', recalcular));
+      recalcular();
+
+      // Formulario de sobrecosto
+      const total = function () {
+        const t = (Number($('dvScCant').value) || 0) * (Number($('dvScPrecio').value) || 0);
+        $('dvScTotal').textContent = t > 0 ? 'Total: ' + $('dvScMoneda').value + ' ' + t.toFixed(2) : '';
+      };
+      const preparar = function (m) {
+        $('dvScMotivo').value = m;
+        $('dvScCantLbl').textContent = m === 'PERNOCTE' ? 'Noches' : 'Horas';
+        $('dvScPrecioLbl').textContent = m === 'PERNOCTE' ? 'Tarifa por noche (con IGV)' : 'Tarifa por hora (con IGV)';
+        if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = ctx.extra > 0 ? ctx.extra : ''; $('dvScObs').value = ctx.extra > 0 ? ('Cita ' + self._fh(cita) + ' · salida ' + self._fh(ctx.salP) + ' · ' + ctx.desdeCita.toFixed(2) + ' h desde la cita − ' + libres + ' h libres') : ''; }
+        else if (m === 'HORAS EXTRAS PUERTO') { $('dvScCant').value = ''; $('dvScObs').value = ctx.enPu !== null ? ('Cola puerto ' + self._fh(ctx.cola) + ' · salida ' + self._fh(ctx.salPu) + ' · ' + ctx.enPu.toFixed(2) + ' h en puerto') : ''; }
+        else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
+        $('dvFormSc').style.display = ''; total(); $('dvScPrecio').focus();
+      };
+      $('sgSugerencias').addEventListener('click', function (ev) { const b = ev.target.closest('button[data-m]'); if (b) preparar(b.dataset.m); });
+      $('dvScMotivo').addEventListener('change', () => preparar($('dvScMotivo').value));
+      ['dvScCant', 'dvScPrecio', 'dvScMoneda'].forEach(id => $(id).addEventListener('input', total));
+      $('dvScCancelar').addEventListener('click', () => { $('dvFormSc').style.display = 'none'; });
+      protegerClic($('dvScGrabar'), async function () {
+        const d = { fila: filaServicio, tipo: $('dvScMotivo').value, cantidad: Number($('dvScCant').value), precio: Number($('dvScPrecio').value), moneda: $('dvScMoneda').value, observacion: $('dvScObs').value };
+        if (!(d.cantidad > 0)) { mostrarMensaje('Ingrese la cantidad.', 'error'); return; }
+        if (!(d.precio > 0)) { mostrarMensaje('Ingrese la tarifa.', 'error'); return; }
+        const r = await llamarBackend('sobrecostoDesdePlanta', d);
+        if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
+        mostrarMensaje(r.mensaje + ' Queda listo en Facturar.', 'exito');
         self._mostrarListaEnPanel();
       });
 
-      raiz.querySelector('#btnGrabarSeguimiento').addEventListener('click', async function () {
+      $('btnVolverSeguimiento').addEventListener('click', () => self._mostrarListaEnPanel());
+      protegerClic($('btnGrabarSeguimiento'), async function () {
         const datos = {};
-        campos.forEach(function (c) {
-          datos[c.col] = raiz.querySelector('#' + c.id).value;
-        });
-
+        campos.forEach(c => { datos[c.col] = $(c.id).value; });
         const resp = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: datos });
         if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
         mostrarMensaje(resp.mensaje, resp.completo ? 'exito' : 'info');
