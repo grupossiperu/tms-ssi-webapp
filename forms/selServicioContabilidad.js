@@ -49,6 +49,8 @@ const FormSelServicioContabilidad = {
         #tablaServicios th { font-size: .7rem; position: sticky; top: 0; z-index: 1; }
         #tablaServicios .badge-datos { font-size: .66rem; padding: 2px 6px; word-break: normal; overflow-wrap: normal; display: inline-block; line-height: 1.25; }
         #tablaServicios td .sub { color: #64748b; font-size: .68rem; margin-top: 2px; }
+        .btn-acarreo { border: 1px solid #cbd5e1; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; cursor: pointer; background: #fff; white-space: nowrap; }
+        .btn-acarreo.ac-ok { background: #dcfce7; color: #166534; border-color: #86efac; } .btn-acarreo.ac-pend { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
         .badge-obs { display: inline-block; background: #e0f2fe; color: #075985; border-radius: 8px; padding: 1px 6px; font-size: .66rem; font-weight: 700; }
         .badge-estado { display: inline-block; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; background: #f1f5f9; color: #334155; }
         .est-programado { background: #e2e8f0; color: #334155; }
@@ -70,14 +72,14 @@ const FormSelServicioContabilidad = {
       <div class="acarreo-tabla-wrap">
         <table class="tabla-lista" id="tablaServicios">
           <colgroup>
-            <col style="width:6.5%"><col style="width:5.5%"><col style="width:10%"><col style="width:6.5%"><col style="width:7.5%">
-            <col style="width:9.5%"><col style="width:9%"><col style="width:8.5%"><col style="width:5.5%"><col style="width:7.5%">
-            <col style="width:6.5%"><col style="width:7%"><col style="width:3%"><col style="width:7.5%">
+            <col style="width:6.5%"><col style="width:5.5%"><col style="width:9%"><col style="width:6.5%"><col style="width:7.5%">
+            <col style="width:8.5%"><col style="width:9%"><col style="width:7.5%"><col style="width:5%"><col style="width:7%">
+            <col style="width:6.5%"><col style="width:6%"><col style="width:6%"><col style="width:3%"><col style="width:6.5%">
           </colgroup>
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Booking</th>
             <th>Retiro</th><th>Destino 1 / posic.</th><th>Packing</th><th>Destino 2 / posic.</th><th>Devolución</th>
-            <th>Observación</th><th>Datos</th><th>Imp.</th><th>Estado</th>
+            <th>Observación</th><th>Datos</th><th title="Contenedor, cita de devolución y 3 documentos">Acarreo</th><th>Imp.</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -207,7 +209,8 @@ const FormSelServicioContabilidad = {
       if (soloFiltrar === true && self._filasCache) {
         filas = self._filasCache.slice();
       } else {
-        filas = await llamarBackend('listarServiciosPendientes', filtros);
+        const resp = await Promise.all([llamarBackend('listarServiciosPendientes', filtros), FormAcarreoDocs.cargar(true)]);
+        filas = resp[0];
         self._filasCache = filas.slice();
       }
 
@@ -288,12 +291,18 @@ const FormSelServicioContabilidad = {
               ? '<span class="badge-datos completo" title="Clic para revisar o modificar">Completo</span>'
               : '<span class="badge-datos incompleto" title="Clic para completar los datos">Datos incompletos</span>'}
           </td>
+          <td style="text-align:center;">${FormAcarreoDocs.boton(f)}</td>
           <td style="text-align:center;"><button type="button" class="btn-imprimir-fila" title="Imprimir este servicio" style="cursor:pointer; font-size:15px; border:none; background:transparent; padding:0;">🖨️</button></td>
           <td><span class="badge-estado est-${estadoTxt.replace(/\s+/g, '-').toLowerCase()}">${f['ESTADO'] || ''}</span></td>`;
 
         tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
           ev.stopPropagation();
           FormServicio.abrir(f._fila);
+        });
+
+        tr.querySelector('.btn-acarreo').addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          FormAcarreoDocs.abrir(f, function () { cargar(true); });
         });
 
         tr.querySelector('.btn-imprimir-fila').addEventListener('click', function (ev) {
@@ -313,7 +322,7 @@ const FormSelServicioContabilidad = {
       // Si el booking escrito ubica un solo servicio, queda seleccionado.
       if (booking && filas.length === 1) tbody.querySelector('tr').click();
       if (filas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; color:#64748b; padding:14px;">' +
+        tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; color:#64748b; padding:14px;">' +
           (booking ? 'No se encontró ningún servicio con ese booking.' : 'No hay servicios con estos filtros.') + '</td></tr>';
       }
       // Cambiar filtros no cuenta como "datos sin guardar" al cerrar.

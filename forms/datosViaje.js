@@ -38,7 +38,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -121,6 +121,7 @@ const FormDatosViaje = {
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
           <td class="dv-retiro" style="text-align:center;cursor:pointer;">${self._celdaH(self._calc(f).enRetiro)}</td>
           <td class="dv-planta" style="text-align:center;cursor:pointer;">${self._celdaPlanta(f)}</td>
+          <td class="dv-gas" style="text-align:center;cursor:pointer;">${self._celdaGas(f)}</td>
           <td class="dv-puerto" style="text-align:center;cursor:pointer;">${self._celdaH(self._calc(f).enPuerto)}</td>
           <td style="text-align:center;">
             ${completo
@@ -132,7 +133,7 @@ const FormDatosViaje = {
           ev.stopPropagation();
           self._abrirSeguimiento(f._fila, f);
         });
-        tr.querySelectorAll('.dv-planta, .dv-retiro, .dv-puerto').forEach(function (td) {
+        tr.querySelectorAll('.dv-planta, .dv-retiro, .dv-gas, .dv-puerto').forEach(function (td) {
           td.addEventListener('click', function (ev) { ev.stopPropagation(); self._abrirSeguimiento(f._fila, f); });
         });
 
@@ -172,6 +173,7 @@ const FormDatosViaje = {
       const pad = n => String(n).padStart(2, '0');
       return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
+    const esGas = self._esGas(f);
     const campos = [
       { id: 'txtInicioRuta', col: 'INICIO RUTA', label: 'Inicio de ruta', tipo: 'datetime-local', etapa: 1 },
       { id: 'txtRetiroVacio', col: 'RETIRO VACIO', label: 'Llegada al depósito (retiro vacío)', tipo: 'datetime-local', etapa: 1 },
@@ -179,6 +181,8 @@ const FormDatosViaje = {
       { id: 'txtMuertos1', col: 'T MUERTOS 1', label: 'Tiempos muertos en ruta (h)', tipo: 'number', etapa: 2 },
       { id: 'txtLlegadaPlanta', col: 'LLEGADA PLANTA', label: 'Llegada a planta', tipo: 'datetime-local', etapa: 2 },
       { id: 'txtSalidaPlanta', col: 'SALIDA PLANTA', label: 'Salida de planta', tipo: 'datetime-local', etapa: 2 },
+      { id: 'txtGasIni', col: 'INICIO GASIFICADO', label: 'Inicio del gasificado', tipo: 'datetime-local', etapa: 'g', dis: !esGas },
+      { id: 'txtGasFin', col: 'FIN GASIFICADO', label: 'Fin del gasificado', tipo: 'datetime-local', etapa: 'g', dis: !esGas },
       { id: 'txtMuertos2', col: 'T MUERTOS 2', label: 'Tiempos muertos en ruta (h)', tipo: 'number', etapa: 3 },
       { id: 'txtLlegadaColaPuerto', col: 'LLEGADA COLA PUERTO', label: 'Llegada a cola de puerto', tipo: 'datetime-local', etapa: 3 },
       { id: 'txtSalidaPuerto', col: 'SALIDA DE PUERTO', label: 'Salida de puerto', tipo: 'datetime-local', etapa: 3 },
@@ -186,7 +190,7 @@ const FormDatosViaje = {
     ];
     const campo = function (c) {
       const valor = c.tipo === 'datetime-local' ? aDatetimeLocal(seguimiento[c.col]) : (seguimiento[c.col] || '');
-      return '<div class="sg-campo"><label for="' + c.id + '">' + c.label + '</label><input type="' + c.tipo + '" id="' + c.id + '" value="' + valor + '"' + (c.tipo === 'number' ? ' step="0.5" min="0"' : '') + '></div>';
+      return '<div class="sg-campo"><label for="' + c.id + '">' + c.label + '</label><input type="' + c.tipo + '" id="' + c.id + '" value="' + valor + '"' + (c.tipo === 'number' ? ' step="0.5" min="0"' : '') + (c.dis ? ' disabled title="Solo para servicios GASIFICADOS"' : '') + '></div>';
     };
     const etapa = function (n, icono, titulo, citaTxt, citaVal, idRes) {
       return '<div class="sg-etapa"><div class="sg-cab"><span class="sg-num">' + n + '</span><span>' + icono + ' ' + titulo + '</span></div>' +
@@ -203,7 +207,7 @@ const FormDatosViaje = {
     const html = `
       <style>
         .sg-info { display:flex; flex-wrap:wrap; gap:4px 18px; background:#f1f5f9; border-radius:10px; padding:8px 12px; font-size:.84rem; color:#334155; margin-bottom:12px; }
-        .sg-etapas { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+        .sg-etapas { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
         .sg-etapa { border:1px solid #dbe3ee; border-radius:12px; padding:10px 12px; background:#fff; box-shadow:0 1px 2px rgba(15,23,42,.04); }
         .sg-cab { display:flex; align-items:center; gap:8px; font-weight:800; color:#1c3a5e; margin-bottom:8px; }
         .sg-num { display:inline-flex; width:24px; height:24px; border-radius:50%; background:#1c3a5e; color:#fff; align-items:center; justify-content:center; font-size:.8rem; }
@@ -219,7 +223,8 @@ const FormDatosViaje = {
         .sg-sug { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
         .sg-sug button { border:1px solid #f59e0b; background:#fff; color:#92400e; border-radius:9px; padding:6px 10px; font-weight:700; cursor:pointer; }
         .sg-sug button:hover { background:#fef3c7; }
-        @media (max-width: 900px) { .sg-etapas { grid-template-columns:1fr; } }
+        @media (max-width: 1250px) { .sg-etapas { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width: 760px) { .sg-etapas { grid-template-columns:1fr; } }
       </style>
       <div class="sg-info">
         <span>Cliente: <b>${esc(f['CLIENTE PARA FACTURACIÓN'] || '')}</b></span><span>Booking: <b>${esc(f['BOOKING'] || '')}</b></span>
@@ -229,6 +234,10 @@ const FormDatosViaje = {
       <div class="sg-etapas">
         ${etapa(1, '📦', 'Retiro del contenedor', 'Cita de retiro', retiro, 'sgRes1')}
         ${etapa(2, '🏭', 'Planta', 'Cita (posicionamiento)', cita, 'sgRes2')}
+        <div class="sg-etapa"${esGas ? '' : ' style="opacity:.55"'}><div class="sg-cab"><span class="sg-num" style="background:#5b21b6">G</span><span>🧪 Gasificado</span></div>
+          <div class="sg-cita" style="background:${esGas ? '#ede9fe' : '#f1f5f9'}"><span>Observación del servicio</span><b>${esGas ? 'GASIFICADO' : 'No aplica'}</b></div>
+          ${campos.filter(c => c.etapa === 'g').map(campo).join('')}
+          <div class="sg-res" id="sgResG">${esGas ? '—' : 'Este servicio no es gasificado: los campos están bloqueados.'}</div></div>
         ${etapa(3, '⚓', 'Puerto y devolución', 'Cita de devolución', devol, 'sgRes3')}
       </div>
       <div class="sg-fact">
@@ -275,6 +284,7 @@ const FormDatosViaje = {
         $('sgRes2').innerHTML = 'Tiempo en planta: ' + hTxt(enPl) +
           '<br>Desde la cita: ' + hTxt(desdeCita) + (extra > 0 ? '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>' : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
         $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu);
+        if (esGas) $('sgResG').innerHTML = 'Tiempo de gasificado: ' + hTxt(self._horas(val('txtGasIni'), val('txtGasFin')));
         const sug = [];
         if (extra > 0 && !cobradoPlanta) sug.push('<button data-m="HORAS EXTRAS PLANTA">+ Facturar ' + extra.toFixed(1) + ' h extra en planta</button>');
         if (enPu !== null && enPu > 0 && enPu <= 200 && !cobradoPuerto) sug.push('<button data-m="HORAS EXTRAS PUERTO">+ Facturar horas extra en puerto (' + enPu.toFixed(1) + ' h en puerto)</button>');
@@ -315,7 +325,7 @@ const FormDatosViaje = {
       $('btnVolverSeguimiento').addEventListener('click', () => self._mostrarListaEnPanel());
       protegerClic($('btnGrabarSeguimiento'), async function () {
         const datos = {};
-        campos.forEach(c => { datos[c.col] = $(c.id).value; });
+        campos.forEach(c => { if (!c.dis) datos[c.col] = $(c.id).value; });
         const resp = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: datos });
         if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
         mostrarMensaje(resp.mensaje, resp.completo ? 'exito' : 'info');
@@ -357,7 +367,15 @@ const FormDatosViaje = {
       enPlantaReal: this._horas(this._fecha(f._llegadaPlanta), sal),
       enPuerto: this._horas(this._fecha(f._llegadaPuerto), this._fecha(f._salidaPuerto)),
       retVacio: this._fecha(f._retiroVacio), salVacio: this._fecha(f._salidaVacio),
-      enRetiro: this._horas(this._fecha(f._retiroVacio), this._fecha(f._salidaVacio)) };
+      enRetiro: this._horas(this._fecha(f._retiroVacio), this._fecha(f._salidaVacio)),
+      esGas: this._esGas(f), enGas: this._horas(this._fecha(f._gasIni), this._fecha(f._gasFin)) };
+  },
+  _esGas: function (f) { return /GASIF/i.test(String(f['OBSERVACION'] || '')); },
+  _celdaGas: function (f) {
+    if (!this._esGas(f)) return '<span style="color:#94a3b8">—</span>';
+    const h = this._calc(f).enGas;
+    return '<span style="display:inline-block;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;font-size:.72rem;font-weight:700">Sí</span>' +
+      (h === null ? '<br><span style="font-size:.7rem;color:#94a3b8">sin horas</span>' : '<br>' + this._celdaH(h));
   },
   _celdaH: function (h) {
     if (h === null || h === undefined) return '<span style="color:#94a3b8">—</span>';
@@ -489,7 +507,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>

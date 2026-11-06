@@ -90,6 +90,7 @@ const FormFacturaViaje = {
         <span>Placa: <b>${esc(datos.placa || '-')}</b></span>
         <span>Venta: <b>$ ${(datos.ventaDolares||0).toFixed(2)}</b></span>
       </div>
+      <div id="factDocsAcarreo" style="margin:-4px 0 10px;padding:7px 10px;border:1px dashed #cbd5e1;border-radius:9px;font-size:.82rem;color:#334155">Cargando documentos del acarreo…</div>
 
       <div class="cols">
         <div>
@@ -188,6 +189,12 @@ const FormFacturaViaje = {
   },
 
   _wire: function (raiz, datos) {
+    (function () {
+      const caja = raiz.querySelector('#factDocsAcarreo');
+      if (!caja || typeof FormAcarreoDocs === 'undefined') return;
+      FormAcarreoDocs.cargar(true).then(function () { caja.innerHTML = FormAcarreoDocs.enlacesHtml(datos.codigoServicio); })
+        .catch(function () { caja.textContent = 'No se pudieron cargar los documentos del acarreo.'; });
+    })();
     const self = this;
 
     function calcularVenta() {
