@@ -7,7 +7,7 @@
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261106a';
+  window.__VERSION_APP = '20261106b';
   ['styles.css', 'home.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
@@ -421,6 +421,15 @@
           <span class="tile-texto"><strong>Incidencias de conductores</strong><small>Fallas reportadas desde el celular, por prioridad</small></span>
         </button>
 
+        <button class="tile" style="grid-column:1 / -1;" id="btn-historial-reparaciones" data-modulo="INCA">
+          <span class="tile-icono" style="background:#ede9fe;color:#5b21b6;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Historial de reparaciones</strong><small>Mantenimientos, fallas resueltas y piezas reparadas</small></span>
+        </button>
+
         <button class="tile" style="grid-column:1 / -1;" id="btn-mt-mantenimiento">
           <span class="tile-icono">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -467,6 +476,7 @@
     'forms/tipoCambio.js',
     'forms/servicio.js',
     'forms/acarreoDocs.js',
+    'forms/historialReparaciones.js',
     'forms/selServicioContabilidad.js',
     'forms/consolidadoServicio.js',
     'forms/serviciosCulminados.js',
