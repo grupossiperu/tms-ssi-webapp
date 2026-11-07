@@ -197,7 +197,7 @@ const FormConsolidadoServicios = {
       try {
         const [r, X] = await Promise.all([llamarBackend('consolidadoExportar', {}), FormConsolidadoServicios._xlsx()]);
         if (!r || !r.ok) throw new Error((r && r.mensaje) || 'No se pudo leer el consolidado.');
-        const cols = r.columnas || [];
+        const cols = (r.columnas || []).map(c => c === 'X' ? 'CLIENTE PARA FACTURACIÓN' : c);
         const iFila = cols.indexOf('FILA SERVICIO'), iCod = cols.findIndex(c => /^CODIGO (DEL )?SERVICIO$/i.test(c));
         const porFila = {}, porCod = {};
         (r.filas || []).forEach(function (row) {
