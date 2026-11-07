@@ -14,6 +14,16 @@
  */
 const FormConsolidadoServicios = {
 
+  _xlsx: function () {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise(function (ok, mal) {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = () => ok(window.XLSX); s.onerror = () => mal(new Error('No se pudo cargar el componente de Excel.'));
+      document.head.appendChild(s);
+    });
+  },
+
   abrir: async function () {
     const html = `
       <style>
@@ -59,7 +69,8 @@ const FormConsolidadoServicios = {
           <tbody></tbody>
         </table>
       </div>
-      <div class="panel-footer" style="padding-top:10px; justify-content:flex-end;">
+      <div class="panel-footer" style="padding-top:10px; justify-content:flex-end; gap:8px;">
+        <button class="boton-primario" id="btnExcelConsolidado" title="Descarga en Excel todos los datos del consolidado de los servicios que se ven en la lista">⬇ Descargar Excel</button>
         <button class="boton-secundario" id="btnCerrarConsolidadoServicios">Cerrar</button>
       </div>`;
 
@@ -104,6 +115,7 @@ const FormConsolidadoServicios = {
       pintar();
     }
 
+    let visibles = [];
     function pintar() {
       const booking = mayus(raiz.querySelector('#filtroConsBooking').value);
       const datos = raiz.querySelector('#filtroConsDatos').value;
@@ -124,6 +136,7 @@ const FormConsolidadoServicios = {
         return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
       });
 
+      visibles = filas;
       const pendientes = filas.filter(f => !completo(f)).length;
       raiz.querySelector('#consCuenta').textContent = filas.length + ' servicio' + (filas.length === 1 ? '' : 's') +
         ' (culminados y falsos fletes) · ' + pendientes + ' por completar';
@@ -177,6 +190,46 @@ const FormConsolidadoServicios = {
       cargar();
     });
     raiz.querySelector('#btnCerrarConsolidadoServicios').addEventListener('click', cerrarPanel);
+    raiz.querySelector('#btnExcelConsolidado').addEventListener('click', async function () {
+      const btn = this;
+      if (!visibles.length) { mostrarMensaje('No hay servicios en la lista para descargar.', 'error'); return; }
+      btn.disabled = true; const txt = btn.textContent; btn.textContent = 'Preparando…';
+      try {
+        const [r, X] = await Promise.all([llamarBackend('consolidadoExportar', {}), FormConsolidadoServicios._xlsx()]);
+        if (!r || !r.ok) throw new Error((r && r.mensaje) || 'No se pudo leer el consolidado.');
+        const cols = r.columnas || [];
+        const iFila = cols.indexOf('FILA SERVICIO'), iCod = cols.findIndex(c => /^CODIGO (DEL )?SERVICIO$/i.test(c));
+        const porFila = {}, porCod = {};
+        (r.filas || []).forEach(function (row) {
+          if (iFila >= 0 && row[iFila] !== '' && row[iFila] !== null) porFila[String(row[iFila]).trim()] = row;
+          if (iCod >= 0 && row[iCod]) porCod[mayus(row[iCod])] = row;
+        });
+        const conCons = [], sinCons = [];
+        visibles.forEach(function (f) {
+          const row = porCod[mayus(f['CODIGO SERVICIO'])] || porFila[String(f._fila)];
+          if (row) conCons.push(row);
+          else sinCons.push([formatoFecha(f['FECHA DE PROGRAMACION'], ''), f['CODIGO SERVICIO'] || '', f['CLIENTE PARA FACTURACIÓN'] || '', f['BOOKING'] || '', f['N° CONTENEDOR'] || '',
+            f['CONDUCTOR'] || '', f['PLACA TRACTO'] || '', f['DESTINO 1'] || '', f['PACKING'] || '', f._estadoServ || '']);
+        });
+        const wb = X.utils.book_new();
+        const ws = X.utils.aoa_to_sheet([cols].concat(conCons));
+        ws['!cols'] = cols.map(c => ({ wch: Math.min(40, Math.max(10, String(c).length + 2)) }));
+        ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: conCons.length, c: Math.max(0, cols.length - 1) } }) };
+        ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+        X.utils.book_append_sheet(wb, ws, 'Consolidado');
+        if (sinCons.length) {
+          const enc = ['FECHA', 'CODIGO SERVICIO', 'CLIENTE', 'BOOKING', 'CONTENEDOR', 'CONDUCTOR', 'TRACTO', 'DESTINO', 'PLANTA', 'ESTADO SERVICIO'];
+          const ws2 = X.utils.aoa_to_sheet([enc].concat(sinCons));
+          ws2['!cols'] = enc.map(() => ({ wch: 18 }));
+          X.utils.book_append_sheet(wb, ws2, 'Sin consolidado');
+        }
+        const hoy = new Date(); const p2 = n => String(n).padStart(2, '0');
+        X.writeFile(wb, 'Consolidado_servicios_' + hoy.getFullYear() + p2(hoy.getMonth() + 1) + p2(hoy.getDate()) + '.xlsx');
+        mostrarMensaje('Excel descargado: ' + conCons.length + ' viaje(s) con consolidado' + (sinCons.length ? ' y ' + sinCons.length + ' sin consolidado (hoja aparte)' : '') + '.', 'exito');
+      } catch (e) {
+        mostrarMensaje(e.message || String(e), 'error');
+      } finally { btn.disabled = false; btn.textContent = txt; }
+    });
 
     cargar();
   }
