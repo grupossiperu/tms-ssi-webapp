@@ -113,6 +113,8 @@ function crearMultiSelect(contenedor, opciones) {
       actualizarTexto();
     },
     valores: function () { return Array.from(seleccion); },
+    /** Marca estos valores (sin avisar onChange). Útil para recordar filtros. */
+    setValores: function (vals) { seleccion.clear(); (vals || []).forEach(function (v) { seleccion.add(String(v)); }); actualizarTexto(); if (panel.style.display !== 'none') pintar(); },
     cumple: function (valor) {
       if (seleccion.size === 0) return true;
       return seleccion.has(String(valor === null || valor === undefined ? '' : valor).trim().toUpperCase()) ||

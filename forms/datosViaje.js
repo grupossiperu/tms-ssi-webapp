@@ -20,8 +20,23 @@ const FormDatosViaje = {
   },
 
   _mostrarLista: function () {
-    const html = `
-      <div class="barra-filtros">
+    this._filtros = null; // ventana nueva: filtros limpios
+    abrirPanel('Datos del Viaje', this._htmlLista(), (raiz) => this._wireLista(raiz), { ancho: true });
+  },
+
+  /** HTML de la lista (filtros iguales a Acarreo + Seguimiento). */
+  _htmlLista: function () {
+    return `
+      <style>
+        #dvFiltros select, #dvFiltros input { max-width: 200px; }
+        #dvFiltros #filtroViajeDesde, #dvFiltros #filtroViajeHasta, #dvFiltros #filtroViajeSeguimiento, #dvFiltros #filtroViajeGas { max-width: 125px; }
+      </style>
+      <div class="barra-filtros" id="dvFiltros">
+        <div class="campo"><label>Estado</label><div id="dvMsEstado"></div></div>
+        <div class="campo"><label>Conductor</label><div id="dvMsConductor"></div></div>
+        <div class="campo"><label>Cliente</label><div id="dvMsCliente"></div></div>
+        <div class="campo"><label>Planta (packing)</label><div id="dvMsPacking"></div></div>
+        <div class="campo"><label>Booking</label><input type="text" id="filtroViajeBooking" placeholder="Booking o código" autocomplete="off"></div>
         <div class="campo"><label>Desde</label><input type="text" id="filtroViajeDesde" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Hasta</label><input type="text" id="filtroViajeHasta" placeholder="dd/mm/yyyy"></div>
         <div class="campo"><label>Seguimiento</label>
@@ -31,14 +46,18 @@ const FormDatosViaje = {
             <option value="incompleto">Incompleto</option>
           </select>
         </div>
+        <div class="campo"><label>Gasificado</label>
+          <select id="filtroViajeGas"><option value="">Todos</option><option value="si">Sí</option><option value="no">No</option></select>
+        </div>
         <button class="boton-secundario" id="btnBorrarFiltroViaje">Borrar filtro</button>
       </div>
-      <div style="max-height:460px; overflow:auto;">
+      <div style="font-size:.78rem;color:#64748b;margin:-4px 0 6px" id="dvConteo"></div>
+      <div style="max-height:calc(74vh - 230px); min-height:220px; overflow:auto;">
         <table class="tabla-lista" id="tablaDatosViaje">
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta. El extra se cuenta desde la cita o la llegada (la más tarde)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -46,8 +65,6 @@ const FormDatosViaje = {
       <div class="panel-footer" style="padding-top:10px; justify-content:flex-end;">
         <button class="boton-secundario" id="btnCerrarDatosViaje">Cerrar</button>
       </div>`;
-
-    abrirPanel('Datos del Viaje', html, (raiz) => this._wireLista(raiz), { ancho: true });
   },
 
   _wireLista: function (raiz) {
@@ -82,16 +99,62 @@ const FormDatosViaje = {
       return (f + ' ' + h).trim();
     }
 
-    async function cargar() {
-      const filtros = {
-        fechaDesde: raiz.querySelector('#filtroViajeDesde').value.trim(),
-        fechaHasta: raiz.querySelector('#filtroViajeHasta').value.trim()
-      };
-      let filas = await llamarBackend('listarConSeguimiento', filtros);
+    const $q = id => raiz.querySelector('#' + id);
+    const mayus = v => String(v || '').trim().toUpperCase();
+    const unicos = (filas, campo) => Array.from(new Set(filas.map(f => mayus(f[campo])).filter(v => v !== '' && v !== '-'))).sort((a, b) => a.localeCompare(b, 'es'));
+    const ESTADOS = (typeof FormSelServicioContabilidad !== 'undefined' && FormSelServicioContabilidad.ESTADOS) || ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'CULMINADO', 'FALSO FLETE', 'REPROGRAMADO', 'CANCELADO'];
+    const estadoDe = f => mayus(f['ESTADO']) || 'PROGRAMADO';
+    const refiltrar = () => cargar(true);
+    const msEstado = crearMultiSelect($q('dvMsEstado'), { textoTodos: 'Todos', onChange: refiltrar });
+    const msConductor = crearMultiSelect($q('dvMsConductor'), { textoTodos: 'Todos', onChange: refiltrar });
+    const msCliente = crearMultiSelect($q('dvMsCliente'), { textoTodos: 'Todos', onChange: refiltrar });
+    const msPacking = crearMultiSelect($q('dvMsPacking'), { textoTodos: 'Todas', onChange: refiltrar });
+    msEstado.setOpciones(ESTADOS);
 
-      const seg = raiz.querySelector('#filtroViajeSeguimiento').value;
+    // Filtros recordados al volver del seguimiento.
+    const prev = self._filtros;
+    if (prev) {
+      $q('filtroViajeDesde').value = prev.desde || ''; $q('filtroViajeHasta').value = prev.hasta || '';
+      $q('filtroViajeSeguimiento').value = prev.seg || ''; $q('filtroViajeGas').value = prev.gas || ''; $q('filtroViajeBooking').value = prev.booking || '';
+    }
+    let restaurado = !prev;
+    const guardarFiltros = function () {
+      self._filtros = {
+        desde: $q('filtroViajeDesde').value, hasta: $q('filtroViajeHasta').value, seg: $q('filtroViajeSeguimiento').value,
+        gas: $q('filtroViajeGas').value, booking: $q('filtroViajeBooking').value,
+        estado: msEstado.valores(), cond: msConductor.valores(), cli: msCliente.valores(), pack: msPacking.valores()
+      };
+    };
+
+    async function cargar(soloFiltrar) {
+      let filas;
+      if (soloFiltrar === true && self._filasCache) filas = self._filasCache.slice();
+      else {
+        const filtros = { fechaDesde: $q('filtroViajeDesde').value.trim(), fechaHasta: $q('filtroViajeHasta').value.trim() };
+        filas = await llamarBackend('listarConSeguimiento', filtros) || [];
+        self._filasCache = filas.slice();
+      }
+      msConductor.setOpciones(unicos(self._filasCache, 'CONDUCTOR'));
+      msCliente.setOpciones(unicos(self._filasCache, 'CLIENTE PARA FACTURACIÓN'));
+      msPacking.setOpciones(unicos(self._filasCache, 'PACKING'));
+      msEstado.setOpciones(ESTADOS.concat(unicos(self._filasCache, 'ESTADO').filter(e => ESTADOS.indexOf(e) === -1)));
+      if (!restaurado) {
+        restaurado = true;
+        msEstado.setValores(prev.estado); msConductor.setValores(prev.cond); msCliente.setValores(prev.cli); msPacking.setValores(prev.pack);
+      }
+      guardarFiltros();
+
+      filas = filas.filter(f => msEstado.cumple(estadoDe(f)) && msConductor.cumple(mayus(f['CONDUCTOR'])) &&
+        msCliente.cumple(mayus(f['CLIENTE PARA FACTURACIÓN'])) && msPacking.cumple(mayus(f['PACKING'])));
+      const booking = mayus($q('filtroViajeBooking').value);
+      if (booking) filas = filas.filter(f => (String(f['BOOKING'] || '') + ' ' + String(f['CODIGO SERVICIO'] || '')).toUpperCase().indexOf(booking) !== -1);
+      const seg = $q('filtroViajeSeguimiento').value;
       if (seg === 'completo') filas = filas.filter(f => f._seguimientoCompleto);
       if (seg === 'incompleto') filas = filas.filter(f => !f._seguimientoCompleto);
+      const gas = $q('filtroViajeGas').value;
+      if (gas === 'si') filas = filas.filter(f => self._esGas(f));
+      if (gas === 'no') filas = filas.filter(f => !self._esGas(f));
+      $q('dvConteo').textContent = filas.length + ' de ' + self._filasCache.length + ' servicios';
 
       filas = filas.slice().sort(function (a, b) {
         const da = new Date(a['FECHA DE PROGRAMACION']);
@@ -110,7 +173,7 @@ const FormDatosViaje = {
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
-          <td>${f['BOOKING'] || ''}</td>
+          <td>${f['BOOKING'] || ''}${f['CODIGO SERVICIO'] ? '<div style="font-size:.7rem;color:#64748b">' + f['CODIGO SERVICIO'] + '</div>' : ''}</td>
           <td>${f['TIPO DE CARGA'] || ''}</td>
           <td>${f['CONDUCTOR'] || ''}</td>
           <td>${f['PLACA TRACTO'] || ''}</td>
@@ -139,16 +202,20 @@ const FormDatosViaje = {
 
         tbody.appendChild(tr);
       });
+      if (!filas.length) tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#64748b;padding:14px">No hay servicios con estos filtros.</td></tr>';
+      if (typeof _refrescarSnapshotFormulario === 'function') _refrescarSnapshotFormulario();
     }
 
-    ['filtroViajeDesde', 'filtroViajeHasta', 'filtroViajeSeguimiento'].forEach(function (id) {
-      raiz.querySelector('#' + id).addEventListener('change', cargar);
+    ['filtroViajeDesde', 'filtroViajeHasta'].forEach(function (id) {
+      $q(id).addEventListener('change', function () { cargar(); });
     });
+    ['filtroViajeSeguimiento', 'filtroViajeGas'].forEach(id => $q(id).addEventListener('change', refiltrar));
+    let esperaBk = null;
+    $q('filtroViajeBooking').addEventListener('input', function () { clearTimeout(esperaBk); esperaBk = setTimeout(refiltrar, 250); });
 
-    raiz.querySelector('#btnBorrarFiltroViaje').addEventListener('click', function () {
-      raiz.querySelector('#filtroViajeDesde').value = '';
-      raiz.querySelector('#filtroViajeHasta').value = '';
-      raiz.querySelector('#filtroViajeSeguimiento').value = '';
+    $q('btnBorrarFiltroViaje').addEventListener('click', function () {
+      msEstado.limpiar(); msConductor.limpiar(); msCliente.limpiar(); msPacking.limpiar();
+      ['filtroViajeDesde', 'filtroViajeHasta', 'filtroViajeSeguimiento', 'filtroViajeGas', 'filtroViajeBooking'].forEach(id => { $q(id).value = ''; });
       cargar();
     });
 
@@ -277,12 +344,13 @@ const FormDatosViaje = {
       const recalcular = function () {
         const retV = val('txtRetiroVacio'), salV = val('txtSalidaVacio'), lleP = val('txtLlegadaPlanta'), salP = val('txtSalidaPlanta');
         const cola = val('txtLlegadaColaPuerto'), salPu = val('txtSalidaPuerto');
-        const enRet = self._horas(retV, salV), enPl = self._horas(lleP, salP), desdeCita = self._horas(cita, salP), enPu = self._horas(cola, salPu);
-        const extra = desdeCita === null || desdeCita < 0 || desdeCita > 200 ? null : Math.max(0, Math.round((desdeCita - libres) * 100) / 100);
-        ctx = { salP: salP, enPl: enPl, desdeCita: desdeCita, extra: extra, cola: cola, salPu: salPu, enPu: enPu };
+        const enRet = self._horas(retV, salV), enPl = self._horas(lleP, salP), enPu = self._horas(cola, salPu);
+        const cb = self._cobro(cita, lleP, salP, libres), extra = cb.extra;
+        ctx = { lleP: lleP, salP: salP, enPl: enPl, cb: cb, extra: extra, cola: cola, salPu: salPu, enPu: enPu };
+        const desdeTxt = cb.desde === 'LLEGADA' ? 'desde la llegada (llegó después de la cita)' : (cb.desde === 'CITA' ? (lleP ? 'desde la cita (llegó antes)' : 'desde la cita') : '');
         $('sgRes1').innerHTML = 'Tiempo en el depósito: ' + hTxt(enRet);
-        $('sgRes2').innerHTML = 'Tiempo en planta: ' + hTxt(enPl) +
-          '<br>Desde la cita: ' + hTxt(desdeCita) + (extra > 0 ? '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>' : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
+        $('sgRes2').innerHTML = 'Tiempo real en planta (llegada → salida): ' + hTxt(enPl) +
+          '<br>Tiempo para el cobro: ' + hTxt(cb.horas) + (desdeTxt && cb.horas !== null ? ' <span style="font-size:.74rem;color:#64748b">' + desdeTxt + '</span>' : '') + (extra > 0 ? '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>' : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
         $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu);
         if (esGas) $('sgResG').innerHTML = 'Tiempo de gasificado: ' + hTxt(self._horas(val('txtGasIni'), val('txtGasFin')));
         const sug = [];
@@ -303,7 +371,7 @@ const FormDatosViaje = {
         $('dvScMotivo').value = m;
         $('dvScCantLbl').textContent = m === 'PERNOCTE' ? 'Noches' : 'Horas';
         $('dvScPrecioLbl').textContent = m === 'PERNOCTE' ? 'Tarifa por noche (con IGV)' : 'Tarifa por hora (con IGV)';
-        if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = ctx.extra > 0 ? ctx.extra : ''; $('dvScObs').value = ctx.extra > 0 ? ('Cita ' + self._fh(cita) + ' · salida ' + self._fh(ctx.salP) + ' · ' + ctx.desdeCita.toFixed(2) + ' h desde la cita − ' + libres + ' h libres') : ''; }
+        if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = ctx.extra > 0 ? ctx.extra : ''; $('dvScObs').value = ctx.extra > 0 ? self._textoCobro(cita, ctx.lleP, ctx.salP, ctx.cb, libres) : ''; }
         else if (m === 'HORAS EXTRAS PUERTO') { $('dvScCant').value = ''; $('dvScObs').value = ctx.enPu !== null ? ('Cola puerto ' + self._fh(ctx.cola) + ' · salida ' + self._fh(ctx.salPu) + ' · ' + ctx.enPu.toFixed(2) + ' h en puerto') : ''; }
         else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
         $('dvFormSc').style.display = ''; total(); $('dvScPrecio').focus();
@@ -356,13 +424,34 @@ const FormDatosViaje = {
     return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   },
   _horas: function (a, b) { return (a && b) ? Math.round((b - a) / 36000) / 100 : null; },
+  /**
+   * Horas extra en planta. El cobro empieza en la hora MÁS TARDE entre la cita
+   * (posicionamiento) y la llegada: si llegó antes de la cita se cuenta desde la cita;
+   * si llegó después, desde la llegada. Extra = (salida − inicio) − horas libres.
+   */
+  _cobro: function (cita, llegada, salida, libres) {
+    let inicio = null, desde = '';
+    if (cita && llegada) { if (llegada > cita) { inicio = llegada; desde = 'LLEGADA'; } else { inicio = cita; desde = 'CITA'; } }
+    else if (cita) { inicio = cita; desde = 'CITA'; }
+    else if (llegada) { inicio = llegada; desde = 'LLEGADA'; }
+    const horas = this._horas(inicio, salida);
+    const extra = horas === null || horas < 0 || horas > 200 ? null : Math.max(0, Math.round((horas - libres) * 100) / 100);
+    return { inicio: inicio, desde: desde, horas: horas, extra: extra };
+  },
+  _textoCobro: function (cita, llegada, salida, cb, libres) {
+    const hh = d => d ? String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : '—';
+    const ini = cb.desde === 'LLEGADA'
+      ? 'Llegada ' + this._fh(llegada) + (cita ? ' (después de la cita ' + hh(cita) + ')' : '')
+      : 'Cita ' + this._fh(cita) + (llegada ? ' (llegó antes, ' + hh(llegada) + ')' : '');
+    return ini + ' · salida ' + this._fh(salida) + ' · ' + (cb.horas || 0).toFixed(2) + ' h − ' + libres + ' h libres';
+  },
   _calc: function (f) {
     const cita = this._cita(f), sal = this._fecha(f._salidaPlanta);
-    const enPlanta = this._horas(cita, sal);
     const libres = Number(f._horasLibres) >= 0 ? Number(f._horasLibres) : 7;
-    const extra = enPlanta === null ? null : Math.max(0, Math.round((enPlanta - libres) * 100) / 100);
+    const cb = this._cobro(cita, this._fecha(f._llegadaPlanta), sal, libres);
+    const enPlanta = cb.horas, extra = cb.extra;
     const cobrado = (f._sc || []).filter(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
-    return { cita: cita, llegada: this._fecha(f._llegadaPlanta), salida: sal, enPlanta: enPlanta, libres: libres, extra: extra, cobrado: cobrado,
+    return { cita: cita, llegada: this._fecha(f._llegadaPlanta), salida: sal, enPlanta: enPlanta, libres: libres, extra: extra, cobrado: cobrado, cb: cb,
       llegPuerto: this._fecha(f._llegadaPuerto), salPuerto: this._fecha(f._salidaPuerto),
       enPlantaReal: this._horas(this._fecha(f._llegadaPlanta), sal),
       enPuerto: this._horas(this._fecha(f._llegadaPuerto), this._fecha(f._salidaPuerto)),
@@ -421,7 +510,7 @@ const FormDatosViaje = {
           <table style="width:100%;border-collapse:collapse;font-size:.85rem">
             ${fila('Posicionamiento (cita)', self._fh(c.cita))}${fila('Llegada a planta', self._fh(c.llegada))}${fila('Salida de planta', self._fh(c.salida))}
             ${fila('Tiempo total en planta (llegada → salida)', c.enPlantaReal === null ? '—' : c.enPlantaReal.toFixed(2) + ' h')}
-            ${fila('Horas desde la cita', c.enPlanta === null ? '—' : c.enPlanta.toFixed(2) + ' h')}
+            ${fila('Horas para el cobro (' + (c.cb.desde === 'LLEGADA' ? 'desde la llegada' : 'desde la cita') + ')', c.enPlanta === null ? '—' : c.enPlanta.toFixed(2) + ' h')}
             ${fila('Horas libres del cliente', c.libres + ' h')}
             ${fila('Horas extra', c.extra === null ? '—' : c.extra.toFixed(2) + ' h', c.extra > 0 ? 'color:#b91c1c;font-size:1rem' : 'color:#166534')}
           </table>
@@ -460,7 +549,7 @@ const FormDatosViaje = {
         const m = $('dvScMotivo').value;
         $('dvScCantLbl').textContent = m === 'PERNOCTE' ? 'Noches' : 'Horas';
         $('dvScPrecioLbl').textContent = m === 'PERNOCTE' ? 'Tarifa por noche (con IGV)' : 'Tarifa por hora (con IGV)';
-        if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = c.extra > 0 ? c.extra : ''; $('dvScObs').value = c.extra > 0 ? ('Cita ' + self._fh(c.cita) + ' · salida ' + self._fh(c.salida) + ' · ' + c.enPlanta.toFixed(2) + ' h en planta − ' + c.libres + ' h libres') : ''; }
+        if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = c.extra > 0 ? c.extra : ''; $('dvScObs').value = c.extra > 0 ? self._textoCobro(c.cita, c.llegada, c.salida, c.cb, c.libres) : ''; }
         else if (m === 'HORAS EXTRAS PUERTO') { $('dvScCant').value = ''; $('dvScObs').value = enPuerto !== null ? ('Cola puerto ' + self._fh(c.llegPuerto) + ' · salida ' + self._fh(c.salPuerto) + ' · ' + enPuerto.toFixed(2) + ' h en puerto') : ''; }
         else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
         total();
@@ -485,37 +574,7 @@ const FormDatosViaje = {
   },
 
   _mostrarListaEnPanel: function () {
-    const self = this;
-    const html = document.getElementById('cuerpo-panel');
-    // Reutiliza el mismo flujo que abrir(): reconstruye la lista dentro
-    // del panel ya abierto en vez de cerrar y volver a abrir el modal.
-    const contenido = `
-      <div class="barra-filtros">
-        <div class="campo"><label>Desde</label><input type="text" id="filtroViajeDesde" placeholder="dd/mm/yyyy"></div>
-        <div class="campo"><label>Hasta</label><input type="text" id="filtroViajeHasta" placeholder="dd/mm/yyyy"></div>
-        <div class="campo"><label>Seguimiento</label>
-          <select id="filtroViajeSeguimiento">
-            <option value="">Todos</option>
-            <option value="completo">Completo</option>
-            <option value="incompleto">Incompleto</option>
-          </select>
-        </div>
-        <button class="boton-secundario" id="btnBorrarFiltroViaje">Borrar filtro</button>
-      </div>
-      <div style="max-height:460px; overflow:auto;">
-        <table class="tabla-lista" id="tablaDatosViaje">
-          <thead><tr>
-            <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
-            <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta (el extra se cuenta desde la cita)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto">T. puerto</th><th>Seguimiento</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="panel-footer" style="padding-top:10px; justify-content:flex-end;">
-        <button class="boton-secundario" id="btnCerrarDatosViaje">Cerrar</button>
-      </div>`;
-
-    actualizarPanel('Datos del Viaje', contenido, (raiz) => self._wireLista(raiz));
+    // Reconstruye la lista dentro del panel ya abierto, con los filtros recordados.
+    actualizarPanel('Datos del Viaje', this._htmlLista(), (raiz) => this._wireLista(raiz));
   }
 };

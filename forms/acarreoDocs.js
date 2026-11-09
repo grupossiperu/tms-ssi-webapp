@@ -1,5 +1,5 @@
 /**
- * forms/acarreoDocs.js  (v102, 06/11/2026)
+ * forms/acarreoDocs.js  (v102, 06/11/2026; v105 09/11/2026: varias fotos → 1 PDF, nombre BK + EIR/TICKET, GRE, GRT)
  * -------------------------------------------------------------------------
  * Cierre del acarreo: N° de contenedor, cita de devolución (fecha y hora)
  * y 3 documentos.
@@ -41,16 +41,72 @@ const FormAcarreoDocs = {
     const p = n => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + (m ? p(m[1]) + ':' + m[2] : '00:00');
   },
-  _leer: function (input) {
+  _aDataUrl: function (blob) {
     return new Promise(function (ok, mal) {
-      const file = input.files && input.files[0];
-      if (!file) { ok(null); return; }
-      if (file.size > 10 * 1024 * 1024) { mal(new Error('"' + file.name + '" pesa más de 10 MB.')); return; }
       const fr = new FileReader();
-      fr.onload = () => ok({ nombre: file.name, dataUrl: fr.result });
-      fr.onerror = () => mal(new Error('No se pudo leer ' + file.name));
-      fr.readAsDataURL(file);
+      fr.onload = () => ok(fr.result);
+      fr.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+      fr.readAsDataURL(blob);
     });
+  },
+  _pdfLib: function () {
+    if (window.PDFLib) return Promise.resolve(window.PDFLib);
+    return new Promise(function (ok, mal) {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+      s.onload = () => window.PDFLib ? ok(window.PDFLib) : mal(new Error('No se pudo cargar el generador de PDF.'));
+      s.onerror = () => mal(new Error('No se pudo cargar el generador de PDF (revise su internet).'));
+      document.head.appendChild(s);
+    });
+  },
+  /** Foto → JPEG reducido (máx. 1800 px) para que el PDF no pese demasiado. */
+  _fotoJpeg: function (file) {
+    return new Promise(function (ok, mal) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = function () {
+        const max = 1800, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => b ? b.arrayBuffer().then(buf => ok({ buf: buf, w: c.width, h: c.height })) : mal(new Error('No se pudo procesar ' + file.name)), 'image/jpeg', 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('"' + file.name + '" no es una imagen que se pueda leer (use JPG, PNG o PDF).')); };
+      img.src = url;
+    });
+  },
+  /**
+   * Lee el campo. Un solo PDF se sube tal cual; varias fotos (o fotos + PDF)
+   * se juntan en UN solo PDF, en el orden en que se eligieron.
+   */
+  _leer: async function (input) {
+    const files = Array.from((input && input.files) || []);
+    if (!files.length) return null;
+    const esPdf = f => /pdf/i.test(f.type) || /\.pdf$/i.test(f.name);
+    if (files.length === 1 && esPdf(files[0])) {
+      if (files[0].size > 10 * 1024 * 1024) throw new Error('"' + files[0].name + '" pesa más de 10 MB.');
+      return { nombre: files[0].name, dataUrl: await this._aDataUrl(files[0]) };
+    }
+    const L = await this._pdfLib();
+    const doc = await L.PDFDocument.create();
+    for (const f of files) {
+      if (esPdf(f)) {
+        const src = await L.PDFDocument.load(await f.arrayBuffer(), { ignoreEncryption: true });
+        (await doc.copyPages(src, src.getPageIndices())).forEach(p => doc.addPage(p));
+      } else {
+        const j = await this._fotoJpeg(f);
+        const im = await doc.embedJpg(j.buf);
+        // Página A4 (vertical u horizontal según la foto) con la imagen centrada.
+        const vert = j.h >= j.w, W = vert ? 595.28 : 841.89, H = vert ? 841.89 : 595.28, m = 18;
+        const k = Math.min((W - 2 * m) / j.w, (H - 2 * m) / j.h);
+        const pg = doc.addPage([W, H]);
+        pg.drawImage(im, { x: (W - j.w * k) / 2, y: (H - j.h * k) / 2, width: j.w * k, height: j.h * k });
+      }
+    }
+    const bytes = await doc.save();
+    if (bytes.length > 10 * 1024 * 1024) throw new Error('El PDF armado con ' + files.length + ' archivos pesa más de 10 MB. Suba menos fotos o de menor tamaño.');
+    return { nombre: 'documento.pdf', dataUrl: await this._aDataUrl(new Blob([bytes], { type: 'application/pdf' })), paginas: doc.getPageCount() };
   },
 
   /** Abre la ventana (superpuesta a Acarreo) para el servicio f. alGuardar() refresca la lista. */
@@ -66,7 +122,8 @@ const FormAcarreoDocs = {
     const fila = (id, titulo, url) => `
       <div class="ac-doc">
         <div><b>${titulo}</b><div class="ac-est">${link(url, 'actual')}</div></div>
-        <input type="file" id="${id}" accept=".pdf,image/*">
+        <div style="text-align:right"><input type="file" id="${id}" accept=".pdf,image/*" multiple>
+          <div class="ac-sel" id="${id}Sel"></div></div>
       </div>`;
     const cont = document.createElement('div');
     cont.className = 'ac-velo';
@@ -94,10 +151,10 @@ const FormAcarreoDocs = {
             <div class="campo"><label>N° de contenedor</label><input id="acCont" value="${esc(f['N° CONTENEDOR'] || it.contenedor || '')}" style="text-transform:uppercase" autocomplete="off" placeholder="ABCD1234567"></div>
             <div class="campo"><label>Cita de devolución (fecha y hora)</label><input type="datetime-local" id="acDev" value="${self._fechaLocal(f)}"></div>
           </div>
-          <div style="margin-top:6px;font-size:.85rem;color:#1c3a5e"><b>Documentos</b> (PDF o foto, máx. 10 MB c/u). Si ya hay uno, subir otro lo reemplaza.</div>
+          <div style="margin-top:6px;font-size:.85rem;color:#1c3a5e"><b>Documentos</b> (PDF o fotos, máx. 10 MB). Si un documento son varias fotos, elígelas todas juntas: se unen en <b>un solo PDF</b>. Se guardan con el nombre <b>${esc(f['BOOKING'] || cod)} ${impo ? 'TICKET' : 'EIR'}</b>, <b>… GRE</b> y <b>… GRT</b>. Subir otro reemplaza al anterior.</div>
           ${fila('acD1', doc1, (it.doc1 || {}).url)}
-          ${fila('acGrr', 'Guía de Remisión Remitente', (it.grr || {}).url)}
-          ${fila('acGrt', 'Guía de Remisión Transportista', (it.grt || {}).url)}
+          ${fila('acGrr', 'Guía de Remisión Remitente (GRE)', (it.grr || {}).url)}
+          ${fila('acGrt', 'Guía de Remisión Transportista (GRT)', (it.grt || {}).url)}
           <div id="acEstado" style="margin-top:10px;font-size:.85rem"></div>
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
             <button type="button" class="boton-secundario" id="acCancelar">Cancelar</button>
@@ -109,15 +166,23 @@ const FormAcarreoDocs = {
     const $ = id => cont.querySelector('#' + id);
     const cerrar = () => cont.remove();
     $('acX').addEventListener('click', cerrar); $('acCancelar').addEventListener('click', cerrar);
+    ['acD1', 'acGrr', 'acGrt'].forEach(function (id) {
+      $(id).addEventListener('change', function () {
+        const n = this.files ? this.files.length : 0, unico = n === 1 && /pdf/i.test(this.files[0].type || this.files[0].name);
+        $(id + 'Sel').innerHTML = !n ? '' : '<span style="font-size:.74rem;color:' + (n > 1 || !unico ? '#1e40af' : '#475569') + '">' +
+          (n === 1 ? (unico ? '1 PDF' : '1 foto → se convierte en PDF') : n + ' archivos → se unen en 1 PDF') + '</span>';
+      });
+    });
     $('acEstado').innerHTML = it.completo ? '<span style="color:#166534;font-weight:700">✓ Acarreo completo' + (it.por ? ' · ' + esc(it.por) + ' ' + esc(it.fecha) : '') + '</span>'
       : '<span style="color:#92400e">Para que el acarreo quede completo se necesitan: contenedor, cita de devolución y los 3 documentos.</span>';
     $('acGrabar').addEventListener('click', async function () {
-      const btn = this; btn.disabled = true; btn.textContent = 'Guardando…';
+      const btn = this; btn.disabled = true; btn.textContent = 'Preparando archivos…';
       try {
         const dev = $('acDev').value;
         const docs = {};
         const d1 = await self._leer($('acD1')), grr = await self._leer($('acGrr')), grt = await self._leer($('acGrt'));
         if (d1) docs.doc1 = d1; if (grr) docs.grr = grr; if (grt) docs.grt = grt;
+        btn.textContent = 'Guardando…';
         const p = dev ? dev.split('T') : null;
         const datos = {
           codigo: cod, tipo: impo ? 'IMPORTACION' : 'EXPORTACION', contenedor: $('acCont').value.trim().toUpperCase(),
@@ -144,7 +209,7 @@ const FormAcarreoDocs = {
     const impo = String(it.tipo).toUpperCase().indexOf('IMPO') >= 0;
     return '<b>Documentos del acarreo (' + (impo ? 'importación' : 'exportación') + '):</b> ' +
       a((it.doc1 || {}).url, impo ? 'Ticket de salida' : 'EIR de salida') + ' · ' +
-      a((it.grr || {}).url, 'GR Remitente') + ' · ' + a((it.grt || {}).url, 'GR Transportista') +
+      a((it.grr || {}).url, 'GRE') + ' · ' + a((it.grt || {}).url, 'GRT') +
       (it.completo ? ' <span style="color:#166534;font-weight:700">✓ completo</span>' : '');
   }
 };
