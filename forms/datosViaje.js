@@ -338,7 +338,11 @@ const FormDatosViaje = {
       </div>
       <div class="panel-footer" style="padding-top:10px; justify-content:space-between;">
         <button class="boton-secundario" id="btnVolverSeguimiento">Volver a la lista</button>
-        <button class="boton-primario" id="btnGrabarSeguimiento">Grabar seguimiento</button>
+        <span style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="boton-secundario" id="btnCopiarSeg" title="Copia el resumen (tiempos y sobrecostos) para pegarlo en un correo">📋 Copiar para correo</button>
+          <button class="boton-secundario" id="btnImprimirSeg" title="Abre el resumen listo para imprimir o guardar como PDF">🖨 Imprimir / PDF</button>
+          <button class="boton-primario" id="btnGrabarSeguimiento">Grabar seguimiento</button>
+        </span>
       </div>`;
 
     actualizarPanel('Seguimiento del Viaje', html, function (raiz) {
@@ -414,6 +418,67 @@ const FormDatosViaje = {
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
         mostrarMensaje(r.mensaje + ' Queda listo en Facturar.', 'exito');
         self._mostrarListaEnPanel();
+      });
+
+      // Resumen para correo / PDF (con lo que está escrito en pantalla, aunque no se haya grabado)
+      const armarResumen = function () {
+        recalcular();
+        const fh = d => d ? self._fh(d) : '—';
+        const hh = h => (h === null || h === undefined) ? '—' : (h < 0 || h > 200 ? 'revisar fechas' : h.toFixed(2) + ' h');
+        const td = 'style="border:1px solid #cbd5e1;padding:5px 8px;font-family:Arial,sans-serif;font-size:12px"';
+        const th = 'style="border:1px solid #cbd5e1;padding:5px 8px;background:#1c3a5e;color:#fff;font-family:Arial,sans-serif;font-size:12px;text-align:left"';
+        const fila = (a, b, c) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + (c || '') + '</td></tr>';
+        const gasH = esGas ? self._horas(val('txtGasIni'), val('txtGasFin')) : null;
+        const extraPu = ctx.extraPu;
+        let h = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#1e293b">';
+        h += '<p style="margin:0 0 8px"><b>Resumen de tiempos del servicio</b></p>';
+        h += '<table style="border-collapse:collapse;margin-bottom:10px">' +
+          [['Cliente', f['CLIENTE PARA FACTURACIÓN']], ['Booking', f['BOOKING']], ['Contenedor', f['N° CONTENEDOR']], ['Código', f['CODIGO SERVICIO']],
+           ['Conductor / placa', (f['CONDUCTOR'] || '') + ' / ' + (f['PLACA TRACTO'] || '')], ['Planta / destino', [f['PACKING'], f['DESTINO 1']].filter(x => x && x !== '-').join(' · ')]]
+            .map(x => '<tr><td ' + td + '><b>' + x[0] + '</b></td><td ' + td + '>' + esc(x[1] || '') + '</td></tr>').join('') + '</table>';
+        h += '<table style="border-collapse:collapse;margin-bottom:10px"><tr><th ' + th + '>Etapa</th><th ' + th + '>Fecha y hora</th><th ' + th + '>Detalle</th></tr>';
+        h += fila('Cita de retiro', fh(retiro), '') + fila('Llegada al depósito', fh(val('txtRetiroVacio')), '') + fila('Salida del depósito', fh(val('txtSalidaVacio')), '');
+        h += fila('<b>Cita en planta (posicionamiento)</b>', '<b>' + fh(cita) + '</b>', '') + fila('Llegada a planta', fh(ctx.lleP), '') + fila('Salida de planta', fh(ctx.salP), '');
+        if (esGas) h += fila('Inicio del gasificado', fh(val('txtGasIni')), '') + fila('Fin del gasificado', fh(val('txtGasFin')), '');
+        h += fila('Cita de devolución', fh(devol), '') + fila('Llegada a cola de puerto', fh(ctx.cola), '') + fila('Salida de puerto', fh(ctx.salPu), '');
+        h += '</table>';
+        h += '<table style="border-collapse:collapse;margin-bottom:10px"><tr><th ' + th + '>Concepto</th><th ' + th + '>Tiempo</th><th ' + th + '>Horas libres</th><th ' + th + '>Por cobrar</th></tr>';
+        const fila4 = (a, b, c, d) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + c + '</td><td ' + td + '><b>' + d + '</b></td></tr>';
+        h += fila4('Tiempo real en planta (llegada → salida)', hh(ctx.enPl), '', '');
+        h += fila4('Tiempo en planta para el cobro (' + (ctx.cb && ctx.cb.desde === 'LLEGADA' ? 'desde la llegada, llegó después de la cita' : 'desde la cita') + ')', hh(ctx.cb && ctx.cb.horas), libres + ' h', ctx.extra > 0 ? ctx.extra.toFixed(2) + ' h' : '0 h');
+        if (esGas) h += fila4('Gasificado', hh(gasH), 'sin horas libres', gasH > 0 && gasH <= 200 ? gasH.toFixed(2) + ' h' : '0 h');
+        h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), self.LIBRES_PUERTO + ' h', extraPu > 0 ? extraPu.toFixed(2) + ' h' : '0 h');
+        h += '</table>';
+        const sc = f._sc || [];
+        if (sc.length) {
+          h += '<p style="margin:6px 0 4px"><b>Sobrecostos registrados</b></p><table style="border-collapse:collapse"><tr><th ' + th + '>Motivo</th><th ' + th + '>Cantidad</th><th ' + th + '>Total</th><th ' + th + '>Detalle</th></tr>' +
+            sc.map(x => '<tr><td ' + td + '>' + esc(x.tipo) + '</td><td ' + td + '>' + (x.cantidad || '') + '</td><td ' + td + '>' + esc(x.moneda) + ' ' + Number(x.total || 0).toFixed(2) + '</td><td ' + td + '>' + esc(x.obs) + '</td></tr>').join('') + '</table>';
+        }
+        h += '</div>';
+        const txt = h.replace(/<\/(tr|p)>/g, '\n').replace(/<\/t[dh]>/g, '\t').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&');
+        return { html: h, txt: txt };
+      };
+      $('btnCopiarSeg').addEventListener('click', async function () {
+        const r = armarResumen();
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([r.html], { type: 'text/html' }), 'text/plain': new Blob([r.txt], { type: 'text/plain' }) })]);
+          mostrarMensaje('Resumen copiado. Pégalo en el correo con Ctrl+V.', 'exito');
+        } catch (e) {
+          const d = document.createElement('div'); d.innerHTML = r.html; d.style.position = 'fixed'; d.style.left = '-9999px'; document.body.appendChild(d);
+          const rg = document.createRange(); rg.selectNodeContents(d); const s = window.getSelection(); s.removeAllRanges(); s.addRange(rg);
+          document.execCommand('copy'); s.removeAllRanges(); d.remove();
+          mostrarMensaje('Resumen copiado. Pégalo en el correo con Ctrl+V.', 'exito');
+        }
+      });
+      $('btnImprimirSeg').addEventListener('click', function () {
+        const r = armarResumen();
+        const w = window.open('', '_blank');
+        if (!w) { mostrarMensaje('El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.', 'error'); return; }
+        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tiempos ' + esc(f['BOOKING'] || f['CODIGO SERVICIO'] || '') + '</title>' +
+          '<style>body{margin:24px}@page{size:A4;margin:14mm}</style></head><body>' +
+          '<div style="font-family:Arial,sans-serif;font-size:15px;font-weight:bold;color:#1c3a5e;margin-bottom:6px">TRANSPORTES SSI S.A.C.</div>' + r.html +
+          '<p style="font-family:Arial,sans-serif;font-size:11px;color:#64748b;margin-top:14px">Generado el ' + self._fh(new Date()) + '</p></body></html>');
+        w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400);
       });
 
       $('btnVolverSeguimiento').addEventListener('click', () => self._mostrarListaEnPanel());
