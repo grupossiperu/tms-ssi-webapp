@@ -49,6 +49,7 @@ const FormSobrecostos = {
         .scr-tag{display:inline-block;padding:1px 7px;border-radius:8px;font-size:.66rem;font-weight:700}
         .scr-b{border:1px solid #cbd5e1;background:#fff;border-radius:7px;padding:2px 6px;font-size:.66rem;font-weight:700;cursor:pointer;margin:1px 0;display:block;width:100%}
         .scr-b:hover{background:#f1f5f9}
+        .scr-t tr.scr-grupo td{background:#eef4fb;border-top:2px solid #c7d6ea}
       </style>
       <div class="scr-barra">
         <div class="campo"><label>Estado</label><select id="scrEstado"><option value="pend">Por facturar</option><option value="fact">Facturados</option><option value="">Todos</option></select></div>
@@ -62,7 +63,7 @@ const FormSobrecostos = {
       <div class="scr-kpi" id="scrKpi"></div>
       <div class="scr-wrap"><table class="scr-t">
         <colgroup><col style="width:3%"><col style="width:8%"><col style="width:12%"><col style="width:7%"><col style="width:12%"><col style="width:11%"><col style="width:7%"><col style="width:7%"><col style="width:8%"><col><col style="width:9%"><col style="width:8%"></colgroup>
-        <thead><tr><th><input type="checkbox" id="scrTodos" title="Marcar todos los visibles"></th><th>Fecha</th><th>Código / BK</th><th>Cliente</th><th>Conductor / contenedor</th><th>Motivo</th><th>Cantidad</th><th>Tarifa</th><th style="text-align:right">Total</th><th>Detalle</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" id="scrTodos" title="Marcar todos los visibles"></th><th>Fecha</th><th>Código</th><th>Cliente</th><th>Placa</th><th>Motivo</th><th>Cantidad</th><th>Tarifa</th><th style="text-align:right">Total</th><th>Detalle</th><th>Estado</th><th></th></tr></thead>
         <tbody id="scrCuerpo"><tr><td colspan="12" style="text-align:center;color:#64748b;padding:16px">Cargando…</td></tr></tbody>
       </table></div>
       <div class="panel-footer" style="padding-top:10px;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -84,11 +85,14 @@ const FormSobrecostos = {
       $('scrCerrar').addEventListener('click', cerrarPanel);
       $('scrTodos').addEventListener('change', function () { self._vis().forEach(x => this.checked ? self._marcados.add(x.fila) : self._marcados.delete(x.fila)); self._pintar(); });
       $('scrCuerpo').addEventListener('change', function (ev) {
+        const g = ev.target.closest('input.scr-chkbk');
+        if (g) { (self._items || []).filter(x => String(x.booking || x.codigoServicio).toUpperCase() === g.dataset.bk).forEach(x => g.checked ? self._marcados.add(x.fila) : self._marcados.delete(x.fila)); self._pintar(); return; }
         const c = ev.target.closest('input.scr-chk'); if (!c) return;
         const f = Number(c.dataset.f); c.checked ? self._marcados.add(f) : self._marcados.delete(f);
       });
       $('scrCuerpo').addEventListener('click', function (ev) {
         const b = ev.target.closest('button[data-acc]'); if (!b) return;
+        if (b.dataset.acc === 'factbk') { self._facturarBK(b.dataset.bk); return; }
         const x = self._items.find(i => i.fila === Number(b.dataset.f)); if (!x) return;
         if (b.dataset.acc === 'fact') FormFacturaSobrecosto.abrir(x.fila);
         if (b.dataset.acc === 'seg') self._verSeguimiento(x);
@@ -125,18 +129,101 @@ const FormSobrecostos = {
     $('scrKpi').innerHTML = [['Sobrecostos', vis.length], ['Por facturar', pend.length],
       ['Por cobrar US$', '$ ' + sum(pend, '$').toFixed(2)], ['Por cobrar S/', 'S/ ' + sum(pend, 'S/').toFixed(2)]]
       .map(k => '<div><span>' + k[0] + '</span><b>' + k[1] + '</b></div>').join('');
-    $('scrCuerpo').innerHTML = vis.length ? vis.map(function (x) {
-      const mon = /S\//.test(x.moneda) ? 'S/' : '$';
-      const est = x.facturado ? '<span class="scr-tag" style="background:#dcfce7;color:#166534">Facturado</span>' + (x.factura ? '<span class="sub">' + esc(x.factura) + (x.fechaFactura ? ' · ' + esc(x.fechaFactura) : '') + '</span>' : '')
-        : '<span class="scr-tag" style="background:#fef3c7;color:#92400e">Por facturar</span>';
-      return '<tr><td><input type="checkbox" class="scr-chk" data-f="' + x.fila + '"' + (self._marcados.has(x.fila) ? ' checked' : '') + '></td>' +
-        '<td>' + esc(x.fecha) + '</td><td><b>' + esc(x.codigo) + '</b><span class="sub">BK ' + esc(x.booking) + '</span></td><td>' + esc(x.cliente) + '</td>' +
-        '<td>' + esc(x.conductor) + '<span class="sub">' + esc(x.contenedor) + ' · ' + esc(x.placa) + '</span></td><td>' + esc(self._mot(x.tipo)) + '</td>' +
-        '<td>' + (x.unidad ? x.cantidad + ' ' + x.unidad : x.cantidad) + '</td><td>' + mon + ' ' + Number(x.precio).toFixed(2) + '</td>' +
-        '<td style="text-align:right"><b>' + mon + ' ' + Number(x.total).toFixed(2) + '</b></td><td>' + esc(x.obs) + '</td><td>' + est + '</td>' +
-        '<td>' + (x.facturado ? '' : '<button type="button" class="scr-b" data-acc="fact" data-f="' + x.fila + '">💲 Facturar</button>') +
-        (x.filaServicio ? '<button type="button" class="scr-b" data-acc="seg" data-f="' + x.fila + '">⏱ Seguimiento</button>' : '') + '</td></tr>';
+    // Agrupado por BOOKING: una cabecera por BK y debajo sus sobrecostos. Una sola factura por BK.
+    const grupos = [], idx = {};
+    vis.forEach(function (x) { const k = String(x.booking || x.codigoServicio).toUpperCase(); if (!(k in idx)) { idx[k] = grupos.length; grupos.push({ bk: x.booking || '—', k: k, items: [] }); } grupos[idx[k]].items.push(x); });
+    $('scrCuerpo').innerHTML = grupos.length ? grupos.map(function (g) {
+      const p = g.items.filter(x => !x.facturado), x0 = g.items[0];
+      const tU = p.filter(x => !/S\//.test(x.moneda)).reduce((a, x) => a + x.total, 0), tS = p.filter(x => /S\//.test(x.moneda)).reduce((a, x) => a + x.total, 0);
+      const todosMarc = g.items.every(x => self._marcados.has(x.fila));
+      let h = '<tr class="scr-grupo"><td><input type="checkbox" class="scr-chkbk" data-bk="' + esc(g.k) + '"' + (todosMarc ? ' checked' : '') + ' title="Marcar todos los de este booking"></td>' +
+        '<td colspan="7"><span style="font-size:.95rem;font-weight:800;color:#1c3a5e">BK ' + esc(g.bk) + '</span>' +
+        '<span style="margin-left:10px;color:#334155">' + esc(x0.cliente) + ' · Cont. ' + esc(x0.contenedor || '—') + ' · ' + esc(x0.conductor) + ' · ' + esc(x0.fecha) + '</span>' +
+        '<span class="sub">' + g.items.length + ' sobrecosto(s)' + (p.length ? ' · ' + p.length + ' por facturar' : ' · todo facturado') + '</span></td>' +
+        '<td style="text-align:right"><b style="font-size:.9rem">' + [tU ? '$ ' + tU.toFixed(2) : '', tS ? 'S/ ' + tS.toFixed(2) : ''].filter(Boolean).join(' + ') + '</b>' + (p.length ? '<span class="sub">por facturar</span>' : '') + '</td>' +
+        '<td colspan="2"></td><td>' + (p.length ? '<button type="button" class="scr-b" style="background:#1c3a5e;color:#fff;border-color:#1c3a5e" data-acc="factbk" data-bk="' + esc(g.k) + '">💲 Facturar BK' + (p.length > 1 ? ' (' + p.length + ')' : '') + '</button>' : '') +
+        (x0.filaServicio ? '<button type="button" class="scr-b" data-acc="seg" data-f="' + x0.fila + '">⏱ Seguimiento</button>' : '') + '</td></tr>';
+      h += g.items.map(function (x) {
+        const mon = /S\//.test(x.moneda) ? 'S/' : '$';
+        const est = x.facturado ? '<span class="scr-tag" style="background:#dcfce7;color:#166534">Facturado</span>' + (x.factura ? '<span class="sub">' + esc(x.factura) + (x.fechaFactura ? ' · ' + esc(x.fechaFactura) : '') + '</span>' : '')
+          : '<span class="scr-tag" style="background:#fef3c7;color:#92400e">Por facturar</span>';
+        return '<tr><td><input type="checkbox" class="scr-chk" data-f="' + x.fila + '"' + (self._marcados.has(x.fila) ? ' checked' : '') + '></td>' +
+          '<td style="color:#64748b">' + esc(x.fecha) + '</td><td style="color:#64748b">' + esc(x.codigo) + '</td><td></td><td style="color:#64748b">' + esc(x.placa) + '</td><td><b>' + esc(self._mot(x.tipo)) + '</b></td>' +
+          '<td>' + (x.unidad ? x.cantidad + ' ' + x.unidad : x.cantidad) + '</td><td>' + mon + ' ' + Number(x.precio).toFixed(2) + '</td>' +
+          '<td style="text-align:right">' + mon + ' ' + Number(x.total).toFixed(2) + '</td><td>' + esc(x.obs) + '</td><td>' + est + '</td><td></td></tr>';
+      }).join('');
+      return h;
     }).join('') : '<tr><td colspan="12" style="text-align:center;color:#64748b;padding:16px">No hay sobrecostos con estos filtros.</td></tr>';
+  },
+
+  // Una sola factura para todos los sobrecostos pendientes del mismo booking:
+  // se graba un registro por sobrecosto con el MISMO N° de factura (Cobranzas los junta como una factura).
+  _facturarBK: async function (k) {
+    const self = this;
+    const items = (self._items || []).filter(x => !x.facturado && String(x.booking || x.codigoServicio).toUpperCase() === k);
+    if (!items.length) return;
+    if (items.length === 1) { FormFacturaSobrecosto.abrir(items[0].fila); return; }
+    const datos = [];
+    for (const x of items) {
+      const d = await llamarBackend('cargarDatosFacturaSobrecosto', { fila: x.fila });
+      if (!respuestaValida(d)) { mostrarMensaje('No se pudo cargar ' + x.codigo + ': ' + ((d && d.mensaje) || 'error'), 'error'); return; }
+      d._item = x; datos.push(d);
+    }
+    const s = c => datos.reduce((a, d) => a + (Number(d[c]) || 0), 0);
+    const d0 = datos[0];
+    const lineas = datos.map(d => '- ' + self._mot(d._item.tipo) + ': ' + (d._item.unidad ? d._item.cantidad + ' ' + d._item.unidad : d._item.cantidad) + ' → $ ' + (Number(d.importe) || 0).toFixed(2)).join('\n');
+    const detalle = 'POR SOBRECOSTOS DEL SERVICIO:\n' + lineas + '\nRESERVA: ' + (d0.booking || '') + '\nCONTENEDOR: ' + (d0.contenedor || '') + '\nCLIENTE: ' + (d0.cliente || '') + '\nFECHA DE SERVICIO: ' + formatoFecha(d0.fechaServicio) + '\nPLACA: ' + (d0.placa || '');
+    const tabla = '<table class="tabla-lista" style="margin:6px 0"><thead><tr><th>Código</th><th>Concepto</th><th>Cantidad</th><th>V. unitario ($)</th><th>IGV ($)</th><th>Importe ($)</th></tr></thead><tbody>' +
+      datos.map(d => '<tr><td>' + esc(d.codigoServicio) + '</td><td>' + esc(self._mot(d._item.tipo)) + '</td><td>' + (d._item.unidad ? d._item.cantidad + ' ' + d._item.unidad : d._item.cantidad) + '</td><td>' + (Number(d.vUnitario) || 0).toFixed(2) + '</td><td>' + (Number(d.igv) || 0).toFixed(2) + '</td><td><b>' + (Number(d.importe) || 0).toFixed(2) + '</b></td></tr>').join('') + '</tbody></table>';
+    const html = `
+      <div style="background:#eef4fb;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:.9rem">
+        <b style="font-size:1.05rem;color:#1c3a5e">BK ${esc(d0.booking)}</b> · Contenedor ${esc(d0.contenedor)} · ${esc(d0.cliente)} · Servicio ${esc(formatoFecha(d0.fechaServicio))} · Placa ${esc(d0.placa)}
+        <div style="font-size:.8rem;color:#475569">Una sola factura para los ${datos.length} sobrecostos de este booking.</div>
+      </div>
+      ${tabla}
+      <div class="fila-campos">
+        <div class="campo"><label>Fecha de facturación</label><input id="fbFecha" value="${esc(formatoFecha(d0.fechaFacturacion, ''))}" disabled></div>
+        <div class="campo"><label>Mes de facturación</label><input id="fbMes" value="${esc(mesDeFecha(d0.fechaFacturacion))}" disabled></div>
+        <div class="campo"><label>Mes de ejecución</label><select id="fbMesEj"><option></option><option>ENERO</option><option>FEBRERO</option><option>MARZO</option><option>ABRIL</option><option>MAYO</option><option>JUNIO</option><option>JULIO</option><option>AGOSTO</option><option>SEPTIEMBRE</option><option>OCTUBRE</option><option>NOVIEMBRE</option><option>DICIEMBRE</option></select></div>
+        <div class="campo"><label>N° de factura</label><input id="fbNum" autocomplete="off"></div>
+        <div class="campo"><label>Tipo de cambio</label><input value="${(Number(d0.tipoCambio) || 0).toFixed(3)}" disabled></div>
+        <div class="campo"><label>V. Unitario total ($)</label><input value="${s('vUnitario').toFixed(2)}" disabled></div>
+        <div class="campo"><label>IGV total ($)</label><input value="${s('igv').toFixed(2)}" disabled></div>
+        <div class="campo"><label>Importe total ($)</label><input value="${s('importe').toFixed(2)}" disabled></div>
+        <div class="campo"><label>% Detracción</label><input value="12%" disabled></div>
+        <div class="campo"><label>Detracción (S/)</label><input value="${s('detraccionSoles').toFixed(2)}" disabled></div>
+        <div class="campo"><label>Detracción ($)</label><input value="${s('detraccionDolares').toFixed(2)}" disabled></div>
+        <div class="campo"><label>Importe facturado ($)</label><input value="${s('importeFacturado').toFixed(2)}" disabled></div>
+      </div>
+      <div class="campo"><label>Detalle de facturación</label><textarea rows="7" disabled>${esc(detalle)}</textarea></div>
+      <div class="panel-footer" style="padding-top:10px;justify-content:space-between">
+        <button class="boton-secundario" id="fbVolver">Volver a sobrecostos</button>
+        <button class="boton-primario" id="fbGrabar">Grabar factura</button>
+      </div>`;
+    actualizarPanel('Facturar sobrecostos · BK ' + (d0.booking || ''), html, function (raiz) {
+      const $ = id => raiz.querySelector('#' + id);
+      $('fbVolver').addEventListener('click', () => self.abrir(true));
+      { const m = mesDeFecha(d0.fechaServicio) || mesDeFecha(d0.fechaFacturacion); if (m) $('fbMesEj').value = m; }
+      protegerClic($('fbGrabar'), async function () {
+        const num = $('fbNum').value.trim(), mesEj = $('fbMesEj').value;
+        if (!num) { mostrarMensaje('Ingrese el número de factura.', 'error'); return; }
+        if (!mesEj) { mostrarMensaje('Seleccione el mes de ejecución.', 'error'); return; }
+        const ok = [], mal = [];
+        for (const d of datos) {
+          const r = await llamarBackend('grabarFacturaSobrecosto', {
+            tipoSobrecosto: d.tipoSobrecosto, booking: d.booking, contenedor: d.contenedor, cliente: d.cliente, fechaServicio: d.fechaServicio,
+            codigoServicio: d.codigoServicio, placa: d.placa, fechaFacturacion: $('fbFecha').value, mesFacturacion: $('fbMes').value, mesEjecucion: mesEj,
+            numeroFactura: num, tipoCambio: (Number(d.tipoCambio) || 0).toFixed(3), vUnitario: (Number(d.vUnitario) || 0).toFixed(2), igv: (Number(d.igv) || 0).toFixed(2),
+            importe: (Number(d.importe) || 0).toFixed(2), porcentajeDetraccion: '12%', detraccionSoles: (Number(d.detraccionSoles) || 0).toFixed(2),
+            detraccionDolares: (Number(d.detraccionDolares) || 0).toFixed(2), importeFacturado: (Number(d.importeFacturado) || 0).toFixed(2)
+          });
+          (r && r.ok ? ok : mal).push(d.codigoServicio + (r && r.ok ? '' : ': ' + ((r && r.mensaje) || 'error')));
+        }
+        if (mal.length) mostrarMensaje('Factura ' + num + ': grabados ' + ok.length + ' de ' + datos.length + '. No se pudo: ' + mal.join(' | '), 'error');
+        else mostrarMensaje('Factura ' + num + ' registrada para los ' + ok.length + ' sobrecostos del BK ' + (d0.booking || '') + '.', 'exito');
+        self.abrir(true);
+      });
+    });
   },
 
   _verSeguimiento: async function (x) {
