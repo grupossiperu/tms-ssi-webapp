@@ -277,7 +277,7 @@ const FormDatosViaje = {
         '<div class="sg-res" id="' + idRes + '">—</div></div>';
     };
     const MOT = { 'HORAS EXTRAS PLANTA': 'Horas extras en planta', 'GASIFICADO': 'Gasificado (horas)', 'HORAS EXTRAS PUERTO': 'Horas extras en puerto', 'PERNOCTE': 'Pernocte' };
-    const scHtml = (f._sc || []).length
+    const scTabla = () => (f._sc || []).length
       ? '<table class="tabla-lista" style="margin-top:6px"><thead><tr><th>Código</th><th>Motivo</th><th>Cantidad</th><th>Total</th><th>Observación</th></tr></thead><tbody>' +
         f._sc.map(x => '<tr><td>' + esc(x.codigo) + '</td><td>' + esc(x.tipo) + '</td><td>' + (x.cantidad || '') + '</td><td>' + esc(x.moneda) + ' ' + Number(x.total || 0).toFixed(2) + '</td><td>' + esc(x.obs) + '</td></tr>').join('') + '</tbody></table>'
       : '<p style="color:#94a3b8;margin:6px 0 0">Aún no hay sobrecostos registrados para este servicio.</p>';
@@ -321,7 +321,7 @@ const FormDatosViaje = {
       <div class="sg-fact">
         <b style="color:#92400e">💰 Por facturar al cliente (sobrecostos)</b>
         <div id="sgSugerencias" class="sg-sug"></div>
-        <div style="margin-top:8px"><b style="color:#1c3a5e;font-size:.85rem">Ya registrados</b>${scHtml}</div>
+        <div style="margin-top:8px"><b style="color:#1c3a5e;font-size:.85rem">Ya registrados</b><div id="sgYaReg">${scTabla()}</div></div>
         <div id="dvFormSc" style="display:none;margin-top:10px;border-top:1px dashed #f59e0b;padding-top:10px">
           <div class="fila-campos">
             <div class="campo"><label>Motivo</label><select id="dvScMotivo">${Object.keys(MOT).map(k => '<option value="' + k + '">' + MOT[k] + '</option>').join('')}</select></div>
@@ -353,9 +353,13 @@ const FormDatosViaje = {
         if (h < 0 || h > 200) return '<span class="sg-tag" style="background:#fef3c7;color:#92400e">⚠ revisa las fechas (' + h.toFixed(1) + ' h)</span>';
         return '<b>' + h.toFixed(1) + ' h</b>';
       };
-      const cobradoPlanta = (f._sc || []).some(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
-      const cobradoPuerto = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
-      const cobradoGas = (f._sc || []).some(x => /^GASIFICADO/.test(x.tipo));
+      let cobradoPlanta, cobradoPuerto, cobradoGas;
+      const verCobrados = function () {
+        cobradoPlanta = (f._sc || []).some(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
+        cobradoPuerto = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
+        cobradoGas = (f._sc || []).some(x => /^GASIFICADO/.test(x.tipo));
+      };
+      verCobrados();
       const tagCobro = (extra, cobrado, lib) => extra > 0
         ? '<span class="sg-tag" style="background:' + (cobrado ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>'
         : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + lib + ' h</span>' : '');
@@ -432,8 +436,13 @@ const FormDatosViaje = {
         if (!rs || !rs.ok) { mostrarMensaje('No se pudieron grabar los tiempos del seguimiento: ' + ((rs && rs.mensaje) || 'error') + '. No se registró el sobrecosto.', 'error'); return; }
         const r = await llamarBackend('sobrecostoDesdePlanta', d);
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
-        mostrarMensaje(r.mensaje + ' Tiempos del seguimiento guardados. Queda listo en Facturar.', 'exito');
-        self._mostrarListaEnPanel();
+        // Se queda en la ventana: agrega a "Ya registrados", oculta el formulario y deja listos los demás botones
+        f._sc = (f._sc || []).concat([{ codigo: (r.codigo || r.codigoServicio || ''), tipo: d.tipo, cantidad: d.cantidad, total: Math.round(d.cantidad * d.precio * 100) / 100, moneda: d.moneda, obs: d.observacion }]);
+        $('sgYaReg').innerHTML = scTabla();
+        $('dvFormSc').style.display = 'none';
+        verCobrados(); recalcular();
+        if (typeof _refrescarSnapshotFormulario === 'function') setTimeout(_refrescarSnapshotFormulario, 0);
+        mostrarMensaje('Sobrecosto agregado (' + (MOT[d.tipo] || d.tipo) + '). Los tiempos quedaron guardados. Puedes agregar otro o volver a la lista.', 'exito');
       });
 
       // Resumen para correo / PDF (con lo que está escrito en pantalla, aunque no se haya grabado)
