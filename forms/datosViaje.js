@@ -388,6 +388,17 @@ const FormDatosViaje = {
         if (extraPu > 0 && !cobradoPuerto) avisos.push('pasó las ' + self.LIBRES_PUERTO + ' h libres en puerto');
         $('sgSugerencias').innerHTML = (avisos.length ? '<span style="width:100%;font-size:.82rem;color:#b91c1c">Este viaje ' + avisos.join(', ') + ': revisa y aprueba el cobro.</span>' : '') + sug.join('');
       };
+      // Si las horas del gasificado no quedaron grabadas pero ya hay sobrecosto GASIFICADO, se recuperan de su detalle
+      if (esGas && !$('txtGasIni').value && !$('txtGasFin').value) {
+        const g = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')));
+        const m = g && String(g.obs || '').match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}:\d{2}).*?(\d{2})\/(\d{2})\/(\d{4}) (\d{2}:\d{2})/);
+        if (m) {
+          $('txtGasIni').value = m[3] + '-' + m[2] + '-' + m[1] + 'T' + m[4];
+          $('txtGasFin').value = m[7] + '-' + m[6] + '-' + m[5] + 'T' + m[8];
+          $('txtGasIni').style.background = $('txtGasFin').style.background = '#fef9c3';
+          $('txtGasIni').title = $('txtGasFin').title = 'Recuperado del sobrecosto registrado: revisa y pulsa Guardar';
+        }
+      }
       campos.forEach(c => $(c.id).addEventListener('input', recalcular));
       recalcular();
 
@@ -414,9 +425,14 @@ const FormDatosViaje = {
         const d = { fila: filaServicio, tipo: $('dvScMotivo').value, cantidad: Number($('dvScCant').value), precio: Number($('dvScPrecio').value), moneda: $('dvScMoneda').value, observacion: $('dvScObs').value };
         if (!(d.cantidad > 0)) { mostrarMensaje('Ingrese la cantidad.', 'error'); return; }
         if (!(d.precio > 0)) { mostrarMensaje('Ingrese la tarifa.', 'error'); return; }
+        // Primero se graban los tiempos escritos (si no, al volver a la lista se perdían, p. ej. las horas del gasificado)
+        const sg = {};
+        campos.forEach(c => { if (!c.dis) sg[c.col] = $(c.id).value; });
+        const rs = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: sg });
+        if (!rs || !rs.ok) { mostrarMensaje('No se pudieron grabar los tiempos del seguimiento: ' + ((rs && rs.mensaje) || 'error') + '. No se registró el sobrecosto.', 'error'); return; }
         const r = await llamarBackend('sobrecostoDesdePlanta', d);
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
-        mostrarMensaje(r.mensaje + ' Queda listo en Facturar.', 'exito');
+        mostrarMensaje(r.mensaje + ' Tiempos del seguimiento guardados. Queda listo en Facturar.', 'exito');
         self._mostrarListaEnPanel();
       });
 
@@ -428,7 +444,9 @@ const FormDatosViaje = {
         const td = 'style="border:1px solid #cbd5e1;padding:5px 8px;font-family:Arial,sans-serif;font-size:12px"';
         const th = 'style="border:1px solid #cbd5e1;padding:5px 8px;background:#1c3a5e;color:#fff;font-family:Arial,sans-serif;font-size:12px;text-align:left"';
         const fila = (a, b, c) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + (c || '') + '</td></tr>';
-        const gasH = esGas ? self._horas(val('txtGasIni'), val('txtGasFin')) : null;
+        let gasH = esGas ? self._horas(val('txtGasIni'), val('txtGasFin')) : null;
+        const gasSc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '').toUpperCase()));
+        if (esGas && gasH === null && gasSc && Number(gasSc.cantidad) > 0) gasH = Number(gasSc.cantidad);
         const extraPu = ctx.extraPu;
         const MOTL = { 'HORAS EXTRAS PLANTA': 'Horas extras en planta', 'H.E. PLANTA F.': 'Horas extras en planta', 'HORAS EXTRAS PUERTO': 'Horas extras en puerto', 'H.E. PUERTO F.': 'Horas extras en puerto',
           'GASIFICADO': 'Gasificado', 'GASIFICADO F.': 'Gasificado', 'REPROGRAMACION': 'Reprogramación de posicionamiento', 'REPROG. F.': 'Reprogramación de posicionamiento', 'PERNOCTE': 'Pernocte', 'PERNOCTE F.': 'Pernocte', 'SOBREESTADIA': 'Sobreestadía', 'SOBREEST. F.': 'Sobreestadía' };
@@ -599,11 +617,13 @@ const FormDatosViaje = {
   _esGas: function (f) { return /GASIF/i.test(String(f['OBSERVACION'] || '')); },
   _celdaGas: function (f) {
     if (!this._esGas(f)) return '<span style="color:#94a3b8">—</span>';
-    const h = this._calc(f).enGas;
+    let h = this._calc(f).enGas;
+    const sc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')));
+    if (h === null && sc && Number(sc.cantidad) > 0) h = Number(sc.cantidad);
     return '<span style="display:inline-block;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;font-size:.72rem;font-weight:700">Sí</span>' +
-      (h === null ? '<br><span style="font-size:.7rem;color:#94a3b8">sin horas</span>' : '<br>' + this._celdaH(h) +
-        ((f._sc || []).some(x => /^GASIFICADO/.test(x.tipo)) ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>'
-          : (h > 0 && h <= 200 ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">por cobrar</span>' : '')));
+      '<br>' + (h === null ? '<span style="font-size:.7rem;color:#94a3b8">sin horas</span>' : this._celdaH(h)) +
+      (sc ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>'
+        : (h > 0 && h <= 200 ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">por cobrar</span>' : ''));
   },
   _celdaH: function (h) {
     if (h === null || h === undefined) return '<span style="color:#94a3b8">—</span>';
