@@ -103,6 +103,7 @@ const FormSelServicioContabilidad = {
           <button class="boton-secundario btn-estado" data-estado="REPROGRAMADO">Reprogramado</button>
           <button class="boton-secundario" id="btnReprogPos" title="Cambiar la cita de posicionamiento y cobrar la reprogramación">📅 Reprogramar posicionamiento</button>
           <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
+          <button class="boton-peligro" id="btnBorrarServicio" style="display:none;background:#7f1d1d" title="Solo maestros: borra el servicio y todo lo amarrado">🗑 Borrar servicio</button>
         </div>
         <div style="display:flex; gap:8px;">
           <button class="boton-secundario" id="btnCancelarSelServicio">Cerrar</button>
@@ -372,6 +373,65 @@ const FormSelServicioContabilidad = {
     }
     raiz.querySelectorAll('.btn-estado').forEach(function (b) {
       b.addEventListener('click', function () { cambiarEstado(b.dataset.estado); });
+    });
+
+    // v107: borrar servicio completo (solo MAESTRO).
+    const esMaestroAc = typeof Sesion !== 'undefined' && Sesion.datos && (Sesion.datos() || {}).rol === 'MAESTRO';
+    if (esMaestroAc) raiz.querySelector('#btnBorrarServicio').style.display = '';
+    raiz.querySelector('#btnBorrarServicio').addEventListener('click', async function () {
+      const f = self._servicioSeleccionado;
+      if (self._filaSeleccionada === null || !f) { mostrarMensaje('Seleccione un servicio para continuar.', 'error'); return; }
+      const btnB = this; btnB.disabled = true;
+      let info;
+      try { info = await llamarBackend('borrarServicioInfo', { fila: f._fila, codigo: f['CODIGO SERVICIO'] || '' }); } finally { btnB.disabled = false; }
+      if (!info || !info.ok) { mostrarMensaje((info && info.mensaje) || 'No se pudo revisar el servicio.', 'error'); return; }
+      const clave = info.codigo || ('FILA ' + f._fila);
+      const lista = (info.items || []).map(x => '<li>' + esc(x.etiqueta) + ': <b>' + x.cantidad + '</b></li>').join('');
+      const bloq = (info.bloqueos || []).length;
+      const velo = document.createElement('div');
+      velo.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+      velo.innerHTML = `
+        <div style="background:#fff;border-radius:14px;max-width:540px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.3)">
+          <div style="background:#7f1d1d;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+            <b>🗑 Borrar servicio</b><button type="button" id="bsX" style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>
+          <div style="padding:14px 16px;font-size:.88rem;color:#334155">
+            <div style="background:#f1f5f9;border-radius:9px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:4px 14px">
+              <span>Código: <b>${esc(info.codigo || '-')}</b></span><span>Booking: <b>${esc(info.booking)}</b></span><span>Contenedor: <b>${esc(info.contenedor)}</b></span>
+              <span>Cliente: <b>${esc(info.cliente)}</b></span><span>Conductor: <b>${esc(info.conductor)}</b></span><span>Estado: <b>${esc(info.estado || 'PROGRAMADO')}</b></span>
+            </div>
+            ${bloq
+              ? '<div style="margin-top:10px;background:#fee2e2;color:#991b1b;border-radius:9px;padding:9px 11px"><b>No se puede borrar:</b><ul style="margin:4px 0 0 18px;padding:0">' + info.bloqueos.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>Primero anule la factura o reabra la liquidación.</div>'
+              : `<div style="margin-top:10px">Se borrará el servicio y además:</div><ul style="margin:4px 0 0 18px;padding:0">${lista}</ul>
+                 <div style="margin-top:8px;font-size:.8rem;color:#64748b">Queda una copia completa en la hoja SERVICIOS_BORRADOS (con enlace al respaldo en Drive). Los documentos del acarreo van a la papelera de Drive (30 días).</div>
+                 <div class="campo" style="margin-top:10px"><label>Motivo del borrado</label><input id="bsMotivo" autocomplete="off" placeholder="Ej. Servicio registrado por error / duplicado"></div>
+                 <div class="campo"><label>Para confirmar escriba el código: <b>${esc(clave)}</b></label><input id="bsConf" autocomplete="off" style="text-transform:uppercase"></div>`}
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+              <button type="button" class="boton-secundario" id="bsCancelar">${bloq ? 'Cerrar' : 'Cancelar'}</button>
+              ${bloq ? '' : '<button type="button" class="boton-peligro" id="bsBorrar" disabled style="background:#7f1d1d">Borrar definitivamente</button>'}
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(velo);
+      const q = id => velo.querySelector('#' + id);
+      const cerrarB = () => velo.remove();
+      q('bsX').addEventListener('click', cerrarB); q('bsCancelar').addEventListener('click', cerrarB);
+      if (bloq) return;
+      const revisar = () => { q('bsBorrar').disabled = !(q('bsMotivo').value.trim() && q('bsConf').value.trim().toUpperCase() === clave.toUpperCase()); };
+      q('bsMotivo').addEventListener('input', revisar); q('bsConf').addEventListener('input', revisar);
+      q('bsBorrar').addEventListener('click', async function () {
+        const b = this; b.disabled = true; b.textContent = 'Borrando…';
+        try {
+          const r = await llamarBackend('borrarServicio', { fila: f._fila, codigo: f['CODIGO SERVICIO'] || '', confirmacion: q('bsConf').value.trim(), motivo: q('bsMotivo').value.trim() });
+          if (!r || !r.ok) throw new Error((r && r.mensaje) || 'No se pudo borrar.');
+          cerrarB();
+          self._filaSeleccionada = null; self._servicioSeleccionado = null;
+          mostrarMensaje(r.mensaje, 'exito');
+          cargar();
+        } catch (e) {
+          mostrarMensaje(e.message || String(e), 'error');
+          b.textContent = 'Borrar definitivamente'; revisar();
+        }
+      });
     });
 
     // v106: reprogramar el posicionamiento (nueva cita + cobro de la reprogramación).
