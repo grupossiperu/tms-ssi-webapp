@@ -51,6 +51,10 @@ const FormSelServicioContabilidad = {
         #tablaServicios td .sub { color: #64748b; font-size: .68rem; margin-top: 2px; }
         .btn-acarreo { border: 1px solid #cbd5e1; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; cursor: pointer; background: #fff; white-space: nowrap; }
         .btn-acarreo.ac-ok { background: #dcfce7; color: #166534; border-color: #86efac; } .btn-acarreo.ac-pend { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+        .btn-datos { border: 1px solid #cbd5e1; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; cursor: pointer; background: #fff; color: #1c3a5e; white-space: nowrap; }
+        .btn-datos .dt-punto { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+        .btn-datos.dt-ok .dt-punto { background: #16a34a; } .btn-datos.dt-pend .dt-punto { background: #f59e0b; }
+        .btn-datos:hover { background: #f1f5f9; }
         .badge-obs { display: inline-block; background: #e0f2fe; color: #075985; border-radius: 8px; padding: 1px 6px; font-size: .66rem; font-weight: 700; }
         .badge-estado { display: inline-block; border-radius: 8px; padding: 2px 6px; font-size: .66rem; font-weight: 700; background: #f1f5f9; color: #334155; }
         .est-programado { background: #e2e8f0; color: #334155; }
@@ -79,7 +83,7 @@ const FormSelServicioContabilidad = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Conductor</th><th>Unidad</th><th>Booking</th>
             <th>Retiro</th><th>Destino 1 / posic.</th><th>Packing</th><th>Destino 2 / posic.</th><th>Devolución</th>
-            <th>Observación</th><th>Datos</th><th title="Contenedor, cita de devolución y 3 documentos">Acarreo</th><th>Imp.</th><th>Estado</th>
+            <th>Observación</th><th>Datos</th><th title="Contenedor, cita de devolución y 3 documentos">Completar acarreo</th><th>Imp.</th><th>Estado</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -97,6 +101,7 @@ const FormSelServicioContabilidad = {
           <span class="sep"></span>
           <button class="boton-secundario btn-estado" data-estado="FALSO FLETE">Falso Flete</button>
           <button class="boton-secundario btn-estado" data-estado="REPROGRAMADO">Reprogramado</button>
+          <button class="boton-secundario" id="btnReprogPos" title="Cambiar la cita de posicionamiento y cobrar la reprogramación">📅 Reprogramar posicionamiento</button>
           <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
         </div>
         <div style="display:flex; gap:8px;">
@@ -287,22 +292,20 @@ const FormSelServicioContabilidad = {
           <td>${linea(f['DEPOSITO DE DEVOLUCION'], formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION']))}</td>
           <td>${obs ? '<span class="badge-obs">' + obs + '</span>' : ''}</td>
           <td style="text-align:center;">
-            ${completo
-              ? '<span class="badge-datos completo" title="Clic para revisar o modificar">Completo</span>'
-              : '<span class="badge-datos incompleto" title="Clic para completar los datos">Datos incompletos</span>'}
+            <button type="button" class="btn-datos ${completo ? 'dt-ok' : 'dt-pend'}" title="${completo ? 'Datos completos' : 'Faltan datos del servicio'} · clic para editar"><span class="dt-punto"></span>✎ Editar datos</button>
           </td>
           <td style="text-align:center;">${FormAcarreoDocs.boton(f)}</td>
           <td style="text-align:center;"><button type="button" class="btn-imprimir-fila" title="Imprimir este servicio" style="cursor:pointer; font-size:15px; border:none; background:transparent; padding:0;">🖨️</button></td>
           <td><span class="badge-estado est-${estadoTxt.replace(/\s+/g, '-').toLowerCase()}">${f['ESTADO'] || ''}</span></td>`;
 
-        tr.querySelector('.badge-datos').addEventListener('click', function (ev) {
+        tr.querySelector('.btn-datos').addEventListener('click', function (ev) {
           ev.stopPropagation();
           FormServicio.abrir(f._fila);
         });
 
         tr.querySelector('.btn-acarreo').addEventListener('click', function (ev) {
           ev.stopPropagation();
-          FormAcarreoDocs.abrir(f, function () { cargar(true); });
+          FormAcarreoDocs.abrir(f, function () { cargar(); });
         });
 
         tr.querySelector('.btn-imprimir-fila').addEventListener('click', function (ev) {
@@ -363,6 +366,75 @@ const FormSelServicioContabilidad = {
     }
     raiz.querySelectorAll('.btn-estado').forEach(function (b) {
       b.addEventListener('click', function () { cambiarEstado(b.dataset.estado); });
+    });
+
+    // v106: reprogramar el posicionamiento (nueva cita + cobro de la reprogramación).
+    raiz.querySelector('#btnReprogPos').addEventListener('click', function () {
+      const f = self._servicioSeleccionado;
+      if (self._filaSeleccionada === null || !f) { mostrarMensaje('Seleccione un servicio para continuar.', 'error'); return; }
+      const est = estadoDe(f);
+      if (est === 'CANCELADO' || est === 'CULMINADO') { mostrarMensaje('El servicio está ' + est + ': no se puede reprogramar.', 'error'); return; }
+      let hist = [];
+      try { hist = JSON.parse(String(f['REPROGRAMACIONES'] || '[]')) || []; } catch (e) { hist = []; }
+      const histHtml = hist.length
+        ? '<div style="margin-top:10px;font-size:.78rem"><b style="color:#1c3a5e">Reprogramaciones anteriores</b>' + hist.map(h =>
+          '<div style="border-top:1px dashed #e2e8f0;padding:4px 0">' + esc(h.antes || '-') + ' → <b>' + esc(h.despues) + '</b> · ' + esc(h.motivo) +
+          (h.tarifa > 0 ? ' · cobro ' + esc(h.moneda) + ' ' + Number(h.tarifa).toFixed(2) : ' · sin cobro') + ' <span style="color:#94a3b8">(' + esc(h.por || '') + ' ' + esc(h.fecha || '') + ')</span></div>').join('') + '</div>'
+        : '';
+      const velo = document.createElement('div');
+      velo.className = 'ac-velo';
+      velo.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+      velo.innerHTML = `
+        <div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)">
+          <div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+            <b>📅 Reprogramar posicionamiento</b><button type="button" id="rpX" style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>
+          <div style="padding:14px 16px">
+            <div style="background:#f1f5f9;border-radius:9px;padding:8px 10px;font-size:.82rem;color:#334155;display:flex;flex-wrap:wrap;gap:4px 14px">
+              <span>Cliente: <b>${esc(f['CLIENTE PARA FACTURACIÓN'] || '')}</b></span><span>Booking: <b>${esc(f['BOOKING'] || '')}</b></span>
+              <span>Código: <b>${esc(f['CODIGO SERVICIO'] || '')}</b></span><span>Destino: <b>${esc(f['DESTINO 1'] || '')}</b></span>
+            </div>
+            <div style="display:flex;justify-content:space-between;background:#eef4fb;border-radius:8px;padding:7px 10px;margin-top:10px;font-size:.85rem">
+              <span>Cita actual de posicionamiento</span><b>${esc(formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1']) || 'Sin dato')}</b></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+              <div class="campo" style="grid-column:1/-1"><label>Nueva cita de posicionamiento (fecha y hora)</label><input type="datetime-local" id="rpNueva"></div>
+              <div class="campo" style="grid-column:1/-1"><label>Motivo</label><input id="rpMotivo" list="rpMotivos" autocomplete="off" placeholder="Ej. Cliente indicó cargar al día siguiente">
+                <datalist id="rpMotivos"><option value="CLIENTE INDICÓ CARGAR AL DÍA SIGUIENTE"><option value="PLANTA SIN CARGA LISTA"><option value="CAMBIO DE HORARIO DEL CLIENTE"><option value="CONTENEDOR DETENIDO EN PLANTA"></datalist></div>
+              <div class="campo"><label>Tarifa de la reprogramación (con IGV)</label><input type="number" id="rpTarifa" min="0" step="0.01" placeholder="0.00"></div>
+              <div class="campo"><label>Moneda</label><select id="rpMoneda"><option value="$">Dólares ($)</option><option value="S/">Soles (S/)</option></select></div>
+            </div>
+            <div style="font-size:.78rem;color:#64748b;margin-top:6px">Se cambia la cita del servicio y se crea el sobrecosto <b>REPROGRAMACIÓN</b> con esta tarifa, listo en Facturar.</div>
+            ${histHtml}
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+              <button type="button" class="boton-secundario" id="rpCancelar">Cancelar</button>
+              <button type="button" class="boton-primario" id="rpGrabar">Reprogramar</button>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(velo);
+      const q = id => velo.querySelector('#' + id);
+      const cerrarRp = () => velo.remove();
+      q('rpX').addEventListener('click', cerrarRp); q('rpCancelar').addEventListener('click', cerrarRp);
+      q('rpGrabar').addEventListener('click', async function () {
+        const v = q('rpNueva').value, motivo = q('rpMotivo').value.trim(), tarifa = Number(q('rpTarifa').value) || 0;
+        if (!v) { mostrarMensaje('Ingrese la nueva fecha y hora de posicionamiento.', 'error'); return; }
+        if (!motivo) { mostrarMensaje('Ingrese el motivo de la reprogramación.', 'error'); return; }
+        if (!(tarifa > 0)) { mostrarMensaje('Ingrese la tarifa de la reprogramación.', 'error'); return; }
+        const p = v.split('T');
+        const btn = this; btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+          const r = await llamarBackend('reprogramarPosicionamiento', {
+            fila: f._fila, codigo: f['CODIGO SERVICIO'] || '', fecha: p[0].split('-').reverse().join('/'), hora: (p[1] || '').slice(0, 5),
+            motivo: motivo.toUpperCase(), tarifa: tarifa, moneda: q('rpMoneda').value
+          });
+          if (!r || !r.ok) throw new Error((r && r.mensaje) || 'No se pudo reprogramar.');
+          cerrarRp();
+          mostrarMensaje(r.mensaje, r.parcial ? 'info' : 'exito');
+          cargar();
+        } catch (e) {
+          mostrarMensaje(e.message || String(e), 'error');
+          btn.disabled = false; btn.textContent = 'Reprogramar';
+        }
+      });
     });
 
     raiz.querySelector('#btnCancelarSelServicio').addEventListener('click', cerrarPanel);

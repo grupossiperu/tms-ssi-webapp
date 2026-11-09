@@ -15,7 +15,7 @@
  */
 const FormRegistroSobrecosto = {
 
-  _motivos: ['SOBREESTADIA', 'PERNOCTE', 'FALTA NOMBRADA', 'FALSO FLETE', 'PUNTO ADICIONAL', 'HORAS ADICIONALES', 'REPROGRAMACION', 'TIEMPO EN TIEMPO', 'TIEMPO EN PACKING'],
+  _motivos: ['SOBREESTADIA', 'PERNOCTE', 'FALTA NOMBRADA', 'FALSO FLETE', 'PUNTO ADICIONAL', 'HORAS ADICIONALES', 'REPROGRAMACION', 'GASIFICADO', 'TIEMPO EN TIEMPO', 'TIEMPO EN PACKING'],
 
   _etiquetas: {
     'SOBREESTADIA': 'Sobreestadía',
@@ -25,6 +25,7 @@ const FormRegistroSobrecosto = {
     'PUNTO ADICIONAL': 'Punto Adicional',
     'HORAS ADICIONALES': 'Horas Adicionales',
     'REPROGRAMACION': 'Reprogramación',
+    'GASIFICADO': 'Gasificado (horas)',
     'TIEMPO EN TIEMPO': 'Tiempo en Tiempo',
     'TIEMPO EN PACKING': 'Tiempo en Packing'
   },

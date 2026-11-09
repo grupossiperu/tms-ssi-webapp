@@ -42,9 +42,9 @@ const FormSelFacturaViaje = {
         <div class="campo"><label>Tipo</label>
           <select id="cboFiltroTipoFact">
             <option>TODOS</option><option>VIAJE NORMAL</option><option>FALSO FLETE</option>
-            <option>BALANZA</option><option>SOBREESTADIA</option><option>PERNOCTE</option><option>HORAS EXTRAS PLANTA</option><option>HORAS EXTRAS PUERTO</option>
+            <option>BALANZA</option><option>SOBREESTADIA</option><option>PERNOCTE</option><option>HORAS EXTRAS PLANTA</option><option>HORAS EXTRAS PUERTO</option><option>GASIFICADO</option><option>REPROGRAMACION</option>
             <option>BALANZA F.</option><option>SERV. FACT.</option><option>F.F. FACT.</option>
-            <option>SOBREEST. F.</option><option>PERNOCTE F.</option><option>H.E. PLANTA F.</option><option>H.E. PUERTO F.</option>
+            <option>SOBREEST. F.</option><option>PERNOCTE F.</option><option>H.E. PLANTA F.</option><option>H.E. PUERTO F.</option><option>GASIFICADO F.</option><option>REPROG. F.</option>
           </select>
         </div>
         <div class="campo"><label>Mostrar</label>
