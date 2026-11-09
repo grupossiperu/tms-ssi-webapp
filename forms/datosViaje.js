@@ -430,12 +430,37 @@ const FormDatosViaje = {
         const fila = (a, b, c) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + (c || '') + '</td></tr>';
         const gasH = esGas ? self._horas(val('txtGasIni'), val('txtGasFin')) : null;
         const extraPu = ctx.extraPu;
+        const MOTL = { 'HORAS EXTRAS PLANTA': 'Horas extras en planta', 'H.E. PLANTA F.': 'Horas extras en planta', 'HORAS EXTRAS PUERTO': 'Horas extras en puerto', 'H.E. PUERTO F.': 'Horas extras en puerto',
+          'GASIFICADO': 'Gasificado', 'GASIFICADO F.': 'Gasificado', 'REPROGRAMACION': 'Reprogramación de posicionamiento', 'REPROG. F.': 'Reprogramación de posicionamiento', 'PERNOCTE': 'Pernocte', 'PERNOCTE F.': 'Pernocte', 'SOBREESTADIA': 'Sobreestadía', 'SOBREEST. F.': 'Sobreestadía' };
+        const unidad = tp => /PERNOCTE|SOBREEST/.test(tp) ? ' día(s)' : (/HORAS|H\.E\.|GASIF/.test(tp) ? ' h' : '');
+        // 1) Detalle del sobrecosto (primera parte del correo)
+        const sc = f._sc || [];
+        const regTipos = sc.map(x => String(x.tipo || '').toUpperCase());
+        const pend = [];
+        if (ctx.extra > 0 && !regTipos.some(x => /HORAS EXTRAS PLANTA|H\.E\. PLANTA/.test(x))) pend.push(['Horas extras en planta', ctx.extra.toFixed(2) + ' h']);
+        if (esGas && gasH > 0 && gasH <= 200 && !regTipos.some(x => /^GASIF/.test(x))) pend.push(['Gasificado', gasH.toFixed(2) + ' h']);
+        if (extraPu > 0 && !regTipos.some(x => /HORAS EXTRAS PUERTO|H\.E\. PUERTO/.test(x))) pend.push(['Horas extras en puerto', extraPu.toFixed(2) + ' h']);
         let h = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#1e293b">';
-        h += '<p style="margin:0 0 8px"><b>Resumen de tiempos del servicio</b></p>';
+        h += '<p style="margin:0 0 8px">Estimados, se detalla el sobrecosto del siguiente servicio:</p>';
+        h += '<p style="margin:0 0 4px"><b>Detalle del sobrecosto</b></p>';
+        h += '<table style="border-collapse:collapse;margin-bottom:12px"><tr><th ' + th + '>Concepto</th><th ' + th + '>Cantidad</th><th ' + th + '>Tarifa</th><th ' + th + '>Total</th><th ' + th + '>Detalle</th></tr>';
+        let totUsd = 0, totPen = 0;
+        sc.forEach(function (x) {
+          const tp = String(x.tipo || '').toUpperCase(), cant = Number(x.cantidad) || 0, tot = Number(x.total) || 0, mon = String(x.moneda || '$');
+          if (/S\//.test(mon)) totPen += tot; else totUsd += tot;
+          h += '<tr><td ' + td + '>' + esc(MOTL[tp] || x.tipo) + '</td><td ' + td + '>' + (cant ? cant + unidad(tp) : '1') + '</td><td ' + td + '>' + esc(mon) + ' ' + (cant ? (tot / cant).toFixed(2) : tot.toFixed(2)) + '</td><td ' + td + '><b>' + esc(mon) + ' ' + tot.toFixed(2) + '</b></td><td ' + td + '>' + esc(x.obs || '') + '</td></tr>';
+        });
+        pend.forEach(function (x) { h += '<tr><td ' + td + '>' + x[0] + '</td><td ' + td + '>' + x[1] + '</td><td ' + td + '>—</td><td ' + td + '>—</td><td ' + td + '>Según tiempos del servicio</td></tr>'; });
+        if (!sc.length && !pend.length) h += '<tr><td ' + td + ' colspan="5">Sin sobrecostos.</td></tr>';
+        if (totUsd || totPen) h += '<tr><td ' + td + ' colspan="3"><b>TOTAL</b></td><td ' + td + '><b>' + [totUsd ? '$ ' + totUsd.toFixed(2) : '', totPen ? 'S/ ' + totPen.toFixed(2) : ''].filter(Boolean).join(' + ') + '</b></td><td ' + td + '></td></tr>';
+        h += '</table>';
+        // 2) Datos del servicio y tiempos
+        h += '<p style="margin:0 0 4px"><b>Datos del servicio</b></p>';
         h += '<table style="border-collapse:collapse;margin-bottom:10px">' +
           [['Cliente', f['CLIENTE PARA FACTURACIÓN']], ['Booking', f['BOOKING']], ['Contenedor', f['N° CONTENEDOR']], ['Código', f['CODIGO SERVICIO']],
            ['Conductor / placa', (f['CONDUCTOR'] || '') + ' / ' + (f['PLACA TRACTO'] || '')], ['Planta / destino', [f['PACKING'], f['DESTINO 1']].filter(x => x && x !== '-').join(' · ')]]
             .map(x => '<tr><td ' + td + '><b>' + x[0] + '</b></td><td ' + td + '>' + esc(x[1] || '') + '</td></tr>').join('') + '</table>';
+        h += '<p style="margin:0 0 4px"><b>Tiempos del servicio</b></p>';
         h += '<table style="border-collapse:collapse;margin-bottom:10px"><tr><th ' + th + '>Etapa</th><th ' + th + '>Fecha y hora</th><th ' + th + '>Detalle</th></tr>';
         h += fila('Cita de retiro', fh(retiro), '') + fila('Llegada al depósito', fh(val('txtRetiroVacio')), '') + fila('Salida del depósito', fh(val('txtSalidaVacio')), '');
         h += fila('<b>Cita en planta (posicionamiento)</b>', '<b>' + fh(cita) + '</b>', '') + fila('Llegada a planta', fh(ctx.lleP), '') + fila('Salida de planta', fh(ctx.salP), '');
@@ -449,34 +474,55 @@ const FormDatosViaje = {
         if (esGas) h += fila4('Gasificado', hh(gasH), 'sin horas libres', gasH > 0 && gasH <= 200 ? gasH.toFixed(2) + ' h' : '0 h');
         h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), self.LIBRES_PUERTO + ' h', extraPu > 0 ? extraPu.toFixed(2) + ' h' : '0 h');
         h += '</table>';
-        const sc = f._sc || [];
-        if (sc.length) {
-          h += '<p style="margin:6px 0 4px"><b>Sobrecostos registrados</b></p><table style="border-collapse:collapse"><tr><th ' + th + '>Motivo</th><th ' + th + '>Cantidad</th><th ' + th + '>Total</th><th ' + th + '>Detalle</th></tr>' +
-            sc.map(x => '<tr><td ' + td + '>' + esc(x.tipo) + '</td><td ' + td + '>' + (x.cantidad || '') + '</td><td ' + td + '>' + esc(x.moneda) + ' ' + Number(x.total || 0).toFixed(2) + '</td><td ' + td + '>' + esc(x.obs) + '</td></tr>').join('') + '</table>';
-        }
+        h += '<p style="margin:10px 0 0"><b>Favor de confirmar para proceder con la facturación.</b></p>';
         h += '</div>';
         const txt = h.replace(/<\/(tr|p)>/g, '\n').replace(/<\/t[dh]>/g, '\t').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&');
         return { html: h, txt: txt };
       };
-      $('btnCopiarSeg').addEventListener('click', async function () {
-        const r = armarResumen();
+      // Asunto: SOBRECOSTOS - BK: xxx- CONTENEDOR: xxx|| CLIENTE: <razón social del maestro de clientes>
+      const asunto = async function () {
+        if (!self._razones) {
+          self._razones = {};
+          try { const r = await llamarBackend('listarClientes', {}); (r && r.clientes || []).forEach(c => { self._razones[String(c.codigo || '').trim().toUpperCase()] = c.razonSocial; }); } catch (e) { /* sin maestro */ }
+        }
+        const cod = String(f['CLIENTE PARA FACTURACIÓN'] || '').trim().toUpperCase();
+        return 'SOBRECOSTOS - BK: ' + String(f['BOOKING'] || '').trim() + '- CONTENEDOR: ' + String(f['N° CONTENEDOR'] || '').trim() + '|| CLIENTE: ' + (self._razones[cod] || cod);
+      };
+      const copiar = async function (html, txt) {
         try {
-          await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([r.html], { type: 'text/html' }), 'text/plain': new Blob([r.txt], { type: 'text/plain' }) })]);
-          mostrarMensaje('Resumen copiado. Pégalo en el correo con Ctrl+V.', 'exito');
+          if (html) await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]);
+          else await navigator.clipboard.writeText(txt);
         } catch (e) {
-          const d = document.createElement('div'); d.innerHTML = r.html; d.style.position = 'fixed'; d.style.left = '-9999px'; document.body.appendChild(d);
+          const d = document.createElement('div'); if (html) d.innerHTML = html; else d.textContent = txt; d.style.position = 'fixed'; d.style.left = '-9999px'; document.body.appendChild(d);
           const rg = document.createRange(); rg.selectNodeContents(d); const s = window.getSelection(); s.removeAllRanges(); s.addRange(rg);
           document.execCommand('copy'); s.removeAllRanges(); d.remove();
-          mostrarMensaje('Resumen copiado. Pégalo en el correo con Ctrl+V.', 'exito');
         }
+      };
+      $('btnCopiarSeg').addEventListener('click', async function () {
+        const r = armarResumen(); const as = await asunto();
+        const velo = document.createElement('div');
+        velo.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+        velo.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)">' +
+          '<div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between"><b>📧 Correo de sobrecosto</b><button type="button" id="ccX" style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>' +
+          '<div style="padding:14px 16px;font-size:.88rem">' +
+          '<div class="campo"><label>Asunto</label><div style="display:flex;gap:6px"><input id="ccAsunto" readonly style="flex:1" value="' + esc(as) + '"><button type="button" class="boton-secundario" id="ccCopAs">📋 Copiar asunto</button></div></div>' +
+          '<div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="color:#64748b">El cuerpo lleva el detalle del sobrecosto, los datos y tiempos del servicio y la línea "Favor de confirmar para proceder con la facturación."</span>' +
+          '<button type="button" class="boton-primario" id="ccCopCu">📋 Copiar cuerpo</button></div>' +
+          '<div style="text-align:right;margin-top:12px"><button type="button" class="boton-secundario" id="ccCerrar">Cerrar</button></div></div></div>';
+        document.body.appendChild(velo);
+        const q = id => velo.querySelector('#' + id); const cerrar = () => velo.remove();
+        q('ccX').addEventListener('click', cerrar); q('ccCerrar').addEventListener('click', cerrar);
+        q('ccCopAs').addEventListener('click', async function () { await copiar(null, as); this.textContent = '✓ Asunto copiado'; });
+        q('ccCopCu').addEventListener('click', async function () { await copiar(r.html, r.txt); this.textContent = '✓ Cuerpo copiado'; });
       });
-      $('btnImprimirSeg').addEventListener('click', function () {
-        const r = armarResumen();
+      $('btnImprimirSeg').addEventListener('click', async function () {
+        const r = armarResumen(); const as = await asunto();
         const w = window.open('', '_blank');
         if (!w) { mostrarMensaje('El navegador bloqueó la ventana. Permite ventanas emergentes para este sitio.', 'error'); return; }
-        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tiempos ' + esc(f['BOOKING'] || f['CODIGO SERVICIO'] || '') + '</title>' +
+        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(as) + '</title>' +
           '<style>body{margin:24px}@page{size:A4;margin:14mm}</style></head><body>' +
-          '<div style="font-family:Arial,sans-serif;font-size:15px;font-weight:bold;color:#1c3a5e;margin-bottom:6px">TRANSPORTES SSI S.A.C.</div>' + r.html +
+          '<div style="font-family:Arial,sans-serif;font-size:15px;font-weight:bold;color:#1c3a5e;margin-bottom:4px">TRANSPORTES SSI S.A.C.</div>' +
+          '<div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;margin-bottom:10px">' + esc(as) + '</div>' + r.html +
           '<p style="font-family:Arial,sans-serif;font-size:11px;color:#64748b;margin-top:14px">Generado el ' + self._fh(new Date()) + '</p></body></html>');
         w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 400);
       });
