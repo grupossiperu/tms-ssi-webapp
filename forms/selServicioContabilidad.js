@@ -146,6 +146,12 @@ const FormSelServicioContabilidad = {
       return texto;
     }
 
+    function fechaHoraOAviso(fecha, hora) {
+      const sinFecha = !fecha || String(fecha).trim() === '-' || isNaN(new Date(fecha).getTime());
+      const h = formatoHora(hora);
+      if (sinFecha && h && h !== '-') return '<span title="Tiene hora pero falta la fecha" style="display:inline-block;padding:1px 5px;border-radius:7px;background:#fef3c7;color:#92400e;font-weight:700">Falta fecha · ' + h + '</span>';
+      return formatoFechaHora(fecha, hora);
+    }
     function formatoFechaHora(fecha, hora) {
       const f = formatoFecha(fecha);
       const h = formatoHora(hora);
@@ -289,7 +295,7 @@ const FormSelServicioContabilidad = {
           <td>${linea(f['DESTINO 1'], formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1']))}</td>
           <td>${f['PACKING'] || ''}</td>
           <td>${d2 ? linea(d2, formatoFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2'])) : '-'}</td>
-          <td>${linea(f['DEPOSITO DE DEVOLUCION'], formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION']))}</td>
+          <td>${linea(f['DEPOSITO DE DEVOLUCION'], fechaHoraOAviso(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION']))}</td>
           <td>${obs ? '<span class="badge-obs">' + obs + '</span>' : ''}</td>
           <td style="text-align:center;">
             <button type="button" class="btn-datos ${completo ? 'dt-ok' : 'dt-pend'}" title="${completo ? 'Datos completos' : 'Faltan datos del servicio'} · clic para editar"><span class="dt-punto"></span>✎ Editar datos</button>
@@ -373,7 +379,7 @@ const FormSelServicioContabilidad = {
       const f = self._servicioSeleccionado;
       if (self._filaSeleccionada === null || !f) { mostrarMensaje('Seleccione un servicio para continuar.', 'error'); return; }
       const est = estadoDe(f);
-      if (est === 'CANCELADO' || est === 'CULMINADO') { mostrarMensaje('El servicio está ' + est + ': no se puede reprogramar.', 'error'); return; }
+      if (est === 'CANCELADO') { mostrarMensaje('El servicio está CANCELADO: no se puede reprogramar.', 'error'); return; }
       let hist = [];
       try { hist = JSON.parse(String(f['REPROGRAMACIONES'] || '[]')) || []; } catch (e) { hist = []; }
       const histHtml = hist.length

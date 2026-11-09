@@ -60,7 +60,7 @@ const FormDatosViaje = {
           <thead><tr>
             <th>Fecha</th><th>Cliente</th><th>Booking</th><th>Tipo de carga</th><th>Conductor</th>
             <th>Tracto</th><th>Depósito de retiro</th><th>Fecha de retiro</th><th>Destino</th>
-            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta. El extra se cuenta desde la cita o la llegada (la más tarde)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto (4 h libres, todos los clientes)">T. puerto</th><th>Seguimiento</th>
+            <th>Fecha de posicionamiento</th><th>Fecha de devolución</th><th title="Retiro vacío → salida del depósito">T. retiro</th><th title="Llegada → salida de planta. El extra se cuenta desde la cita o la llegada (la más tarde)">T. planta</th><th title="Servicio gasificado y horas de gasificado (inicio → fin)">Gasificado</th><th title="Llegada a cola de puerto → salida de puerto (4 h libres, todos los clientes)">T. puerto</th><th>Estado</th><th>Seguimiento</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -94,6 +94,13 @@ const FormDatosViaje = {
       return texto;
     }
 
+    // Hora sin fecha (fecha guardada como "-"): avisar en vez de mostrar "- 18:00".
+    function fechaHoraOAviso(fecha, hora) {
+      const sinFecha = !fecha || String(fecha).trim() === '-' || isNaN(new Date(fecha).getTime());
+      const h = formatoHora(hora);
+      if (sinFecha && h && h !== '-') return '<span title="Tiene hora pero falta la fecha: complétala en Completar acarreo o Editar datos" style="display:inline-block;padding:1px 6px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700">Falta fecha · ' + h + '</span>';
+      return formatoFechaHora(fecha, hora);
+    }
     function formatoFechaHora(fecha, hora) {
       const f = formatoFecha(fecha);
       const h = formatoHora(hora);
@@ -184,11 +191,12 @@ const FormDatosViaje = {
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO'])}</td>
           <td>${f['DESTINO 1'] || ''}</td>
           <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE POSICIONAMIENTO 1'], f['HORA DE POSICIONAMIENTO 1'])}</td>
-          <td class="celda-fechahora">${formatoFechaHora(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
+          <td class="celda-fechahora">${fechaHoraOAviso(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION'])}</td>
           <td class="dv-retiro" style="text-align:center;cursor:pointer;">${self._celdaH(self._calc(f).enRetiro)}</td>
           <td class="dv-planta" style="text-align:center;cursor:pointer;">${self._celdaPlanta(f)}</td>
           <td class="dv-gas" style="text-align:center;cursor:pointer;">${self._celdaGas(f)}</td>
           <td class="dv-puerto" style="text-align:center;cursor:pointer;">${self._celdaPuerto(f)}</td>
+          <td><span class="badge-estado est-${(String(f['ESTADO'] || '').trim().toUpperCase() || 'PROGRAMADO').replace(/\s+/g, '-').toLowerCase()}">${esc(String(f['ESTADO'] || '').trim() || 'PROGRAMADO')}</span></td>
           <td style="text-align:center;">
             ${completo
               ? '<span class="badge-datos completo" title="Clic para revisar el seguimiento">Completo</span>'
@@ -205,7 +213,7 @@ const FormDatosViaje = {
 
         tbody.appendChild(tr);
       });
-      if (!filas.length) tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#64748b;padding:14px">No hay servicios con estos filtros.</td></tr>';
+      if (!filas.length) tbody.innerHTML = '<tr><td colspan="17" style="text-align:center;color:#64748b;padding:14px">No hay servicios con estos filtros.</td></tr>';
       if (typeof _refrescarSnapshotFormulario === 'function') _refrescarSnapshotFormulario();
     }
 
