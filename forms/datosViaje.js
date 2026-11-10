@@ -321,6 +321,14 @@ const FormDatosViaje = {
       <div class="sg-fact">
         <b style="color:#92400e">💰 Por facturar al cliente (sobrecostos)</b>
         <div id="sgSugerencias" class="sg-sug"></div>
+        <div id="sgNcForm" style="display:none;margin-top:8px;border:1px dashed #94a3b8;border-radius:10px;padding:8px 10px;background:#f8fafc">
+          <b id="sgNcTit" style="color:#334155;font-size:.88rem"></b>
+          <div class="fila-campos" style="margin-top:6px">
+            <div class="campo"><label>Motivo</label><select id="sgNcMot">${self.MOTIVOS_NO_COBRO.map(m => '<option>' + m + '</option>').join('')}</select></div>
+            <div class="campo" style="grid-column:span 2"><label>Detalle (obligatorio si es OTRO)</label><input type="text" id="sgNcDet" autocomplete="off"></div>
+          </div>
+          <div style="text-align:right;margin-top:4px"><button class="boton-secundario" id="sgNcCancelar">Cancelar</button> <button class="boton-primario" id="sgNcGrabar">Guardar: no se cobra</button></div>
+        </div>
         <div style="margin-top:8px"><b style="color:#1c3a5e;font-size:.85rem">Ya registrados</b><div id="sgYaReg">${scTabla()}</div></div>
         <div id="dvFormSc" style="display:none;margin-top:10px;border-top:1px dashed #f59e0b;padding-top:10px">
           <div class="fila-campos">
@@ -360,6 +368,14 @@ const FormDatosViaje = {
         cobradoGas = (f._sc || []).some(x => /^GASIFICADO/.test(x.tipo));
       };
       verCobrados();
+      const nc = self._nc(f);
+      const ncTag = c => '<span class="sg-tag" title="' + esc(self._ncTxt(nc[c])) + '" style="background:#e2e8f0;color:#475569">no se cobra</span>';
+      const datosSeg = function () {
+        const sg = {};
+        campos.forEach(c => { if (!c.dis) sg[c.col] = $(c.id).value; });
+        sg['NO COBRAR'] = Object.keys(nc).length ? JSON.stringify(nc) : '';
+        return sg;
+      };
       const tagCobro = (extra, cobrado, lib) => extra > 0
         ? '<span class="sg-tag" style="background:' + (cobrado ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>'
         : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + lib + ' h</span>' : '');
@@ -372,24 +388,28 @@ const FormDatosViaje = {
         const okH = h => h !== null && h >= 0 && h <= 200;
         const extraPu = okH(enPu) ? Math.max(0, Math.round((enPu - self.LIBRES_PUERTO) * 100) / 100) : null;
         const gIni = esGas ? val('txtGasIni') : null, gFin = esGas ? val('txtGasFin') : null, enGas = self._horas(gIni, gFin);
-        const gasCobrar = esGas && okH(enGas) && enGas > 0 ? enGas : 0;
+        const gasCobrar = esGas && okH(enGas) && enGas >= 0.05 ? enGas : 0;
         ctx = { lleP: lleP, salP: salP, enPl: enPl, cb: cb, extra: extra, cola: cola, salPu: salPu, enPu: enPu, extraPu: extraPu, gIni: gIni, gFin: gFin, enGas: enGas };
         const desdeTxt = cb.desde === 'LLEGADA' ? 'desde la llegada (llegó después de la cita)' : (cb.desde === 'CITA' ? (lleP ? 'desde la cita (llegó antes)' : 'desde la cita') : '');
         $('sgRes1').innerHTML = 'Tiempo en el depósito: ' + hTxt(enRet);
         $('sgRes2').innerHTML = 'Tiempo real en planta (llegada → salida): ' + hTxt(enPl) +
-          '<br>Tiempo para el cobro: ' + hTxt(cb.horas) + (desdeTxt && cb.horas !== null ? ' <span style="font-size:.74rem;color:#64748b">' + desdeTxt + '</span>' : '') + (extra > 0 ? '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>' : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
-        $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu) + tagCobro(extraPu, cobradoPuerto, self.LIBRES_PUERTO);
+          '<br>Tiempo para el cobro: ' + hTxt(cb.horas) + (desdeTxt && cb.horas !== null ? ' <span style="font-size:.74rem;color:#64748b">' + desdeTxt + '</span>' : '') + (extra > 0 ? (!cobradoPlanta && nc.PLANTA ? ncTag('PLANTA') : '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>') : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
+        $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu) + (extraPu > 0 && !cobradoPuerto && nc.PUERTO ? ncTag('PUERTO') : tagCobro(extraPu, cobradoPuerto, self.LIBRES_PUERTO));
         if (esGas) $('sgResG').innerHTML = 'Tiempo de gasificado: ' + hTxt(enGas) +
-          (gasCobrar ? '<span class="sg-tag" style="background:' + (cobradoGas ? '#dcfce7;color:#166534">✓ cobrado' : '#ede9fe;color:#5b21b6">se cobran todas las horas') + '</span>' : '');
+          (gasCobrar && !cobradoGas && nc.GASIFICADO ? ncTag('GASIFICADO') : gasCobrar ? '<span class="sg-tag" style="background:' + (cobradoGas ? '#dcfce7;color:#166534">✓ cobrado' : '#ede9fe;color:#5b21b6">se cobran todas las horas') + '</span>' : '');
         const sug = [];
-        if (extra > 0 && !cobradoPlanta) sug.push('<button data-m="HORAS EXTRAS PLANTA">+ Facturar ' + extra.toFixed(1) + ' h extra en planta</button>');
-        if (gasCobrar && !cobradoGas) sug.push('<button data-m="GASIFICADO">+ Facturar ' + gasCobrar.toFixed(1) + ' h de gasificado</button>');
-        if (extraPu > 0 && !cobradoPuerto) sug.push('<button data-m="HORAS EXTRAS PUERTO">+ Facturar ' + extraPu.toFixed(1) + ' h extra en puerto</button>');
+        const bNo = (c, h, txt) => nc[c]
+          ? '<span style="display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:#475569;background:#e2e8f0;border-radius:9px;padding:4px 8px" title="' + esc(self._ncTxt(nc[c])) + '">' + txt + ': no se cobra (' + esc(nc[c].motivo) + ') <button data-rc="' + c + '" style="border:1px solid #64748b;color:#334155;padding:2px 7px">↺ Volver a cobrar</button></span>'
+          : '<button data-nc="' + c + '" data-h="' + h + '" style="border-color:#94a3b8;color:#475569">✕ No se cobra</button>';
+        ctx.ncH = { PLANTA: extra, GASIFICADO: gasCobrar, PUERTO: extraPu };
+        if (extra > 0 && !cobradoPlanta) sug.push(nc.PLANTA ? bNo('PLANTA', extra, 'Horas extra en planta') : '<button data-m="HORAS EXTRAS PLANTA">+ Facturar ' + extra.toFixed(1) + ' h extra en planta</button>' + bNo('PLANTA', extra));
+        if (gasCobrar && !cobradoGas) sug.push(nc.GASIFICADO ? bNo('GASIFICADO', gasCobrar, 'Gasificado') : '<button data-m="GASIFICADO">+ Facturar ' + gasCobrar.toFixed(1) + ' h de gasificado</button>' + bNo('GASIFICADO', gasCobrar));
+        if (extraPu > 0 && !cobradoPuerto) sug.push(nc.PUERTO ? bNo('PUERTO', extraPu, 'Horas extra en puerto') : '<button data-m="HORAS EXTRAS PUERTO">+ Facturar ' + extraPu.toFixed(1) + ' h extra en puerto</button>' + bNo('PUERTO', extraPu));
         sug.push('<button data-m="PERNOCTE">+ Facturar pernocte</button>');
         const avisos = [];
-        if (extra > 0 && !cobradoPlanta) avisos.push('pasó las horas libres en planta');
-        if (gasCobrar && !cobradoGas) avisos.push('tiene horas de gasificado por cobrar');
-        if (extraPu > 0 && !cobradoPuerto) avisos.push('pasó las ' + self.LIBRES_PUERTO + ' h libres en puerto');
+        if (extra > 0 && !cobradoPlanta && !nc.PLANTA) avisos.push('pasó las horas libres en planta');
+        if (gasCobrar && !cobradoGas && !nc.GASIFICADO) avisos.push('tiene horas de gasificado por cobrar');
+        if (extraPu > 0 && !cobradoPuerto && !nc.PUERTO) avisos.push('pasó las ' + self.LIBRES_PUERTO + ' h libres en puerto');
         $('sgSugerencias').innerHTML = (avisos.length ? '<span style="width:100%;font-size:.82rem;color:#b91c1c">Este viaje ' + avisos.join(', ') + ': revisa y aprueba el cobro.</span>' : '') + sug.join('');
       };
       // Si las horas del gasificado no quedaron grabadas pero ya hay sobrecosto GASIFICADO, se recuperan de su detalle
@@ -421,7 +441,45 @@ const FormDatosViaje = {
         else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
         $('dvFormSc').style.display = ''; total(); $('dvScPrecio').focus();
       };
-      $('sgSugerencias').addEventListener('click', function (ev) { const b = ev.target.closest('button[data-m]'); if (b) preparar(b.dataset.m); });
+      const NOMBRE_NC = { PLANTA: 'horas extra en planta', GASIFICADO: 'horas de gasificado', PUERTO: 'horas extra en puerto' };
+      let ncConcepto = null;
+      const grabarNc = async function (msgOk) {
+        const rs = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: datosSeg() });
+        if (!rs || !rs.ok) { mostrarMensaje('No se pudo guardar: ' + ((rs && rs.mensaje) || 'error'), 'error'); return false; }
+        f._noCobrar = Object.keys(nc).length ? JSON.stringify(nc) : '';
+        recalcular();
+        if (typeof _refrescarSnapshotFormulario === 'function') setTimeout(_refrescarSnapshotFormulario, 0);
+        mostrarMensaje(msgOk, 'exito');
+        return true;
+      };
+      $('sgSugerencias').addEventListener('click', async function (ev) {
+        const b = ev.target.closest('button[data-m]'); if (b) { preparar(b.dataset.m); return; }
+        const n = ev.target.closest('button[data-nc]');
+        if (n) {
+          ncConcepto = n.dataset.nc;
+          $('sgNcTit').textContent = 'No cobrar ' + Number(n.dataset.h || 0).toFixed(2) + ' ' + NOMBRE_NC[ncConcepto] + ' — indica el motivo';
+          $('sgNcDet').value = ''; $('sgNcForm').style.display = ''; $('dvFormSc').style.display = 'none'; $('sgNcMot').focus();
+          return;
+        }
+        const r = ev.target.closest('button[data-rc]');
+        if (r) {
+          const c = r.dataset.rc, prev = nc[c];
+          delete nc[c];
+          if (!(await grabarNc('Listo: las ' + NOMBRE_NC[c] + ' vuelven a quedar por cobrar.'))) nc[c] = prev;
+        }
+      });
+      $('sgNcCancelar').addEventListener('click', () => { $('sgNcForm').style.display = 'none'; ncConcepto = null; });
+      protegerClic($('sgNcGrabar'), async function () {
+        if (!ncConcepto) return;
+        const mot = $('sgNcMot').value, det = $('sgNcDet').value.trim();
+        if (mot === 'OTRO' && !det) { mostrarMensaje('Escribe el detalle del motivo.', 'error'); return; }
+        const s = (typeof Sesion !== 'undefined' && Sesion.datos && Sesion.datos()) || {};
+        const hoy = new Date(), fecha = String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
+        const c = ncConcepto;
+        nc[c] = { horas: Math.round((Number((ctx.ncH || {})[c]) || 0) * 100) / 100, motivo: mot + (det ? ': ' + det : ''), usuario: s.nombre || s.usuario || '', fecha: fecha };
+        if (await grabarNc('Guardado: las ' + NOMBRE_NC[c] + ' no se cobran (' + nc[c].motivo + ').')) { $('sgNcForm').style.display = 'none'; ncConcepto = null; }
+        else delete nc[c];
+      });
       $('dvScMotivo').addEventListener('change', () => preparar($('dvScMotivo').value));
       ['dvScCant', 'dvScPrecio', 'dvScMoneda'].forEach(id => $(id).addEventListener('input', total));
       $('dvScCancelar').addEventListener('click', () => { $('dvFormSc').style.display = 'none'; });
@@ -430,9 +488,7 @@ const FormDatosViaje = {
         if (!(d.cantidad > 0)) { mostrarMensaje('Ingrese la cantidad.', 'error'); return; }
         if (!(d.precio > 0)) { mostrarMensaje('Ingrese la tarifa.', 'error'); return; }
         // Primero se graban los tiempos escritos (si no, al volver a la lista se perdían, p. ej. las horas del gasificado)
-        const sg = {};
-        campos.forEach(c => { if (!c.dis) sg[c.col] = $(c.id).value; });
-        const rs = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: sg });
+        const rs = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: datosSeg() });
         if (!rs || !rs.ok) { mostrarMensaje('No se pudieron grabar los tiempos del seguimiento: ' + ((rs && rs.mensaje) || 'error') + '. No se registró el sobrecosto.', 'error'); return; }
         const r = await llamarBackend('sobrecostoDesdePlanta', d);
         if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); return; }
@@ -464,9 +520,9 @@ const FormDatosViaje = {
         const sc = f._sc || [];
         const regTipos = sc.map(x => String(x.tipo || '').toUpperCase());
         const pend = [];
-        if (ctx.extra > 0 && !regTipos.some(x => /HORAS EXTRAS PLANTA|H\.E\. PLANTA/.test(x))) pend.push(['Horas extras en planta', ctx.extra.toFixed(2) + ' h']);
-        if (esGas && gasH > 0 && gasH <= 200 && !regTipos.some(x => /^GASIF/.test(x))) pend.push(['Gasificado', gasH.toFixed(2) + ' h']);
-        if (extraPu > 0 && !regTipos.some(x => /HORAS EXTRAS PUERTO|H\.E\. PUERTO/.test(x))) pend.push(['Horas extras en puerto', extraPu.toFixed(2) + ' h']);
+        if (ctx.extra > 0 && !nc.PLANTA && !regTipos.some(x => /HORAS EXTRAS PLANTA|H\.E\. PLANTA/.test(x))) pend.push(['Horas extras en planta', ctx.extra.toFixed(2) + ' h']);
+        if (esGas && !nc.GASIFICADO && gasH >= 0.05 && gasH <= 200 && !regTipos.some(x => /^GASIF/.test(x))) pend.push(['Gasificado', gasH.toFixed(2) + ' h']);
+        if (extraPu > 0 && !nc.PUERTO && !regTipos.some(x => /HORAS EXTRAS PUERTO|H\.E\. PUERTO/.test(x))) pend.push(['Horas extras en puerto', extraPu.toFixed(2) + ' h']);
         let h = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#1e293b">';
         h += '<p style="margin:0 0 8px">Estimados, se detalla el sobrecosto del siguiente servicio:</p>';
         h += '<p style="margin:0 0 4px"><b>Detalle del sobrecosto</b></p>';
@@ -497,9 +553,9 @@ const FormDatosViaje = {
         h += '<table style="border-collapse:collapse;margin-bottom:10px"><tr><th ' + th + '>Concepto</th><th ' + th + '>Tiempo</th><th ' + th + '>Horas libres</th><th ' + th + '>Por cobrar</th></tr>';
         const fila4 = (a, b, c, d) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + c + '</td><td ' + td + '><b>' + d + '</b></td></tr>';
         h += fila4('Tiempo real en planta (llegada → salida)', hh(ctx.enPl), '', '');
-        h += fila4('Tiempo en planta para el cobro (' + (ctx.cb && ctx.cb.desde === 'LLEGADA' ? 'desde la llegada, llegó después de la cita' : 'desde la cita') + ')', hh(ctx.cb && ctx.cb.horas), libres + ' h', ctx.extra > 0 ? ctx.extra.toFixed(2) + ' h' : '0 h');
-        if (esGas) h += fila4('Gasificado', hh(gasH), 'sin horas libres', gasH > 0 && gasH <= 200 ? gasH.toFixed(2) + ' h' : '0 h');
-        h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), self.LIBRES_PUERTO + ' h', extraPu > 0 ? extraPu.toFixed(2) + ' h' : '0 h');
+        h += fila4('Tiempo en planta para el cobro (' + (ctx.cb && ctx.cb.desde === 'LLEGADA' ? 'desde la llegada, llegó después de la cita' : 'desde la cita') + ')', hh(ctx.cb && ctx.cb.horas), libres + ' h', ctx.extra > 0 ? (nc.PLANTA ? 'No se cobra (' + esc(nc.PLANTA.motivo) + ')' : ctx.extra.toFixed(2) + ' h') : '0 h');
+        if (esGas) h += fila4('Gasificado', hh(gasH), 'sin horas libres', gasH >= 0.05 && gasH <= 200 ? (nc.GASIFICADO ? 'No se cobra (' + esc(nc.GASIFICADO.motivo) + ')' : gasH.toFixed(2) + ' h') : '0 h');
+        h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), self.LIBRES_PUERTO + ' h', extraPu > 0 ? (nc.PUERTO ? 'No se cobra (' + esc(nc.PUERTO.motivo) + ')' : extraPu.toFixed(2) + ' h') : '0 h');
         h += '</table>';
         h += '<p style="margin:10px 0 0"><b>Favor de confirmar para proceder con la facturación.</b></p>';
         h += '</div>';
@@ -556,9 +612,7 @@ const FormDatosViaje = {
 
       $('btnVolverSeguimiento').addEventListener('click', () => self._mostrarListaEnPanel());
       protegerClic($('btnGrabarSeguimiento'), async function () {
-        const datos = {};
-        campos.forEach(c => { if (!c.dis) datos[c.col] = $(c.id).value; });
-        const resp = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: datos });
+        const resp = await llamarBackend('grabarSeguimiento', { fila: filaServicio, datos: datosSeg() });
         if (!resp.ok) { mostrarMensaje(resp.mensaje, 'error'); return; }
         mostrarMensaje(resp.mensaje, resp.completo ? 'exito' : 'info');
         self._mostrarListaEnPanel();
@@ -624,15 +678,20 @@ const FormDatosViaje = {
       esGas: this._esGas(f), enGas: this._horas(this._fecha(f._gasIni), this._fecha(f._gasFin)) };
   },
   _esGas: function (f) { return /GASIF/i.test(String(f['OBSERVACION'] || '')); },
+  MOTIVOS_NO_COBRO: ['CORTESIA AL CLIENTE', 'DEMORA ATRIBUIBLE A SSI', 'ACUERDO COMERCIAL', 'CLIENTE NO ACEPTO EL COBRO', 'OTRO'],
+  _nc: function (f) { try { const o = JSON.parse(f._noCobrar || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } },
+  _ncTxt: function (x) { return x ? ('No se cobra: ' + x.motivo + (x.horas ? ' · ' + Number(x.horas).toFixed(2) + ' h' : '') + (x.usuario ? ' · ' + x.usuario : '') + (x.fecha ? ' · ' + x.fecha : '')) : ''; },
   _celdaGas: function (f) {
     if (!this._esGas(f)) return '<span style="color:#94a3b8">—</span>';
     let h = this._calc(f).enGas;
     const sc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')));
     if (h === null && sc && Number(sc.cantidad) > 0) h = Number(sc.cantidad);
+    const nc = this._nc(f).GASIFICADO;
     return '<span style="display:inline-block;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;font-size:.72rem;font-weight:700">Sí</span>' +
       '<br>' + (h === null ? '<span style="font-size:.7rem;color:#94a3b8">sin horas</span>' : this._celdaH(h)) +
       (sc ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>'
-        : (h > 0 && h <= 200 ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">por cobrar</span>' : ''));
+        : nc ? '<br><span title="' + esc(this._ncTxt(nc)) + '" style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#e2e8f0;color:#475569;font-size:.7rem;font-weight:700">no se cobra</span>'
+        : (h >= 0.05 && h <= 200 ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">por cobrar</span>' : ''));
   },
   _celdaH: function (h) {
     if (h === null || h === undefined) return '<span style="color:#94a3b8">—</span>';
@@ -645,7 +704,9 @@ const FormDatosViaje = {
     if (h === null || h < 0 || h > 200) return s;
     const cobrado = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
     const ex = Math.max(0, Math.round((h - this.LIBRES_PUERTO) * 100) / 100);
+    const nc = this._nc(f).PUERTO;
     if (cobrado) s += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>';
+    else if (ex > 0 && nc) s += '<br><span title="' + esc(this._ncTxt(nc)) + '" style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#e2e8f0;color:#475569;font-size:.7rem;font-weight:700">no se cobra</span>';
     else if (ex > 0) s += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">+' + ex.toFixed(1) + ' h extra</span>';
     return s;
   },
@@ -653,7 +714,9 @@ const FormDatosViaje = {
     const c = this._calc(f);
     if (c.enPlantaReal === null && c.enPlanta === null) return '<span style="color:#94a3b8">—</span>';
     let h = this._celdaH(c.enPlantaReal);
+    const nc = this._nc(f).PLANTA;
     if (c.cobrado.length) h += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>';
+    else if (c.extra > 0 && nc) h += '<br><span title="' + esc(this._ncTxt(nc)) + '" style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#e2e8f0;color:#475569;font-size:.7rem;font-weight:700">no se cobra</span>';
     else if (c.extra > 0) h += '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">+' + c.extra.toFixed(1) + ' h extra</span>';
     return h;
   },
