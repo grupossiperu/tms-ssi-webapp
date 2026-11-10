@@ -7,7 +7,7 @@
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261110c';
+  window.__VERSION_APP = '20261110d';
   ['styles.css', 'home.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
@@ -421,6 +421,16 @@
           <span class="tile-texto"><strong>Incidencias de conductores</strong><small>Fallas reportadas desde el celular, por prioridad</small></span>
         </button>
 
+        <button class="tile tile-destacado" id="btn-control-mant" style="position:relative;">
+          <span class="tile-icono" style="background:#fef3c7;color:#b45309;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2.5 2.5"></path><path d="M9 2h6"></path>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Control de mantenimiento</strong><small>Camiones cada 20 000 km · gensets cada 1 000 h</small></span>
+          <span id="cmBadge" style="display:none;position:absolute;top:10px;right:12px;background:#d97706;color:#fff;border-radius:999px;min-width:24px;height:24px;padding:0 7px;font-size:.8rem;font-weight:800;line-height:24px;text-align:center;"></span>
+        </button>
+
         <button class="tile" style="grid-column:1 / -1;" id="btn-historial-reparaciones" data-modulo="INCA">
           <span class="tile-icono" style="background:#ede9fe;color:#5b21b6;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -477,6 +487,7 @@
     'forms/servicio.js',
     'forms/acarreoDocs.js',
     'forms/historialReparaciones.js',
+    'forms/controlMantenimiento.js',
     'forms/selServicioContabilidad.js',
     'forms/consolidadoServicio.js',
     'forms/serviciosCulminados.js',
