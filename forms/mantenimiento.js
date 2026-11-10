@@ -135,9 +135,12 @@ const FormMantenimiento = {
     const d = self._datos;
     const horaVista = h => { const m = String(h || '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/); return m ? m[1].padStart(2, '0') + ':' + m[2] + ':' + (m[3] || '00') : MT.ahora(); };
     const tecnicoFijo = !cfg.sinRepuesto && cfg.tecnicos.length === 1;
+    // Varios repuestos a la vez: una casilla por salida pendiente (todas marcadas al inicio) + "Ninguno".
     const opcionesRepuesto = function (lista) {
-      return '<option value=""></option>' + lista.map(s => '<option value="' + esc(s.fila) + '">' + esc(s.producto) + '</option>').join('') +
-        '<option value="NO">NO APLICA</option>';
+      if (!lista.length) return '<label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="d-rep-no" checked style="width:auto"> NO APLICA (sin repuesto)</label>';
+      return lista.map(s => '<label style="display:flex;gap:6px;align-items:center;font-weight:400;margin:2px 0"><input type="checkbox" class="d-rep" value="' + esc(s.fila) + '" checked style="width:auto"> ' +
+        esc(s.producto) + (s.cantidad ? ' <small style="color:#64748b">(' + esc(s.cantidad) + ')</small>' : '') + '</label>').join('') +
+        '<label style="display:flex;gap:6px;align-items:center;font-weight:400;margin-top:4px;color:#64748b"><input type="checkbox" class="d-rep-no" style="width:auto"> Ninguno (NO APLICA)</label>';
     };
 
     const html = MT_ESTILOS + `
@@ -163,7 +166,7 @@ const FormMantenimiento = {
         </div>
         <div class="mt-seccion"><h3>Detalle</h3>
           <div class="fila-campos">
-            <div class="campo ancho2"><label>Repuesto utilizado</label><select id="dRepuesto" ${cfg.sinRepuesto ? 'disabled' : ''}>${cfg.sinRepuesto ? '<option value="NO">NO APLICA</option>' : opcionesRepuesto(cfg.repuestos)}</select></div>
+            <div class="campo ancho2"><label>Repuestos utilizados <small style="font-weight:400;color:#64748b">(marca todos los que se usaron)</small></label><div id="dRepuesto" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px 10px;max-height:150px;overflow:auto;background:#fff">${cfg.sinRepuesto ? '<span>NO APLICA</span>' : opcionesRepuesto(cfg.repuestos)}</div></div>
             <div class="campo"><label>Sistema reparado</label><select id="dSistema">${MT.opciones(MTM_SISTEMAS, '')}</select></div>
             <div class="campo"><label>Método de reparación</label><input type="text" id="dMetodo" list="dlMetodos" autocomplete="off" style="text-transform:uppercase">${MT.datalist('dlMetodos', MTM_METODOS)}</div>
             <div class="campo ancho4"><label>Observación</label><input type="text" id="dObs" autocomplete="off" style="text-transform:uppercase"></div>
@@ -231,22 +234,30 @@ const FormMantenimiento = {
 
       function limpiarDetalle() {
         const doc = $('dDocumento').value, mon = $('dMoneda').value, conCosto = $('dTieneCosto').checked;
-        $('dRepuesto').innerHTML = cfg.sinRepuesto ? '<option value="NO">NO APLICA</option>' : opcionesRepuesto(repuestos);
+        $('dRepuesto').innerHTML = cfg.sinRepuesto ? '<span>NO APLICA</span>' : opcionesRepuesto(repuestos);
         ['dSistema', 'dMetodo', 'dObs'].forEach(id => { $(id).value = ''; });
         habilitarCosto(conCosto);
         if (conCosto) { $('dDocumento').value = doc; $('dMoneda').value = mon; }
         _refrescarSnapshotFormulario();
-        $('dRepuesto').focus();
+        $('dSistema').focus();
       }
+      // "Ninguno" desmarca los repuestos y viceversa
+      $('dRepuesto').addEventListener('change', function (ev) {
+        if (ev.target.classList.contains('d-rep-no') && ev.target.checked) raiz.querySelectorAll('.d-rep').forEach(c => { c.checked = false; });
+        if (ev.target.classList.contains('d-rep') && ev.target.checked) raiz.querySelectorAll('.d-rep-no').forEach(c => { c.checked = false; });
+      });
 
       async function grabar(confirmarKm) {
-        const valRep = $('dRepuesto').value;
-        const rep = repuestos.find(s => String(s.fila) === valRep);
+        const marcados = Array.from(raiz.querySelectorAll('.d-rep:checked')).map(c => repuestos.find(s => String(s.fila) === c.value)).filter(Boolean);
+        const ninguno = cfg.sinRepuesto || raiz.querySelectorAll('.d-rep-no:checked').length > 0;
+        if (!marcados.length && !ninguno) { mostrarMensaje('Marca al menos un repuesto, o "Ninguno (NO APLICA)".', 'error'); return; }
+        const lista = marcados.length ? marcados : [null];
+        const rep = lista[0];
         const datos = {
           nombre: $('dNombre').value, fechaInicial: $('dFechaIni').value, horaInicial: $('dHoraIni').value,
           fechaFinal: $('dFechaFin').value, horaFinal: $('dHoraFin').value, tipoMantenimiento: $('dTipo').value,
           tecnico: $('dTecnico').value, placa: $('dPlaca').value, lugar: $('dLugar').value,
-          repuesto: valRep === 'NO' ? 'NO APLICA' : (rep ? rep.producto : ''), filaSalida: rep ? rep.fila : 0,
+          repuesto: rep ? rep.producto : 'NO APLICA', filaSalida: rep ? rep.fila : 0,
           sistema: $('dSistema').value, metodo: $('dMetodo').value, kilometraje: $('dKm').value, observacion: $('dObs').value,
           tieneCosto: $('dTieneCosto').checked, tipoCosto: $('dTipoCosto').value, monedaCosto: $('dMoneda').value,
           cantidadCosto: $('dCantidad').value, precioCosto: $('dPrecio').value, documentoCosto: $('dDocumento').value,
@@ -254,6 +265,19 @@ const FormMantenimiento = {
         };
         const r = await MT.llamar('mtGrabarMantenimiento', datos);
         if (!r) return;
+        if (!r.confirmarKm && lista.length > 1) {
+          // Los demás repuestos: misma reparación, una fila por repuesto; el costo solo va en la primera.
+          const fallidos = [];
+          for (let i = 1; i < lista.length; i++) {
+            const d2 = Object.assign({}, datos, { repuesto: lista[i].producto, filaSalida: lista[i].fila, confirmarKm: true,
+              tieneCosto: false, tipoCosto: '', monedaCosto: '', cantidadCosto: '', precioCosto: '', documentoCosto: '' });
+            const r2 = await MT.llamar('mtGrabarMantenimiento', d2);
+            if (!r2 || r2.confirmarKm) fallidos.push(lista[i].producto);
+          }
+          r.mensaje = 'Reparación registrada con ' + (lista.length - fallidos.length) + ' repuesto(s).' + (fallidos.length ? ' No se pudo: ' + fallidos.join(', ') + '.' : '');
+          const ok = lista.filter(s => fallidos.indexOf(s.producto) < 0);
+          repuestos = repuestos.filter(s => ok.indexOf(s) < 0);
+        }
         if (r.confirmarKm) {
           if (confirmar('El kilometraje ingresado presenta una variación muy alta.\n\nÚltimo km: ' + r.kmAnterior +
             '\nKm ingresado: ' + datos.kilometraje + '\nDiferencia: ' + r.diferencia + ' km\n\n¿Desea continuar de todas formas?')) {
@@ -263,7 +287,7 @@ const FormMantenimiento = {
           return;
         }
         d.kmPorPlaca[datos.placa.trim().toUpperCase()] = Number(datos.kilometraje);
-        if (rep) repuestos = repuestos.filter(s => s !== rep);
+        if (rep && lista.length === 1) repuestos = repuestos.filter(s => s !== rep);
         if (confirmar(r.mensaje + '\n\n¿Deseas registrar otro detalle para esta misma reparación?')) {
           limpiarDetalle();
         } else {
