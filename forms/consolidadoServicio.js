@@ -161,36 +161,6 @@ const FormConsolidadoServicio = {
             </div>
           </div>
 
-          <div class="seg">
-            <div class="seg-tit"><span class="seg-num">3</span> Documentos</div>
-            <div class="g">
-              ${c('N° de transferencia', 'txtNumeroTransferenciaConsol', '', true)}
-              ${c('N° de viático', 'txtNumeroViaticoConsol', '', true)}
-              ${c('Nombre de cliente de la guía (GRE)', 'txtClienteGuiaConsol', '', true, 'span2')}
-              <div class="sub">Guías de remisión <span style="text-transform:none;font-weight:500">· por cada guía del cliente va una guía de transporte</span></div>
-              <table class="tabla-mini" id="tablaGuiasConsol">
-                <thead><tr><th>G.R. Transporte (GRT)${req}</th><th>G.R. Cliente (GRE)${req}</th><th style="width:150px">Peso bruto (kg)${req}</th><th style="width:28px"></th></tr></thead>
-                <tbody></tbody>
-              </table>
-              <button type="button" class="btn-agregar" id="btnAgregarGuiaConsol" style="grid-column:span 2;align-self:center;">+ Agregar guía</button>
-              <div></div>
-              ${k('Peso bruto total (kg)', 'txtPesoBrutoTotalConsol')}
-            </div>
-          </div>
-
-          <div class="seg">
-            <div class="seg-tit"><span class="seg-num">4</span> Kilometraje y horómetro</div>
-            <div class="g">
-              ${c('KM inicial', 'txtKmInicialConsol', '', true)}
-              ${c('KM final', 'txtKmFinalConsol', '', true)}
-              <div class="campo calc"><label for="txtKmRecorridoConsol">KM recorridos</label><input id="txtKmRecorridoConsol" disabled></div>
-              ${c('N° generador', 'txtNumeroGeneradorConsol', '', true)}
-              ${c('Horómetro inicial', 'txtHrInicialConsol', '', true)}
-              ${c('Horómetro final', 'txtHrFinalConsol', '', true)}
-              <div class="campo calc"><label for="txtHrRecorridoConsol">Horas genset</label><input id="txtHrRecorridoConsol" disabled></div>
-              <div class="nota-campo" id="notaKmConsol">Buscando el KM final del viaje anterior de este tracto…</div>
-            </div>
-          </div>
         </div>
 
         <div>
@@ -228,6 +198,43 @@ const FormConsolidadoServicio = {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <div class="cols">
+        <div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">3</span> Documentos</div>
+            <div class="g">
+              ${c('N° de transferencia', 'txtNumeroTransferenciaConsol', '', true)}
+              ${c('N° de viático', 'txtNumeroViaticoConsol', '', true)}
+              ${c('Nombre de cliente de la guía (GRE)', 'txtClienteGuiaConsol', '', true, 'span2')}
+              <div class="sub">Guías de remisión <span style="text-transform:none;font-weight:500">· por cada guía del cliente va una guía de transporte</span></div>
+              <table class="tabla-mini" id="tablaGuiasConsol">
+                <thead><tr><th>G.R. Transporte (GRT)${req}</th><th>G.R. Cliente (GRE)${req}</th><th style="width:150px">Peso bruto (kg)${req}</th><th style="width:28px"></th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <button type="button" class="btn-agregar" id="btnAgregarGuiaConsol" style="grid-column:span 2;align-self:center;">+ Agregar guía</button>
+              <div></div>
+              ${k('Peso bruto total (kg)', 'txtPesoBrutoTotalConsol')}
+              <div id="cajaDocsAcarreoConsol" style="grid-column:1/-1;margin:4px 0 10px;padding:8px 10px;border:1px solid #c7d6ea;background:#f5f9ff;border-radius:9px;font-size:.84rem;line-height:1.7">Buscando documentos del acarreo…</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="seg">
+            <div class="seg-tit"><span class="seg-num">4</span> Kilometraje y horómetro</div>
+            <div class="g">
+              ${c('KM inicial', 'txtKmInicialConsol', '', true)}
+              ${c('KM final', 'txtKmFinalConsol', '', true)}
+              <div class="campo calc"><label for="txtKmRecorridoConsol">KM recorridos</label><input id="txtKmRecorridoConsol" disabled></div>
+              ${c('N° generador', 'txtNumeroGeneradorConsol', '', true)}
+              ${c('Horómetro inicial', 'txtHrInicialConsol', '', true)}
+              ${c('Horómetro final', 'txtHrFinalConsol', '', true)}
+              <div class="campo calc"><label for="txtHrRecorridoConsol">Horas genset</label><input id="txtHrRecorridoConsol" disabled></div>
+              <div class="nota-campo" id="notaKmConsol">Buscando el KM final del viaje anterior de este tracto…</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -686,6 +693,14 @@ const FormConsolidadoServicio = {
       q('btnGenerarCodigoConsol').style.display = 'none';
       codigoEditadoAMano = true;
     }
+    // Documentos del acarreo (EIR/Ticket, GRE, GRT) subidos en Acarreo → Completar acarreo
+    (function () {
+      const caja = q('cajaDocsAcarreoConsol');
+      if (!caja) return;
+      if (typeof FormAcarreoDocs === 'undefined' || !codigoFijo) { caja.innerHTML = '<span style="color:#94a3b8">Documentos del acarreo: no disponibles para este servicio.</span>'; return; }
+      FormAcarreoDocs.cargar(true).then(function () { caja.innerHTML = FormAcarreoDocs.enlacesHtml(codigoFijo); })
+        .catch(function () { caja.innerHTML = '<span style="color:#b91c1c">No se pudieron cargar los documentos del acarreo.</span>'; });
+    })();
     function ponerCodigo(forzar) {
       if (codigoFijo) { q('txtCodigoServicioConsol').value = codigoFijo; return; }
       if (codigoEditadoAMano && !forzar) return;
