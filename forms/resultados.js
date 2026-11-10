@@ -155,8 +155,10 @@ const FormResultados = {
         <button type="button" class="res-tab" data-vista="er">Estado de resultados</button>
         <button type="button" class="res-tab" data-vista="alm">Almacén y mantenimiento</button>
         <button type="button" class="res-tab" data-vista="ren">Rendimiento de combustible</button>
+        <button type="button" class="res-tab" data-vista="ct">Control de tiempos</button>
       </div>
       <div id="resVistaRen" style="display:none"></div>
+      <div id="resVistaCT" style="display:none"></div>
       <div id="resVistaER" style="display:none"></div>
       <div id="resVistaAlm" style="display:none"></div>
       <div id="resVistaDash">
@@ -240,9 +242,11 @@ const FormResultados = {
         raiz.querySelector('#resVistaER').style.display = vista === 'er' ? '' : 'none';
         raiz.querySelector('#resVistaAlm').style.display = vista === 'alm' ? '' : 'none';
         raiz.querySelector('#resVistaRen').style.display = vista === 'ren' ? '' : 'none';
+        raiz.querySelector('#resVistaCT').style.display = vista === 'ct' ? '' : 'none';
         if (vista === 'er') FormEstadoResultados.mostrar(raiz.querySelector('#resVistaER'), self._token);
         if (vista === 'alm') FormResultadosAlmacen.mostrar(raiz.querySelector('#resVistaAlm'), self._token);
         if (vista === 'ren') FormRendimiento.mostrar(raiz.querySelector('#resVistaRen'), self._token);
+        if (vista === 'ct') FormControlTiempos.mostrar(raiz.querySelector('#resVistaCT'));
       });
     });
 
