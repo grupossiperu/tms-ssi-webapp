@@ -142,7 +142,8 @@ const FormMantenimiento = {
     // Varios repuestos a la vez: una casilla por salida pendiente (todas marcadas al inicio) + "Ninguno".
     const opcionesRepuesto = function (lista) {
       if (!lista.length) return '<label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="d-rep-no" checked style="width:auto"> NO APLICA (sin repuesto)</label>';
-      return lista.map(s => '<label style="display:flex;gap:6px;align-items:center;font-weight:400;margin:2px 0"><input type="checkbox" class="d-rep" value="' + esc(s.fila) + '" checked style="width:auto"> ' +
+      return '<div style="font-size:.78rem;color:#92400e;font-weight:700;margin-bottom:4px">Pendientes de registrar: ' + lista.length + ' · marca los que lleven el mismo sistema y método, graba, y sigue con los demás</div>' +
+        lista.map(s => '<label style="display:flex;gap:6px;align-items:center;font-weight:400;margin:2px 0"><input type="checkbox" class="d-rep" value="' + esc(s.fila) + '" style="width:auto"> ' +
         esc(s.producto) + (s.cantidad ? ' <small style="color:#64748b">(' + esc(s.cantidad) + ')</small>' : '') + '</label>').join('') +
         '<label style="display:flex;gap:6px;align-items:center;font-weight:400;margin-top:4px;color:#64748b"><input type="checkbox" class="d-rep-no" style="width:auto"> Ninguno (NO APLICA)</label>';
     };
@@ -170,7 +171,7 @@ const FormMantenimiento = {
         </div>
         <div class="mt-seccion"><h3>Detalle</h3>
           <div class="fila-campos">
-            <div class="campo ancho2"><label>Repuestos utilizados <small style="font-weight:400;color:#64748b">(marca todos los que se usaron)</small></label><div id="dRepuesto" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px 10px;max-height:150px;overflow:auto;background:#fff">${cfg.sinRepuesto ? '<span>NO APLICA</span>' : opcionesRepuesto(cfg.repuestos)}</div></div>
+            <div class="campo ancho2"><label>Repuestos de esta línea <small style="font-weight:400;color:#64748b">(marca uno o varios con el mismo sistema y método)</small></label><div id="dRepuesto" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px 10px;max-height:150px;overflow:auto;background:#fff">${cfg.sinRepuesto ? '<span>NO APLICA</span>' : opcionesRepuesto(cfg.repuestos)}</div></div>
             <div class="campo"><label>Sistema reparado</label><select id="dSistema">${MT.opciones(MTM_SISTEMAS, '')}</select></div>
             <div class="campo"><label>Método de reparación</label><input type="text" id="dMetodo" list="dlMetodos" autocomplete="off" style="text-transform:uppercase">${MT.datalist('dlMetodos', MTM_METODOS)}</div>
             <div class="campo ancho4"><label>Observación</label><input type="text" id="dObs" autocomplete="off" style="text-transform:uppercase"></div>
@@ -300,7 +301,11 @@ const FormMantenimiento = {
         }
         d.kmPorPlaca[datos.placa.trim().toUpperCase()] = Number(datos.kilometraje);
         if (rep && lista.length === 1) repuestos = repuestos.filter(s => s !== rep);
-        if (confirmar(r.mensaje + '\n\n¿Deseas registrar otro detalle para esta misma reparación?')) {
+        if (!cfg.sinRepuesto && repuestos.length) {
+          // Quedan repuestos de la lista elegida: se sigue en la misma reparación (mismas fechas, km, lugar y técnico).
+          limpiarDetalle();
+          mostrarMensaje(r.mensaje + ' Quedan ' + repuestos.length + ' repuesto(s) por registrar: márcalos, elige el sistema y método, y graba.', 'exito');
+        } else if (confirmar(r.mensaje + (cfg.sinRepuesto ? '' : '\n\nYa registraste todos los repuestos elegidos.') + '\n\n¿Deseas registrar otro detalle para esta misma reparación?')) {
           limpiarDetalle();
         } else {
           cerrarPanel();
