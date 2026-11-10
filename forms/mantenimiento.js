@@ -57,10 +57,13 @@ const FormMantenimiento = {
 
   /* ============================ 1a. SELECCIÓN DE SALIDAS ============================ */
 
-  abrirRegistrar: async function () {
+  abrirRegistrar: async function (opts) {
     if (!(await this._cargar())) return;
     const self = this;
-    const salidas = self._datos.salidas;
+    const pref = String((opts && opts.placa) || '').toUpperCase().replace(/[\s-]/g, '');
+    self._pref = pref;
+    const normP = p => { const s = String(p || '').toUpperCase().replace(/[\s-]/g, ''); return /^UG\d+$/.test(s) ? 'UG' + String(parseInt(s.slice(2), 10)) : s; };
+    const salidas = pref ? self._datos.salidas.filter(s => normP(s.placa) === normP(pref)) : self._datos.salidas;
 
     const html = MT_ESTILOS + `
       <div class="mt-form">
@@ -68,6 +71,7 @@ const FormMantenimiento = {
           <div class="campo ancho4"><label>Nombre de la reparación</label>
             <input type="text" id="mNombreSel" autocomplete="off" style="text-transform:uppercase" placeholder="Ej.: CAMBIO DE BATERÍA"></div>
         </div>
+        ${pref ? '<div class="mt-ayuda" style="margin-bottom:6px;color:#1c3a5e"><b>Unidad: ' + esc(pref) + '</b> · solo se muestran las salidas de esta placa.</div>' : ''}
         <div class="mt-ayuda" style="margin-bottom:6px;">Marque los repuestos (salidas de almacén pendientes de mantenimiento) usados en esta reparación. Deben ser de la misma placa.</div>
         <div class="mt-tabla-wrap">
           <table class="tabla-lista" id="tablaSalidasMant">
@@ -121,7 +125,7 @@ const FormMantenimiento = {
         const n = nombre();
         if (!n) return;
         self._detalle({
-          nombre: n, placa: '', placaFija: false, fechaInicial: MT.hoy(), horaInicial: MT.ahora(),
+          nombre: n, placa: self._pref || '', placaFija: false, fechaInicial: MT.hoy(), horaInicial: MT.ahora(),
           tecnicos: MTM_TALLERES, tecnicoInicial: 'TALLER EXTERNO', repuestos: [], sinRepuesto: true
         });
       });
@@ -150,7 +154,7 @@ const FormMantenimiento = {
             <div class="campo ancho2"><label>Nombre de la reparación</label><input type="text" id="dNombre" readonly value="${esc(cfg.nombre)}"></div>
             <div class="campo"><label>Placa</label>${cfg.placaFija
               ? '<input type="text" id="dPlaca" readonly value="' + esc(cfg.placa) + '">'
-              : '<input type="text" id="dPlaca" list="dlPlacasM" autocomplete="off" style="text-transform:uppercase">' + MT.datalist('dlPlacasM', d.placas)}</div>
+              : '<input type="text" id="dPlaca" list="dlPlacasM" autocomplete="off" style="text-transform:uppercase" value="' + esc(cfg.placa || '') + '">' + MT.datalist('dlPlacasM', d.placas)}</div>
             <div class="campo"><label>Tipo de mantenimiento</label><select id="dTipo">${MT.opciones(MTM_TIPOS, '')}</select></div>
             <div class="campo"><label>Fecha inicial</label><input type="date" id="dFechaIni" value="${esc(cfg.fechaInicial)}"></div>
             <div class="campo"><label>Hora inicial</label><input type="time" step="1" id="dHoraIni" value="${esc(horaVista(cfg.horaInicial))}"></div>
@@ -170,6 +174,7 @@ const FormMantenimiento = {
             <div class="campo"><label>Sistema reparado</label><select id="dSistema">${MT.opciones(MTM_SISTEMAS, '')}</select></div>
             <div class="campo"><label>Método de reparación</label><input type="text" id="dMetodo" list="dlMetodos" autocomplete="off" style="text-transform:uppercase">${MT.datalist('dlMetodos', MTM_METODOS)}</div>
             <div class="campo ancho4"><label>Observación</label><input type="text" id="dObs" autocomplete="off" style="text-transform:uppercase"></div>
+            <div class="campo ancho4"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:7px 10px;color:#92400e;font-weight:700"><input type="checkbox" id="dAceite" style="width:auto"> Incluye cambio de aceite y filtros (reinicia el contador del Control de mantenimiento con este km)</label></div>
           </div>
         </div>
         <div class="mt-seccion"><h3><label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0"><input type="checkbox" id="dTieneCosto" style="width:auto"> ¿Tiene costo?</label></h3>
@@ -236,13 +241,20 @@ const FormMantenimiento = {
         const doc = $('dDocumento').value, mon = $('dMoneda').value, conCosto = $('dTieneCosto').checked;
         $('dRepuesto').innerHTML = cfg.sinRepuesto ? '<span>NO APLICA</span>' : opcionesRepuesto(repuestos);
         ['dSistema', 'dMetodo', 'dObs'].forEach(id => { $(id).value = ''; });
+        $('dAceite').checked = false;
         habilitarCosto(conCosto);
         if (conCosto) { $('dDocumento').value = doc; $('dMoneda').value = mon; }
         _refrescarSnapshotFormulario();
         $('dSistema').focus();
       }
+      const aceiteAuto = function () {
+        const txt = Array.from(raiz.querySelectorAll('.d-rep:checked')).map(c => (repuestos.find(s => String(s.fila) === c.value) || {}).producto || '').join(' ').toUpperCase();
+        if (/ACEITE|FILTRO\s+(DE\s+)?ACEITE|15W-?40/.test(txt)) $('dAceite').checked = true;
+      };
+      aceiteAuto();
       // "Ninguno" desmarca los repuestos y viceversa
       $('dRepuesto').addEventListener('change', function (ev) {
+        if (ev.target.classList.contains('d-rep')) aceiteAuto();
         if (ev.target.classList.contains('d-rep-no') && ev.target.checked) raiz.querySelectorAll('.d-rep').forEach(c => { c.checked = false; });
         if (ev.target.classList.contains('d-rep') && ev.target.checked) raiz.querySelectorAll('.d-rep-no').forEach(c => { c.checked = false; });
       });
@@ -261,7 +273,7 @@ const FormMantenimiento = {
           sistema: $('dSistema').value, metodo: $('dMetodo').value, kilometraje: $('dKm').value, observacion: $('dObs').value,
           tieneCosto: $('dTieneCosto').checked, tipoCosto: $('dTipoCosto').value, monedaCosto: $('dMoneda').value,
           cantidadCosto: $('dCantidad').value, precioCosto: $('dPrecio').value, documentoCosto: $('dDocumento').value,
-          confirmarKm: !!confirmarKm
+          confirmarKm: !!confirmarKm, cambioAceite: $('dAceite').checked
         };
         const r = await MT.llamar('mtGrabarMantenimiento', datos);
         if (!r) return;
@@ -269,7 +281,7 @@ const FormMantenimiento = {
           // Los demás repuestos: misma reparación, una fila por repuesto; el costo solo va en la primera.
           const fallidos = [];
           for (let i = 1; i < lista.length; i++) {
-            const d2 = Object.assign({}, datos, { repuesto: lista[i].producto, filaSalida: lista[i].fila, confirmarKm: true,
+            const d2 = Object.assign({}, datos, { repuesto: lista[i].producto, filaSalida: lista[i].fila, confirmarKm: true, cambioAceite: false,
               tieneCosto: false, tipoCosto: '', monedaCosto: '', cantidadCosto: '', precioCosto: '', documentoCosto: '' });
             const r2 = await MT.llamar('mtGrabarMantenimiento', d2);
             if (!r2 || r2.confirmarKm) fallidos.push(lista[i].producto);

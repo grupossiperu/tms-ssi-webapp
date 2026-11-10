@@ -26,6 +26,34 @@ const FormControlMant = {
     if (v === null || v === undefined || isNaN(v)) return '—';
     return Number(v).toLocaleString('es-PE', { maximumFractionDigits: 1 }) + (tipo === 'TRACTO' ? ' km' : ' h');
   },
+  _esMaestro: function () { try { return typeof Sesion !== 'undefined' && Sesion.datos && String((Sesion.datos() || {}).rol || '').toUpperCase() === 'MAESTRO'; } catch (e) { return false; } },
+  _placa: function (x) { return x.tipo === 'GENSET' ? 'UG' + String(x.unidad).padStart(4, '0') : x.unidad; },
+  _corregir: async function (x) {
+    if (typeof FormAlmacenCorregir === 'undefined') { mostrarMensaje('No está disponible la corrección de mantenimientos.', 'error'); return; }
+    await FormAlmacenCorregir.abrir('mantenimientos');
+    const q = x.tipo === 'GENSET' ? String(x.unidad) : x.unidad;
+    for (let i = 0; i < 40; i++) {
+      const b = document.getElementById('crBuscar'), tb = document.getElementById('crTb');
+      if (b && tb) { b.value = q; b.dispatchEvent(new Event('input', { bubbles: true })); return; }
+      await new Promise(r => setTimeout(r, 250));
+    }
+  },
+  _mants: null,
+  _mantsDe: async function (x) {
+    if (!this._mants) {
+      let r = null; try { r = await llamarBackend('mtHistorialReparaciones', {}); } catch (e) { r = null; }
+      this._mants = (r && r.items) ? r.items.filter(i => i.origen === 'MANTENIMIENTO') : [];
+    }
+    const norm = p => { const s = String(p || '').toUpperCase().replace(/[\s-]/g, ''); return (/^UG/.test(s) || /^\d+$/.test(s)) ? String(parseInt(s.replace(/\D/g, ''), 10) || '') : s; };
+    const u = String(x.unidad).toUpperCase();
+    const g = {};
+    this._mants.filter(i => norm(i.placa) === u).forEach(i => {
+      const k = i.iso + '|' + i.titulo + '|' + i.km;
+      if (!g[k]) g[k] = { iso: i.iso, fecha: i.fin || i.fecha, inicio: i.fecha, titulo: i.titulo, km: i.km, tipo: i.tipo, rep: [] };
+      if (i.repuesto && i.repuesto !== 'NO APLICA') g[k].rep.push(i.repuesto);
+    });
+    return Object.values(g).sort((a, b) => String(b.iso).localeCompare(String(a.iso))).slice(0, 15);
+  },
   _tag: function (e) { const x = this.EST[e] || [e, '#e2e8f0', '#475569']; return '<span class="cm-tag" style="background:' + x[1] + ';color:' + x[2] + '">' + x[0] + '</span>'; },
 
   abrir: async function () {
@@ -76,6 +104,8 @@ const FormControlMant = {
         const x = (self._datos || []).find(u => u.tipo === b.dataset.tipo && u.unidad === b.dataset.u); if (!x) return;
         if (b.dataset.acc === 'reiniciar') self._formReinicio(x);
         if (b.dataset.acc === 'hist') self._historial(x);
+        if (b.dataset.acc === 'registrar') { if (typeof FormMantenimiento !== 'undefined') FormMantenimiento.abrirRegistrar({ placa: self._placa(x) }); }
+        if (b.dataset.acc === 'corregir') self._corregir(x);
       });
       self._cargar();
     }, { ancho: true });
@@ -107,14 +137,17 @@ const FormControlMant = {
       L.map(function (x) {
         const pct = x.recorrido !== null ? Math.max(0, Math.min(100, x.recorrido / x.intervalo * 100)) : 0;
         const col = x.estado === 'VENCIDO' ? '#dc2626' : x.estado === 'POR VENCER' ? '#d97706' : '#16a34a';
-        const base = x.base ? self._n(x.base.lectura, tipo) + '<small>' + esc(x.base.fecha) + ' · ' + (x.base.origen === 'MANTENIMIENTO' ? 'registro de mantenimiento' : 'reinicio manual') + '</small>' : '<span style="color:#94a3b8">sin registro</span>';
+        const base = x.base ? self._n(x.base.lectura, tipo) + '<small>' + esc(x.base.fecha) + ' · ' + (/^MANTENIMIENTO/.test(x.base.origen) ? 'registro de mantenimiento' : 'reinicio manual') + '</small>' : '<span style="color:#94a3b8">sin registro</span>';
         const act = x.actual !== null ? self._n(x.actual, tipo) + '<small>' + esc(x.fechaActual) + (x.codigo ? ' · ' + esc(x.codigo) : '') + (x.carreta ? ' · carreta ' + esc(x.carreta) : '') + '</small>' : '—';
         const falta = x.falta === null ? '—' : (x.falta <= 0 ? '<b style="color:#b91c1c">+' + self._n(-x.falta, tipo) + '<small>de exceso</small></b>' : '<b>' + self._n(x.falta, tipo) + '</b>');
         return '<tr><td><b style="font-size:.9rem">' + esc(tipo === 'GENSET' ? 'UG' + String(x.unidad).padStart(4, '0') : x.unidad) + '</b>' + (tipo === 'GENSET' ? '<small>N° ' + esc(x.unidad) + '</small>' : '') + '</td>' +
           '<td>' + self._tag(x.estado) + '</td><td>' + base + '</td><td>' + act + '</td>' +
           '<td class="r">' + (x.recorrido === null ? '—' : self._n(x.recorrido, tipo) + '<div class="cm-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div><small>de ' + self._n(x.intervalo, tipo) + '</small>') + '</td>' +
           '<td class="r">' + falta + '</td>' +
-          '<td><button type="button" class="cm-b p" data-acc="reiniciar" data-tipo="' + tipo + '" data-u="' + esc(x.unidad) + '">↺ Reiniciar contador</button><button type="button" class="cm-b" data-acc="hist" data-tipo="' + tipo + '" data-u="' + esc(x.unidad) + '">Historial</button></td></tr>';
+          '<td><button type="button" class="cm-b p" data-acc="registrar" data-tipo="' + tipo + '" data-u="' + esc(x.unidad) + '">➕ Registrar mantenimiento</button>' +
+          '<button type="button" class="cm-b" data-acc="reiniciar" data-tipo="' + tipo + '" data-u="' + esc(x.unidad) + '">↺ Reiniciar contador</button>' +
+          '<button type="button" class="cm-b" data-acc="hist" data-tipo="' + tipo + '" data-u="' + esc(x.unidad) + '">Historial</button>' +
+          (self._esMaestro() ? '<button type="button" class="cm-b" data-acc="corregir" data-tipo="' + tipo + '" data-u="' + esc(x.unidad) + '">✎ Corregir</button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table>' +
       (L.some(x => x.estado === 'REVISAR') ? '<p style="font-size:.76rem;color:#9a3412;margin:6px 0 0">"Revisar lecturas": la lectura actual del consolidado es menor que la del último mantenimiento. Revisa el ' + u + ' digitado en el consolidado o en el mantenimiento.</p>' : '');
   },
@@ -127,8 +160,25 @@ const FormControlMant = {
       '<div class="fila-campos" style="margin-top:6px"><div class="campo"><label>Fecha del mantenimiento</label><input type="date" id="cmFecha" value="' + iso + '"></div>' +
       '<div class="campo"><label>' + (x.tipo === 'TRACTO' ? 'Kilometraje en el mantenimiento' : 'Horómetro en el mantenimiento') + '</label><input type="number" id="cmLect" min="0" step="0.1" value="' + (x.actual !== null ? x.actual : '') + '"></div>' +
       '<div class="campo" style="grid-column:span 2"><label>Observación</label><input type="text" id="cmObs" autocomplete="off" placeholder="Ej. cambio de aceite y filtros en taller X"></div></div>' +
-      '<div style="text-align:right"><button class="boton-secundario" id="cmCancelar">Cancelar</button> <button class="boton-primario" id="cmGrabar">Guardar reinicio</button></div></div>';
+      '<div style="text-align:right"><button class="boton-secundario" id="cmCancelar">Cancelar</button> <button class="boton-primario" id="cmGrabar">Guardar reinicio</button></div>' +
+      '<div style="margin-top:8px"><b style="font-size:.82rem;color:#1c3a5e">Tomar los datos de un mantenimiento registrado</b><div id="cmMantLista" style="font-size:.78rem;color:#64748b">Buscando mantenimientos de esta unidad…</div></div></div>';
     $('cmCancelar').addEventListener('click', () => { $('cmForm').innerHTML = ''; });
+    self._mantsDe(x).then(function (L) {
+      const cont = $('cmMantLista'); if (!cont) return;
+      if (!L.length) { cont.innerHTML = 'No hay mantenimientos registrados para esta unidad. Escribe la fecha y el ' + (x.tipo === 'TRACTO' ? 'km' : 'horómetro') + ' a mano, o usa "➕ Registrar mantenimiento".'; return; }
+      cont.innerHTML = '<table class="cm-t" style="margin-top:4px"><thead><tr><th style="width:14%">Fecha</th><th>Trabajo</th><th class="r" style="width:16%">' + (x.tipo === 'TRACTO' ? 'Km' : 'Horómetro') + '</th><th style="width:16%"></th></tr></thead><tbody>' +
+        L.map((m, i) => '<tr><td>' + esc(m.fecha) + '</td><td><b>' + esc(m.titulo) + '</b>' + (m.tipo ? ' · ' + esc(m.tipo) : '') + (m.rep.length ? '<small>' + esc(m.rep.join(' · ').slice(0, 160)) + '</small>' : '') + '</td><td class="r">' + esc(m.km || '—') + '</td>' +
+          '<td><button type="button" class="cm-b p" data-usar="' + i + '">Usar este</button></td></tr>').join('') + '</tbody></table>';
+      cont.querySelectorAll('button[data-usar]').forEach(b => b.addEventListener('click', function () {
+        const m = L[Number(b.dataset.usar)];
+        const mm = String(m.fecha || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (mm) $('cmFecha').value = mm[3] + '-' + mm[2] + '-' + mm[1];
+        const km = Number(String(m.km || '').replace(/,/g, ''));
+        if (km > 0) $('cmLect').value = km;
+        $('cmObs').value = 'Desde mantenimiento registrado: ' + m.titulo + ' (' + m.fecha + ')';
+        $('cmGrabar').focus();
+      }));
+    });
     protegerClic($('cmGrabar'), async function () {
       const f = $('cmFecha').value, l = $('cmLect').value;
       if (!f) { mostrarMensaje('Indique la fecha.', 'error'); return; }
@@ -148,7 +198,7 @@ const FormControlMant = {
     const tipo = x.tipo, nom = tipo === 'GENSET' ? 'genset UG' + String(x.unidad).padStart(4, '0') : x.unidad;
     $('cmForm').innerHTML = '<div class="cm-form"><b style="color:#1c3a5e">Historial de mantenimientos preventivos · ' + esc(nom) + '</b>' +
       (x.historial.length ? '<table class="cm-t" style="margin-top:6px"><thead><tr><th style="width:14%">Fecha</th><th class="r" style="width:14%">Lectura</th><th style="width:16%">Origen</th><th>Detalle</th><th style="width:14%">Usuario</th><th style="width:12%"></th></tr></thead><tbody>' +
-        x.historial.map(h => '<tr' + (h.anulado ? ' style="opacity:.5;text-decoration:line-through"' : '') + '><td>' + esc(h.fecha) + '</td><td class="r">' + self._n(h.lectura, tipo) + '</td><td>' + (h.origen === 'MANTENIMIENTO' ? 'Registro de mantenimiento' : 'Reinicio manual') + (h.anulado ? ' (anulado)' : '') + '</td><td>' + esc(h.detalle || '') + '</td><td>' + esc(h.usuario || '') + '</td><td>' +
+        x.historial.map(h => '<tr' + (h.anulado ? ' style="opacity:.5;text-decoration:line-through"' : '') + '><td>' + esc(h.fecha) + '</td><td class="r">' + self._n(h.lectura, tipo) + '</td><td>' + (/^MANTENIMIENTO/.test(h.origen) ? 'Registro de mantenimiento' : 'Reinicio manual') + (h.anulado ? ' (anulado)' : '') + '</td><td>' + esc(h.detalle || '') + '</td><td>' + esc(h.usuario || '') + '</td><td>' +
           (h.fila && !h.anulado ? '<button type="button" class="cm-b" data-anular="' + h.fila + '">Anular</button>' : '') + '</td></tr>').join('') + '</tbody></table>'
         : '<p style="color:#64748b;margin:6px 0">Sin mantenimientos registrados.</p>') +
       '<div style="display:flex;gap:8px;justify-content:flex-end;align-items:end;margin-top:6px;flex-wrap:wrap">' +
