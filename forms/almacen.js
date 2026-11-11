@@ -1341,7 +1341,7 @@ const FormAlmacen = {
   _tabsStock: function (activa) {
     const n = this._datos ? this._alertas().total : 0;
     const t = function (k, txt) { return '<button type="button" class="mt-tab' + (k === activa ? ' activo' : '') + '" data-tab-stock="' + k + '">' + txt + '</button>'; };
-    return '<div class="mt-tabs">' + t('stock', 'Stock') + t('kardex', 'Kardex por producto') +
+    return '<div class="mt-tabs">' + t('stock', 'Stock') + t('kardex', 'Kardex por producto') + t('dia', 'Registros por día') +
       t('alertas', 'Alertas' + (n ? '<span class="n">' + n + '</span>' : '')) +
       (typeof FormAlmacenCorregir !== 'undefined' && FormAlmacenCorregir.esMaestro() ? t('corregir', 'Corregir (maestros)') : '') + '</div>';
   },
@@ -1351,8 +1351,181 @@ const FormAlmacen = {
       b.addEventListener('click', function () {
         if (b.classList.contains('activo')) return;
         const k = b.dataset.tabStock;
-        if (k === 'stock') self.abrirStock(); else if (k === 'kardex') self.abrirKardex(); else if (k === 'corregir') FormAlmacenCorregir.abrir(); else self.abrirAlertas();
+        if (k === 'stock') self.abrirStock(); else if (k === 'kardex') self.abrirKardex(); else if (k === 'dia') self.abrirRegistrosDia(); else if (k === 'corregir') FormAlmacenCorregir.abrir(); else self.abrirAlertas();
       });
+    });
+  },
+
+  /* ===== Registros por día: ingresos (por factura/boleta) y salidas (por entrega), sin anulados ===== */
+  abrirRegistrosDia: async function () {
+    if (!(await this._cargar())) return;
+    const self = this;
+    const hoy = new Date(), iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const f = self._rdFiltros || { desde: iso(hoy), hasta: iso(hoy), tipo: '', q: '', usr: '' };
+    const html = MT_ESTILOS + self._tabsStock('dia') + `
+      <style>
+        .rd-dia td{background:#1c3a5e!important;color:#fff!important;font-weight:800;padding:7px 9px!important}
+        .rd-doc{cursor:pointer;background:#f8fafc}
+        .rd-doc:hover{background:#eef2ff}
+        .rd-det td{font-size:.8rem;color:#475569;background:#fff}
+        .rd-tag{display:inline-block;padding:1px 7px;border-radius:8px;font-size:.7rem;font-weight:700}
+        .rd-kpi{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px}
+        .rd-kpi div{background:#f1f5f9;border-radius:10px;padding:6px 12px;font-size:.78rem;color:#475569}
+        .rd-kpi b{display:block;font-size:1rem;color:#1c3a5e}
+      </style>
+      <div class="mt-form">
+        <div class="fila-campos" style="grid-template-columns: 1fr 1fr 1fr 2fr 1.3fr;">
+          <div class="campo"><label>Desde</label><input type="date" id="rdDesde" value="${f.desde}"></div>
+          <div class="campo"><label>Hasta</label><input type="date" id="rdHasta" value="${f.hasta}"></div>
+          <div class="campo"><label>Tipo</label><select id="rdTipo"><option value="">Todos</option><option value="I">Ingresos</option><option value="S">Salidas</option></select></div>
+          <div class="campo"><label>Buscar (N° factura, proveedor, producto, placa, entregado a)</label><input id="rdBuscar" autocomplete="off" style="text-transform:uppercase" value="${esc(f.q)}"></div>
+          <div class="campo"><label>Registrado por</label><select id="rdUsr"><option value="">Todos</option></select></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;align-items:center">
+          <button type="button" class="mt-mini" data-rng="hoy">Hoy</button><button type="button" class="mt-mini" data-rng="ayer">Ayer</button>
+          <button type="button" class="mt-mini" data-rng="7">Últimos 7 días</button><button type="button" class="mt-mini" data-rng="mes">Este mes</button>
+          <span style="flex:1"></span>
+          <button type="button" class="boton-secundario" id="rdCopiar">📋 Copiar para correo</button>
+          <button type="button" class="boton-secundario" id="rdExcel">⬇ Exportar Excel</button>
+        </div>
+        <div class="rd-kpi" id="rdKpi"></div>
+        <div class="mt-tabla-wrap" style="max-height:52vh">
+          <table class="tabla-lista" id="rdTabla" style="table-layout:fixed">
+            <thead><tr><th style="width:8%">Hora</th><th style="width:10%">Tipo</th><th style="width:30%">Documento / entrega</th><th style="width:22%">Proveedor / entregado a</th><th style="width:9%">Productos</th><th style="width:11%">Total</th><th style="width:10%">Registró</th></tr></thead>
+            <tbody><tr><td colspan="7" style="text-align:center;color:#8b95a1;padding:16px">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="mt-botones"><button class="boton-secundario" id="rdCerrar">Cerrar</button></div>
+      </div>`;
+    abrirPanel('Stock · Registros por día', html, async function (raiz) {
+      const $ = id => raiz.querySelector('#' + id);
+      self._wireTabsStock(raiz);
+      $('rdTipo').value = f.tipo;
+      $('rdCerrar').addEventListener('click', cerrarPanel);
+      const r = await MT.llamar('mtRegistrosDia', {});
+      if (!r || !r.ok) { $('rdTabla').querySelector('tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#b91c1c;padding:16px">' + esc((r && r.mensaje) || 'No se pudo cargar.') + '</td></tr>'; return; }
+      const nomProd = c => { const p = (self._datos.productos || []).find(x => x.codigo === c); return p ? p.producto : ''; };
+      const fdmy = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(s || ''); };
+      // Ingresos agrupados por documento; salidas agrupadas por entrega (misma fecha, hora, persona, placa, motivo y usuario)
+      const grupos = [], gi = {};
+      (r.ingresos || []).forEach(x => {
+        const k = 'I|' + x.fecha + '|' + x.tipoDoc + '|' + x.documento + '|' + x.proveedor;
+        if (!gi[k]) { gi[k] = { t: 'I', fecha: x.fecha, hora: x.hora, usuario: x.usuario, tipoDoc: x.tipoDoc || 'S/D', documento: x.documento || '', quien: x.proveedor || '', ruc: x.ruc || '', lineas: [] }; grupos.push(gi[k]); }
+        if (String(x.hora) < String(gi[k].hora)) gi[k].hora = x.hora;
+        gi[k].lineas.push(x);
+      });
+      (r.salidas || []).forEach(x => {
+        const k = 'S|' + x.fecha + '|' + String(x.hora).slice(0, 5) + '|' + x.entregadoA + '|' + x.placa + '|' + x.motivo + '|' + x.usuario;
+        if (!gi[k]) { gi[k] = { t: 'S', fecha: x.fecha, hora: x.hora, usuario: x.usuario, quien: x.entregadoA || '', placa: x.placa || '', motivo: x.motivo || '', lineas: [] }; grupos.push(gi[k]); }
+        gi[k].lineas.push(x);
+      });
+      grupos.forEach(g => {
+        g.total = {};
+        if (g.t === 'I') g.lineas.forEach(l => { const m = /S\//.test(l.moneda) ? 'S/' : '$'; g.total[m] = (g.total[m] || 0) + (Number(l.totalLinea) || 0); });
+        g.busca = [g.tipoDoc, g.documento, g.quien, g.ruc, g.placa, g.motivo].concat(g.lineas.map(l => (l.producto || nomProd(l.codigo)) + ' ' + l.codigo)).join(' ').toUpperCase();
+      });
+      const usrs = Array.from(new Set(grupos.map(g => g.usuario).filter(Boolean))).sort();
+      $('rdUsr').innerHTML = '<option value="">Todos</option>' + usrs.map(u => '<option>' + esc(u) + '</option>').join('');
+      $('rdUsr').value = f.usr;
+      const totTxt = t => Object.keys(t).filter(m => t[m]).map(m => m + ' ' + MT.dinero(t[m])).join(' + ');
+      const abiertos = new Set();
+      let vis = [];
+      function filtrar() {
+        const de = $('rdDesde').value, ha = $('rdHasta').value, tp = $('rdTipo').value, q = $('rdBuscar').value.trim().toUpperCase(), us = $('rdUsr').value;
+        self._rdFiltros = { desde: de, hasta: ha, tipo: tp, q: q, usr: us };
+        vis = grupos.filter(g => (!de || g.fecha >= de) && (!ha || g.fecha <= ha) && (!tp || g.t === tp) && (!us || g.usuario === us) && (!q || g.busca.indexOf(q) >= 0))
+          .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)) || String(a.hora).localeCompare(String(b.hora)));
+      }
+      function lineaTxt(g, l) {
+        const nom = l.producto || nomProd(l.codigo);
+        return g.t === 'I'
+          ? esc(nom) + ' <small>(' + esc(l.codigo) + ')</small> · ' + esc(MT.cant(l.cantidad, l.unidadCompra)) + (l.precioSinIgv ? ' · ' + esc(l.moneda) + ' ' + MT.dinero(l.precioSinIgv) + ' sin IGV · total ' + esc(l.moneda) + ' ' + MT.dinero(l.totalLinea) : '')
+          : esc(nom) + ' <small>(' + esc(l.codigo) + ')</small> · ' + esc(MT.cant(l.cantidad)) + (l.observacion ? ' · ' + esc(l.observacion) : '');
+      }
+      function pintar() {
+        filtrar();
+        const ni = vis.filter(g => g.t === 'I'), ns = vis.filter(g => g.t === 'S'), comp = {};
+        ni.forEach(g => Object.keys(g.total).forEach(m => { comp[m] = (comp[m] || 0) + g.total[m]; }));
+        $('rdKpi').innerHTML = [['Días', new Set(vis.map(g => g.fecha)).size], ['Facturas / boletas', ni.length], ['Productos ingresados', ni.reduce((a, g) => a + g.lineas.length, 0)],
+          ['Compras', totTxt(comp) || '—'], ['Entregas (salidas)', ns.length], ['Productos entregados', ns.reduce((a, g) => a + g.lineas.length, 0)]]
+          .map(k => '<div>' + k[0] + '<b>' + k[1] + '</b></div>').join('');
+        let h = '', dia = null;
+        vis.forEach((g, i) => {
+          if (g.fecha !== dia) {
+            dia = g.fecha;
+            const dd = vis.filter(x => x.fecha === dia), ci = {};
+            dd.filter(x => x.t === 'I').forEach(x => Object.keys(x.total).forEach(m => { ci[m] = (ci[m] || 0) + x.total[m]; }));
+            h += '<tr class="rd-dia"><td colspan="7">📅 ' + fdmy(dia) + ' · ' + dd.filter(x => x.t === 'I').length + ' ingreso(s)' + (totTxt(ci) ? ' (' + totTxt(ci) + ')' : '') + ' · ' + dd.filter(x => x.t === 'S').length + ' salida(s)</td></tr>';
+          }
+          const ab = abiertos.has(i);
+          h += '<tr class="rd-doc" data-i="' + i + '"><td>' + esc(String(g.hora || '').slice(0, 5)) + '</td><td>' +
+            (g.t === 'I' ? '<span class="rd-tag" style="background:#dcfce7;color:#166534">INGRESO</span>' : '<span class="rd-tag" style="background:#fee2e2;color:#991b1b">SALIDA</span>') + '</td><td>' +
+            (g.t === 'I' ? '<b>' + esc(g.tipoDoc + ' ' + g.documento) + '</b>' : '<b>' + esc(g.motivo || 'SALIDA') + '</b>' + (g.placa ? ' · ' + esc(g.placa) : '')) + ' <small style="color:#64748b">' + (ab ? '▲ ocultar' : '▼ ver detalle') + '</small></td><td>' +
+            esc(g.quien) + (g.ruc ? '<br><small>RUC ' + esc(g.ruc) + '</small>' : '') + '</td><td style="text-align:center">' + g.lineas.length + '</td><td style="white-space:nowrap">' + (g.t === 'I' ? '<b>' + esc(totTxt(g.total)) + '</b>' : '') + '</td><td><small>' + esc(g.usuario) + '</small></td></tr>';
+          if (ab) h += g.lineas.map(l => '<tr class="rd-det"><td></td><td colspan="6">• ' + lineaTxt(g, l) + '</td></tr>').join('');
+        });
+        $('rdTabla').querySelector('tbody').innerHTML = h || '<tr><td colspan="7" style="text-align:center;color:#8b95a1;padding:16px">No hay registros en estas fechas.</td></tr>';
+        raiz.querySelectorAll('.rd-doc').forEach(tr => tr.addEventListener('click', () => { const i = +tr.dataset.i; if (abiertos.has(i)) abiertos.delete(i); else abiertos.add(i); pintar(); }));
+        if (typeof _refrescarSnapshotFormulario === 'function') setTimeout(_refrescarSnapshotFormulario, 0);
+      }
+      const reiniciarYPintar = () => { abiertos.clear(); pintar(); };
+      ['rdDesde', 'rdHasta', 'rdTipo', 'rdUsr'].forEach(id => $(id).addEventListener('change', reiniciarYPintar));
+      let espera = null;
+      $('rdBuscar').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(reiniciarYPintar, 250); });
+      raiz.querySelectorAll('[data-rng]').forEach(b => b.addEventListener('click', () => {
+        const d = new Date(), k = b.dataset.rng; let a = new Date(d), z = new Date(d);
+        if (k === 'ayer') { a.setDate(d.getDate() - 1); z = new Date(a); } else if (k === '7') a.setDate(d.getDate() - 6); else if (k === 'mes') a = new Date(d.getFullYear(), d.getMonth(), 1);
+        $('rdDesde').value = iso(a); $('rdHasta').value = iso(z); reiniciarYPintar();
+      }));
+      // Una fila por producto (para Excel)
+      const plano = () => {
+        const out = [];
+        vis.forEach(g => g.lineas.forEach(l => out.push({
+          'Fecha': fdmy(g.fecha), 'Hora': String(l.hora || g.hora || '').slice(0, 5), 'Tipo': g.t === 'I' ? 'INGRESO' : 'SALIDA',
+          'Documento': g.t === 'I' ? (g.tipoDoc + ' ' + g.documento).trim() : '', 'Proveedor': g.t === 'I' ? g.quien : '', 'RUC': g.t === 'I' ? g.ruc : '',
+          'Entregado a': g.t === 'S' ? g.quien : '', 'Placa': g.t === 'S' ? g.placa : '', 'Motivo': g.t === 'S' ? g.motivo : '',
+          'Código': l.codigo, 'Producto': l.producto || nomProd(l.codigo), 'Cantidad': Number(l.cantidad) || 0, 'Unidad': g.t === 'I' ? (l.unidadCompra || '') : '',
+          'Moneda': g.t === 'I' ? (l.moneda || '') : '', 'P. unit. sin IGV': g.t === 'I' ? (Number(l.precioSinIgv) || 0) : '', 'Total línea': g.t === 'I' ? (Number(l.totalLinea) || 0) : '',
+          'Registró': l.usuario || g.usuario, 'Observación': l.observacion || ''
+        })));
+        return out;
+      };
+      $('rdExcel').addEventListener('click', async function () {
+        const filas = plano();
+        if (!filas.length) { mostrarMensaje('No hay registros para exportar.', 'info'); return; }
+        if (typeof XLSX === 'undefined') {
+          await new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); }).catch(() => null);
+        }
+        if (typeof XLSX === 'undefined') { mostrarMensaje('No se pudo cargar el generador de Excel. Revisa tu conexión.', 'error'); return; }
+        const wb = XLSX.utils.book_new();
+        const docs = vis.map(g => ({ 'Fecha': fdmy(g.fecha), 'Hora': String(g.hora || '').slice(0, 5), 'Tipo': g.t === 'I' ? 'INGRESO' : 'SALIDA',
+          'Documento / entrega': g.t === 'I' ? (g.tipoDoc + ' ' + g.documento).trim() : ((g.motivo || '') + (g.placa ? ' · ' + g.placa : '')),
+          'Proveedor / entregado a': g.quien, 'Productos': g.lineas.length, 'Total $': g.total['$'] || '', 'Total S/': g.total['S/'] || '', 'Registró': g.usuario }));
+        const h1 = XLSX.utils.json_to_sheet(docs); h1['!cols'] = [10, 7, 10, 30, 32, 10, 11, 11, 20].map(w => ({ wch: w })); h1['!autofilter'] = { ref: h1['!ref'] };
+        const h2 = XLSX.utils.json_to_sheet(filas); h2['!cols'] = [10, 7, 9, 18, 28, 13, 22, 10, 16, 14, 38, 9, 9, 7, 12, 11, 18, 24].map(w => ({ wch: w })); h2['!autofilter'] = { ref: h2['!ref'] };
+        XLSX.utils.book_append_sheet(wb, h1, 'Por documento');
+        XLSX.utils.book_append_sheet(wb, h2, 'Detalle por producto');
+        const de = $('rdDesde').value, ha = $('rdHasta').value;
+        XLSX.writeFile(wb, ('Almacen registros ' + (de === ha ? fdmy(de) : fdmy(de) + ' al ' + fdmy(ha))).replace(/\//g, '-') + '.xlsx');
+      });
+      $('rdCopiar').addEventListener('click', async function () {
+        if (!vis.length) { mostrarMensaje('No hay registros para copiar.', 'info'); return; }
+        const td = 'style="border:1px solid #cbd5e1;padding:4px 7px;font-family:Arial,sans-serif;font-size:12px"', th = 'style="border:1px solid #cbd5e1;padding:4px 7px;background:#1c3a5e;color:#fff;font-family:Arial,sans-serif;font-size:12px;text-align:left"';
+        const de = $('rdDesde').value, ha = $('rdHasta').value;
+        let h = '<div style="font-family:Arial,sans-serif;font-size:13px"><p><b>Registros de almacén ' + (de === ha ? 'del ' + fdmy(de) : 'del ' + fdmy(de) + ' al ' + fdmy(ha)) + '</b></p>' +
+          '<table style="border-collapse:collapse"><tr><th ' + th + '>Fecha</th><th ' + th + '>Tipo</th><th ' + th + '>Documento / entrega</th><th ' + th + '>Proveedor / entregado a</th><th ' + th + '>Producto</th><th ' + th + '>Cant.</th><th ' + th + '>Total</th><th ' + th + '>Registró</th></tr>';
+        vis.forEach(g => g.lineas.forEach((l, j) => {
+          h += '<tr><td ' + td + '>' + (j ? '' : fdmy(g.fecha) + ' ' + String(g.hora || '').slice(0, 5)) + '</td><td ' + td + '>' + (j ? '' : (g.t === 'I' ? 'INGRESO' : 'SALIDA')) + '</td><td ' + td + '>' +
+            (j ? '' : esc(g.t === 'I' ? (g.tipoDoc + ' ' + g.documento) : ((g.motivo || '') + (g.placa ? ' · ' + g.placa : '')))) + '</td><td ' + td + '>' + (j ? '' : esc(g.quien)) + '</td><td ' + td + '>' + esc(l.producto || nomProd(l.codigo)) +
+            '</td><td ' + td + '>' + esc(MT.cant(l.cantidad)) + '</td><td ' + td + '>' + (g.t === 'I' ? esc(l.moneda) + ' ' + MT.dinero(l.totalLinea) : '') + '</td><td ' + td + '>' + (j ? '' : esc(g.usuario)) + '</td></tr>';
+        }));
+        h += '</table></div>';
+        const txt = h.replace(/<\/tr>/g, '\n').replace(/<\/t[dh]>/g, '\t').replace(/<[^>]+>/g, '');
+        try { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([h], { type: 'text/html' }), 'text/plain': new Blob([txt], { type: 'text/plain' }) })]); }
+        catch (e) { const d = document.createElement('div'); d.innerHTML = h; d.style.cssText = 'position:fixed;left:-9999px'; document.body.appendChild(d); const rg = document.createRange(); rg.selectNodeContents(d); const s = getSelection(); s.removeAllRanges(); s.addRange(rg); document.execCommand('copy'); s.removeAllRanges(); d.remove(); }
+        const b = this; b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = '📋 Copiar para correo'; }, 2000);
+      });
+      pintar();
     });
   },
 
