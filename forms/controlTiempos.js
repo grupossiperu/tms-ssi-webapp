@@ -93,9 +93,20 @@ const FormControlTiempos = {
       <div id="ctAviso" style="font-size:.8rem;color:#64748b;margin:-2px 0 10px">Cargando…</div>
       <div class="ct-kpis" id="ctKpis"></div>
       <div class="ct-card">
-        <h3><span>Promedios por grupo (horas)</span>
+        <h3><span>Promedios por grupo (horas) <small style="font-weight:400;color:#64748b">· clic en un encabezado para ordenar (▲ menor a mayor)</small></span>
           <span class="ct-seg" id="ctPor"><button data-p="PLANTA" class="act">Por planta</button><button data-p="DESTINO">Por destino</button><button data-p="CONDUCTOR">Por conductor</button><button data-p="TIPO">Por Impo/Expo</button><button data-p="VIAJE">Viaje por viaje</button></span></h3>
         <div id="ctTabla"></div>
+      </div>
+      <div class="ct-card">
+        <h3><span>Gráficos y análisis comparativo</span>
+          <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label style="font-size:.78rem;font-weight:600;color:#475569">Indicador</label><select id="ctInd" style="width:auto"></select>
+          <button type="button" class="boton-secundario" id="ctExportar" style="padding:5px 12px">⬇ Exportar Excel</button></span></h3>
+        <div id="ctAnal" style="font-size:.82rem;color:#334155;margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><b style="font-size:.78rem;color:#1c3a5e" id="ctG1Tit">Promedio por grupo</b><div style="position:relative;height:320px"><canvas id="ctG1"></canvas></div></div>
+          <div><b style="font-size:.78rem;color:#1c3a5e">¿En qué se va el tiempo del viaje? (promedio por grupo)</b><div style="position:relative;height:320px"><canvas id="ctG2"></canvas></div></div>
+          <div style="grid-column:1/-1"><b style="font-size:.78rem;color:#1c3a5e">Evolución mensual (promedios)</b><div style="position:relative;height:260px"><canvas id="ctG3"></canvas></div></div>
+        </div>
       </div>
       <div class="ct-card" id="ctRevCard"><h3><span>Viajes con fechas a revisar (no entran al promedio)</span></h3><div id="ctRev"></div></div>`;
     const $ = id => cont.querySelector('#' + id);
@@ -108,6 +119,16 @@ const FormControlTiempos = {
     };
     ['ctDesde', 'ctHasta'].forEach(id => $(id).addEventListener('change', repintar));
     self._por = 'PLANTA';
+    self._sortK = 'total'; self._sortDir = 1;
+    $('ctInd').innerHTML = self.IND.map(i => '<option value="' + i.k + '"' + (i.k === 'total' ? ' selected' : '') + '>' + i.t + '</option>').join('');
+    $('ctInd').addEventListener('change', () => self._graficos());
+    $('ctExportar').addEventListener('click', () => self._exportar());
+    $('ctTabla').addEventListener('click', function (ev) {
+      const th = ev.target.closest('th[data-sort]'); if (!th) return;
+      const k = th.dataset.sort;
+      if (self._sortK === k) self._sortDir = -self._sortDir; else { self._sortK = k; self._sortDir = 1; }
+      self._pintar();
+    });
     $('ctPor').addEventListener('click', function (ev) {
       const b = ev.target.closest('button[data-p]'); if (!b) return;
       self._por = b.dataset.p;
@@ -162,18 +183,30 @@ const FormControlTiempos = {
         '<small>' + (e ? e.n + ' viajes · mín ' + e.min.toFixed(1) + ' · máx ' + e.max.toFixed(1) : 'sin datos') + '</small><small>' + esc(i.d) + '</small></div>';
     }).join('');
     // Tabla por grupo o viaje por viaje
-    const cab = '<tr><th>' + ({ PLANTA: 'Planta', DESTINO: 'Destino', CONDUCTOR: 'Conductor', TIPO: 'Impo / Expo', VIAJE: 'Viaje' })[self._por] + '</th><th>Viajes</th>' +
-      self.IND.map(i => '<th title="' + esc(i.d) + '">' + i.t.replace(' (con t. muertos)', ' c/TM').replace(' (sin t. muertos)', ' s/TM').replace('Tiempo en ', '') + '</th>').join('') + '</tr>';
+    const fl = k => self._sortK === k ? (self._sortDir > 0 ? ' ▲' : ' ▼') : '';
+    const thS = 'cursor:pointer;user-select:none';
+    const cab = '<tr><th data-sort="nombre" style="' + thS + '">' + ({ PLANTA: 'Planta', DESTINO: 'Destino', CONDUCTOR: 'Conductor', TIPO: 'Impo / Expo', VIAJE: 'Viaje' })[self._por] + fl('nombre') + '</th><th data-sort="n" style="' + thS + '">Viajes' + fl('n') + '</th>' +
+      self.IND.map(i => '<th data-sort="' + i.k + '" style="' + thS + '" title="' + esc(i.d) + ' · clic para ordenar">' + i.t.replace(' (con t. muertos)', ' c/TM').replace(' (sin t. muertos)', ' s/TM').replace('Tiempo en ', '') + fl(i.k) + '</th>').join('') + '</tr>';
+    const ordenar = function (arr, val, nom) {
+      const k = self._sortK, dir = self._sortDir;
+      return arr.sort(function (a, b) {
+        if (k === 'nombre') return dir * String(nom(a)).localeCompare(String(nom(b)), 'es', { numeric: true });
+        const va = val(a, k), vb = val(b, k);
+        if (va === null && vb === null) return 0; if (va === null) return 1; if (vb === null) return -1;
+        return dir * (va - vb);
+      });
+    };
     let filas = '';
     if (self._por === 'VIAJE') {
-      const ord = vis.slice().sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+      const ord = ordenar(vis.slice(), (d, k) => k === 'n' ? 1 : (d.v[k] !== undefined ? d.v[k] : null), d => d.x['CODIGO SERVICIO']);
       filas = ord.map(d => '<tr><td><b>' + esc(d.x['CODIGO SERVICIO']) + '</b><br><small>' + esc(d.planta) + ' · ' + esc(d.dest) + '<br>' + esc(d.cond) + '</small></td><td>1</td>' +
         self.IND.map(i => '<td>' + (d.v[i.k] !== undefined ? self._txt(d.v[i.k]) : (d.rev.indexOf(i.k) >= 0 ? '<span style="color:#b45309" title="Fechas a revisar">⚠</span>' : '—')) + '</td>').join('') + '</tr>').join('');
     } else {
       const key = { PLANTA: 'planta', DESTINO: 'dest', CONDUCTOR: 'cond', TIPO: 'tipo' }[self._por];
       const g = {};
       vis.forEach(d => { (g[d[key]] = g[d[key]] || []).push(d); });
-      filas = Object.keys(g).sort((a, b) => g[b].length - g[a].length || a.localeCompare(b)).map(function (n) {
+      const est = {}; Object.keys(g).forEach(n => { est[n] = {}; self.IND.forEach(i => { const e = self._est(g[n], i.k); est[n][i.k] = e ? e.prom : null; }); });
+      filas = ordenar(Object.keys(g), (n, k) => k === 'n' ? g[n].length : est[n][k], n => n).map(function (n) {
         return '<tr><td>' + esc(n) + '</td><td>' + g[n].length + '</td>' + self.IND.map(function (i) {
           const e = self._est(g[n], i.k);
           return '<td>' + (e ? self._txt(e.prom) + (e.n < g[n].length ? '<br><small>' + e.n + ' v.</small>' : '') : '—') + '</td>';
@@ -189,5 +222,106 @@ const FormControlTiempos = {
     $('ctRev').innerHTML = rev.length ? '<table class="ct-t"><thead><tr><th>Código</th><th style="text-align:left">Conductor</th><th style="text-align:left">Planta / destino</th><th style="text-align:left;width:40%">Tiempo con fechas a revisar</th></tr></thead><tbody>' +
       rev.map(d => '<tr><td><b>' + esc(d.x['CODIGO SERVICIO']) + '</b></td><td style="text-align:left">' + esc(d.cond) + '</td><td style="text-align:left">' + esc(d.planta) + ' · ' + esc(d.dest) + '</td><td style="text-align:left">' + d.rev.map(k => nom[k]).join(', ') + '</td></tr>').join('') +
       '</tbody></table><p style="font-size:.76rem;color:#64748b;margin:6px 0 0">Corrige las fechas en Datos del viaje → Seguimiento y estos viajes entrarán al promedio.</p>' : '';
+    self._graficos();
+  },
+
+  /** Grupos según "Ver por" (en "Viaje por viaje" los gráficos agrupan por planta). */
+  _grupos: function (vis) {
+    const key = { PLANTA: 'planta', DESTINO: 'dest', CONDUCTOR: 'cond', TIPO: 'tipo', VIAJE: 'planta' }[this._por];
+    const g = {}; vis.forEach(d => { (g[d[key]] = g[d[key]] || []).push(d); });
+    return g;
+  },
+  _chart: function () {
+    if (window.Chart) return Promise.resolve();
+    if (this._cargandoChart) return this._cargandoChart;
+    this._cargandoChart = new Promise(function (ok, no) {
+      const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+      s.onload = () => ok(); s.onerror = () => no(new Error('No se pudo cargar Chart.js')); document.head.appendChild(s);
+    });
+    return this._cargandoChart;
+  },
+  _graficos: async function () {
+    const self = this, $ = id => self._cont.querySelector('#' + id);
+    if (!$('ctG1')) return;
+    const vis = self._vis(), k = $('ctInd').value || 'total';
+    const ind = self.IND.find(i => i.k === k);
+    const g = self._grupos(vis);
+    const flota = self._est(vis, k);
+    const nomGrupo = ({ PLANTA: 'planta', DESTINO: 'destino', CONDUCTOR: 'conductor', TIPO: 'tipo de carga', VIAJE: 'planta' })[self._por];
+    // Análisis comparativo
+    const filas = Object.keys(g).map(n => ({ n: n, e: self._est(g[n], k) })).filter(x => x.e && x.e.n >= 3).sort((a, b) => a.e.prom - b.e.prom);
+    let an = '';
+    if (!flota) an = '<span style="color:#94a3b8">Sin datos para ' + esc(ind.t) + ' con estos filtros.</span>';
+    else {
+      const pct = v => (v >= flota.prom ? '+' : '') + Math.round((v / flota.prom - 1) * 100) + '%';
+      const li = x => '<b>' + esc(x.n) + '</b> ' + x.e.prom.toFixed(1) + ' h (' + pct(x.e.prom) + ', ' + x.e.n + ' v.)';
+      const altos = filas.filter(x => x.e.prom > flota.prom * 1.2);
+      an = '<b>' + esc(ind.t) + '</b>: promedio general <b>' + flota.prom.toFixed(1) + ' h</b> (' + flota.n + ' viajes). ' +
+        (filas.length ? '<br>🟢 Más rápidos por ' + nomGrupo + ': ' + filas.slice(0, 3).map(li).join(' · ') +
+          '<br>🔴 Más lentos: ' + filas.slice(-3).reverse().map(li).join(' · ') +
+          (altos.length ? '<br>⚠ ' + altos.length + ' ' + nomGrupo + '(s) superan en más de 20% el promedio: ' + altos.map(x => esc(x.n)).join(', ') + '.' : '<br>Ningún grupo supera en más de 20% el promedio.') +
+          '<br><small style="color:#64748b">Solo se comparan grupos con 3 o más viajes.</small>' : '');
+    }
+    $('ctAnal').innerHTML = an;
+    $('ctG1Tit').textContent = ind.t + ' · promedio por ' + nomGrupo + ' (de menor a mayor) vs promedio general';
+    try { await self._chart(); } catch (e) { $('ctAnal').innerHTML += '<br><span style="color:#b91c1c">No se pudieron cargar los gráficos.</span>'; return; }
+    (self._charts || []).forEach(c => c.destroy()); self._charts = [];
+    const corto = s => s.length > 28 ? s.slice(0, 27) + '…' : s;
+    const todos = Object.keys(g).map(n => ({ n: n, e: self._est(g[n], k) })).filter(x => x.e).sort((a, b) => a.e.prom - b.e.prom).slice(0, 25);
+    self._charts.push(new Chart($('ctG1'), {
+      data: { labels: todos.map(x => corto(x.n)), datasets: [
+        { type: 'bar', label: ind.t + ' (h)', data: todos.map(x => +x.e.prom.toFixed(2)), backgroundColor: todos.map(x => flota && x.e.prom > flota.prom * 1.2 ? '#f87171' : (flota && x.e.prom < flota.prom ? '#4ade80' : '#60a5fa')) },
+        { type: 'line', label: 'Promedio general', data: todos.map(() => flota ? +flota.prom.toFixed(2) : null), borderColor: '#1c3a5e', borderDash: [6, 4], pointRadius: 0 }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { afterLabel: c => c.datasetIndex === 0 ? todos[c.dataIndex].e.n + ' viajes' : '' } } }, scales: { x: { title: { display: true, text: 'horas' } } } }
+    }));
+    const comp = [['idaSin', 'Ida s/TM', '#60a5fa'], ['tm1', 'T. muertos ida', '#fbbf24'], ['planta', 'Planta', '#a78bfa'], ['retSin', 'Retorno s/TM', '#34d399'], ['tm2', 'T. muertos retorno', '#f97316']];
+    const gs = Object.keys(g).map(n => ({ n: n, t: self._est(g[n], 'total') })).sort((a, b) => (a.t ? a.t.prom : 9e9) - (b.t ? b.t.prom : 9e9)).slice(0, 15);
+    self._charts.push(new Chart($('ctG2'), {
+      type: 'bar',
+      data: { labels: gs.map(x => corto(x.n)), datasets: comp.map(c => ({ label: c[1], backgroundColor: c[2], data: gs.map(x => { const e = self._est(g[x.n], c[0]); return e ? +e.prom.toFixed(2) : 0; }) })) },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { stacked: true, title: { display: true, text: 'horas' } }, y: { stacked: true } } }
+    }));
+    const meses = {};
+    vis.forEach(d => { if (!d.fecha) return; const m = d.fecha.getFullYear() + '-' + String(d.fecha.getMonth() + 1).padStart(2, '0'); (meses[m] = meses[m] || []).push(d); });
+    const ms = Object.keys(meses).sort();
+    const serie = (kk, col) => ({ label: self.IND.find(i => i.k === kk).t, borderColor: col, backgroundColor: col, tension: .25, data: ms.map(m => { const e = self._est(meses[m], kk); return e ? +e.prom.toFixed(2) : null; }) });
+    self._charts.push(new Chart($('ctG3'), {
+      type: 'line',
+      data: { labels: ms.map(m => { const p = m.split('-'); return ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'][+p[1] - 1] + ' ' + p[0]; }),
+        datasets: [serie('total', '#16a34a'), serie('idaCon', '#2563eb'), serie('retCon', '#059669'), serie('planta', '#7c3aed'), serie(k === 'total' || k === 'idaCon' || k === 'retCon' || k === 'planta' ? 'tm1' : k, '#f59e0b')] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { title: { display: true, text: 'horas' } } } }
+    }));
+  },
+
+  _exportar: async function () {
+    const self = this;
+    if (!window.XLSX) {
+      try {
+        await new Promise(function (ok, no) { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+      } catch (e) { mostrarMensaje('No se pudo cargar el exportador de Excel.', 'error'); return; }
+    }
+    const vis = self._vis();
+    if (!vis.length) { mostrarMensaje('No hay viajes con estos filtros.', 'error'); return; }
+    const r2 = v => v === undefined || v === null ? '' : Math.round(v * 100) / 100;
+    const fF = d => d ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear() : '';
+    const nom = {}; self.IND.forEach(i => { nom[i.k] = i.t + ' (h)'; });
+    const wb = XLSX.utils.book_new();
+    const porTxt = ({ PLANTA: 'Planta', DESTINO: 'Destino', CONDUCTOR: 'Conductor', TIPO: 'Impo-Expo', VIAJE: 'Planta' })[self._por];
+    const g = self._grupos(vis);
+    const resumen = Object.keys(g).map(n => { const o = {}; o[porTxt] = n; o['Viajes'] = g[n].length; self.IND.forEach(i => { const e = self._est(g[n], i.k); o[nom[i.k]] = e ? r2(e.prom) : ''; }); return o; })
+      .sort((a, b) => (a[nom.total] === '' ? 9e9 : a[nom.total]) - (b[nom.total] === '' ? 9e9 : b[nom.total]));
+    const tot = { [porTxt]: 'TOTAL / PROMEDIO GENERAL', 'Viajes': vis.length }; self.IND.forEach(i => { const e = self._est(vis, i.k); tot[nom[i.k]] = e ? r2(e.prom) : ''; }); resumen.push(tot);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), ('Promedio por ' + porTxt).slice(0, 31));
+    const ind = self.IND.map(i => { const e = self._est(vis, i.k); return { 'Indicador': i.t, 'Cómo se mide': i.d, 'Viajes': e ? e.n : 0, 'Promedio (h)': e ? r2(e.prom) : '', 'Mínimo (h)': e ? r2(e.min) : '', 'Máximo (h)': e ? r2(e.max) : '' }; });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ind), 'Indicadores');
+    const viajes = vis.slice().sort((a, b) => (a.fecha || 0) - (b.fecha || 0)).map(d => {
+      const o = { 'Código': d.x['CODIGO SERVICIO'], 'Fecha': fF(d.fecha), 'Impo/Expo': d.tipo, 'Conductor': d.cond, 'Placa': d.x['PLACA TRACTO'] || '', 'Planta': d.planta, 'Destino': d.dest, 'Cliente': d.x['CLIENTE PARA FACTURACIÓN'] || '' };
+      self.IND.forEach(i => { o[nom[i.k]] = r2(d.v[i.k]); });
+      o['Fechas a revisar'] = d.rev.map(k => self.IND.find(i => i.k === k).t).join(', ');
+      return o;
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(viajes), 'Viajes');
+    const hoy = new Date();
+    XLSX.writeFile(wb, 'Control de tiempos ' + fF(hoy).replace(/\//g, '-') + '.xlsx');
   }
 };
