@@ -52,7 +52,7 @@ const FormSobrecostos = {
         .scr-t tr.scr-grupo td{background:#eef4fb;border-top:2px solid #c7d6ea}
       </style>
       <div class="scr-barra">
-        <div class="campo"><label>Estado</label><select id="scrEstado"><option value="pend">Por facturar</option><option value="fact">Facturados</option><option value="">Todos</option></select></div>
+        <div class="campo"><label>Estado</label><select id="scrEstado"><option value="pend">Por facturar</option><option value="fact">Facturados</option><option value="cero">No se cobran (0)</option><option value="">Todos</option></select></div>
         <div class="campo"><label>Cliente</label><div id="scrCliente"></div></div>
         <div class="campo"><label>Motivo</label><div id="scrMotivo"></div></div>
         <div class="campo"><label>Desde</label><input type="date" id="scrDesde"></div>
@@ -102,7 +102,7 @@ const FormSobrecostos = {
       let r = null;
       try { r = await llamarBackend('sobrecostosListar', {}); } catch (e) { r = null; }
       if (!r || !r.ok) { $('scrCuerpo').innerHTML = '<tr><td colspan="12" style="text-align:center;color:#b91c1c;padding:16px">' + esc((r && r.mensaje) || 'No se pudo cargar la lista.') + '</td></tr>'; return; }
-      self._items = r.items || [];
+      self._items = (r.items || []).map(function (x) { x.sinCobro = !x.facturado && !(Number(x.total) > 0); if (x.sinCobro && /h/.test(String(x.obs)) && !x.unidad) { x.cantidad = 0; x.unidad = 'h'; } return x; });
       self._msCli.setOpciones(Array.from(new Set(self._items.map(x => String(x.cliente).toUpperCase()).filter(Boolean))).sort());
       self._msMot.setOpciones(Array.from(new Set(self._items.map(x => self._mot(x.tipo)).filter(Boolean))).sort());
       self._pintar();
@@ -114,7 +114,7 @@ const FormSobrecostos = {
   _vis: function () {
     const $ = id => this._raiz.querySelector('#' + id);
     const est = $('scrEstado').value, de = $('scrDesde').value, ha = $('scrHasta').value, q = $('scrBuscar').value.trim().toUpperCase();
-    return (this._items || []).filter(x => (!est || (est === 'pend' ? !x.facturado : x.facturado)) &&
+    return (this._items || []).filter(x => (!est || (est === 'pend' ? (!x.facturado && !x.sinCobro) : (est === 'cero' ? x.sinCobro : x.facturado))) &&
       this._msCli.cumple(String(x.cliente).toUpperCase()) && this._msMot.cumple(this._mot(x.tipo)) &&
       (!de || (x.iso && x.iso >= de)) && (!ha || (x.iso && x.iso <= ha)) &&
       (!q || [x.codigo, x.booking, x.contenedor, x.conductor, x.placa, x.obs].join(' ').toUpperCase().indexOf(q) >= 0));
@@ -125,7 +125,7 @@ const FormSobrecostos = {
     if (typeof _refrescarSnapshotFormulario === 'function') setTimeout(_refrescarSnapshotFormulario, 0);
     const vis = self._vis();
     const sum = (arr, m) => arr.filter(x => (/S\//.test(x.moneda) ? 'S/' : '$') === m).reduce((a, x) => a + x.total, 0);
-    const pend = vis.filter(x => !x.facturado);
+    const pend = vis.filter(x => !x.facturado && !x.sinCobro);
     $('scrKpi').innerHTML = [['Sobrecostos', vis.length], ['Por facturar', pend.length],
       ['Por cobrar US$', '$ ' + sum(pend, '$').toFixed(2)], ['Por cobrar S/', 'S/ ' + sum(pend, 'S/').toFixed(2)]]
       .map(k => '<div><span>' + k[0] + '</span><b>' + k[1] + '</b></div>').join('');
@@ -133,19 +133,20 @@ const FormSobrecostos = {
     const grupos = [], idx = {};
     vis.forEach(function (x) { const k = String(x.booking || x.codigoServicio).toUpperCase(); if (!(k in idx)) { idx[k] = grupos.length; grupos.push({ bk: x.booking || '—', k: k, items: [] }); } grupos[idx[k]].items.push(x); });
     $('scrCuerpo').innerHTML = grupos.length ? grupos.map(function (g) {
-      const p = g.items.filter(x => !x.facturado), x0 = g.items[0];
+      const p = g.items.filter(x => !x.facturado && !x.sinCobro), x0 = g.items[0];
       const tU = p.filter(x => !/S\//.test(x.moneda)).reduce((a, x) => a + x.total, 0), tS = p.filter(x => /S\//.test(x.moneda)).reduce((a, x) => a + x.total, 0);
       const todosMarc = g.items.every(x => self._marcados.has(x.fila));
       let h = '<tr class="scr-grupo"><td><input type="checkbox" class="scr-chkbk" data-bk="' + esc(g.k) + '"' + (todosMarc ? ' checked' : '') + ' title="Marcar todos los de este booking"></td>' +
         '<td colspan="7"><span style="font-size:.95rem;font-weight:800;color:#1c3a5e">BK ' + esc(g.bk) + '</span>' +
         '<span style="margin-left:10px;color:#334155">' + esc(x0.cliente) + ' · Cont. ' + esc(x0.contenedor || '—') + ' · ' + esc(x0.conductor) + ' · ' + esc(x0.fecha) + '</span>' +
-        '<span class="sub">' + g.items.length + ' sobrecosto(s)' + (p.length ? ' · ' + p.length + ' por facturar' : ' · todo facturado') + '</span></td>' +
+        '<span class="sub">' + g.items.length + ' sobrecosto(s)' + (p.length ? ' · ' + p.length + ' por facturar' : (g.items.some(x => x.facturado) ? ' · todo facturado' : ' · nada por facturar')) + '</span></td>' +
         '<td style="text-align:right"><b style="font-size:.9rem">' + [tU ? '$ ' + tU.toFixed(2) : '', tS ? 'S/ ' + tS.toFixed(2) : ''].filter(Boolean).join(' + ') + '</b>' + (p.length ? '<span class="sub">por facturar</span>' : '') + '</td>' +
         '<td colspan="2"></td><td>' + (p.length ? '<button type="button" class="scr-b" style="background:#1c3a5e;color:#fff;border-color:#1c3a5e" data-acc="factbk" data-bk="' + esc(g.k) + '">💲 Facturar BK' + (p.length > 1 ? ' (' + p.length + ')' : '') + '</button>' : '') +
         (x0.filaServicio ? '<button type="button" class="scr-b" data-acc="seg" data-f="' + x0.fila + '">⏱ Seguimiento</button>' : '') + '</td></tr>';
       h += g.items.map(function (x) {
         const mon = /S\//.test(x.moneda) ? 'S/' : '$';
         const est = x.facturado ? '<span class="scr-tag" style="background:#dcfce7;color:#166534">Facturado</span>' + (x.factura ? '<span class="sub">' + esc(x.factura) + (x.fechaFactura ? ' · ' + esc(x.fechaFactura) : '') + '</span>' : '')
+          : x.sinCobro ? '<span class="scr-tag" style="background:#e2e8f0;color:#475569" title="No supera las horas libres">No se cobra (0)</span>'
           : '<span class="scr-tag" style="background:#fef3c7;color:#92400e">Por facturar</span>';
         return '<tr><td><input type="checkbox" class="scr-chk" data-f="' + x.fila + '"' + (self._marcados.has(x.fila) ? ' checked' : '') + '></td>' +
           '<td style="color:#64748b">' + esc(x.fecha) + '</td><td style="color:#64748b">' + esc(x.codigo) + '</td><td></td><td style="color:#64748b">' + esc(x.placa) + '</td><td><b>' + esc(self._mot(x.tipo)) + '</b></td>' +
@@ -160,7 +161,7 @@ const FormSobrecostos = {
   // se graba un registro por sobrecosto con el MISMO N° de factura (Cobranzas los junta como una factura).
   _facturarBK: async function (k) {
     const self = this;
-    const items = (self._items || []).filter(x => !x.facturado && String(x.booking || x.codigoServicio).toUpperCase() === k);
+    const items = (self._items || []).filter(x => !x.facturado && !x.sinCobro && String(x.booking || x.codigoServicio).toUpperCase() === k);
     if (!items.length) return;
     if (items.length === 1) { FormFacturaSobrecosto.abrir(items[0].fila); return; }
     const datos = [];

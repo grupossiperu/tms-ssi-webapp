@@ -367,7 +367,7 @@ const FormDatosViaje = {
       const verCobrados = function () {
         cobradoPlanta = (f._sc || []).some(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
         cobradoPuerto = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
-        cobradoGas = (f._sc || []).some(x => /^GASIFICADO/.test(x.tipo));
+        cobradoGas = (f._sc || []).some(x => /^GASIFICADO/.test(x.tipo) && !(Number(x.total) === 0));
       };
       verCobrados();
       const nc = self._nc(f);
@@ -695,7 +695,7 @@ const FormDatosViaje = {
     if (!this._esGas(f)) return '<span style="color:#94a3b8">—</span>';
     const c = this._calc(f);
     const h = c.enGas, hc = c.enGasPu;
-    const sc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')));
+    const sc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')) && !(Number(x.total) === 0));
     const nc = this._nc(f).GASIFICADO;
     const ex = hc !== null && hc >= 0 && hc <= 200 ? Math.max(0, Math.round((hc - this.LIBRES_GASIFICADO) * 100) / 100) : null;
     const tag = (bg, col, t, tit) => '<br><span' + (tit ? ' title="' + esc(tit) + '"' : '') + ' style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:' + bg + ';color:' + col + ';font-size:.7rem;font-weight:700">' + t + '</span>';
