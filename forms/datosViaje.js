@@ -17,6 +17,8 @@ const FormDatosViaje = {
 
   /** Horas libres en puerto (cola → salida), iguales para todos los clientes. */
   LIBRES_PUERTO: 4,
+  /** Gasificado: se cuenta desde el INICIO del gasificado hasta la SALIDA del puerto; 4 h libres (todos los clientes). Reemplaza al cobro de puerto. */
+  LIBRES_GASIFICADO: 4,
 
   abrir: async function () {
     this._mostrarLista();
@@ -386,29 +388,35 @@ const FormDatosViaje = {
         const enRet = self._horas(retV, salV), enPl = self._horas(lleP, salP), enPu = self._horas(cola, salPu);
         const cb = self._cobro(cita, lleP, salP, libres), extra = cb.extra;
         const okH = h => h !== null && h >= 0 && h <= 200;
-        const extraPu = okH(enPu) ? Math.max(0, Math.round((enPu - self.LIBRES_PUERTO) * 100) / 100) : null;
+        // En viajes gasificados el puerto no se cobra aparte: va dentro del tramo inicio gasificado → salida puerto
+        const extraPu = esGas ? null : (okH(enPu) ? Math.max(0, Math.round((enPu - self.LIBRES_PUERTO) * 100) / 100) : null);
         const gIni = esGas ? val('txtGasIni') : null, gFin = esGas ? val('txtGasFin') : null, enGas = self._horas(gIni, gFin);
-        const gasCobrar = esGas && okH(enGas) && enGas >= 0.05 ? enGas : 0;
-        ctx = { lleP: lleP, salP: salP, enPl: enPl, cb: cb, extra: extra, cola: cola, salPu: salPu, enPu: enPu, extraPu: extraPu, gIni: gIni, gFin: gFin, enGas: enGas };
+        const enGasPu = esGas ? self._horas(gIni, salPu) : null;
+        const extraGas = esGas && okH(enGasPu) ? Math.max(0, Math.round((enGasPu - self.LIBRES_GASIFICADO) * 100) / 100) : null;
+        const gasCobrar = extraGas > 0 ? extraGas : 0;
+        ctx = { lleP: lleP, salP: salP, enPl: enPl, cb: cb, extra: extra, cola: cola, salPu: salPu, enPu: enPu, extraPu: extraPu, gIni: gIni, gFin: gFin, enGas: enGas, enGasPu: enGasPu, extraGas: extraGas, gasCobrar: gasCobrar };
         const desdeTxt = cb.desde === 'LLEGADA' ? 'desde la llegada (llegó después de la cita)' : (cb.desde === 'CITA' ? (lleP ? 'desde la cita (llegó antes)' : 'desde la cita') : '');
         $('sgRes1').innerHTML = 'Tiempo en el depósito: ' + hTxt(enRet);
         $('sgRes2').innerHTML = 'Tiempo real en planta (llegada → salida): ' + hTxt(enPl) +
           '<br>Tiempo para el cobro: ' + hTxt(cb.horas) + (desdeTxt && cb.horas !== null ? ' <span style="font-size:.74rem;color:#64748b">' + desdeTxt + '</span>' : '') + (extra > 0 ? (!cobradoPlanta && nc.PLANTA ? ncTag('PLANTA') : '<span class="sg-tag" style="background:' + (cobradoPlanta ? '#dcfce7;color:#166534">✓ cobrado' : '#fee2e2;color:#b91c1c">+' + extra.toFixed(1) + ' h extra') + '</span>') : (extra === 0 ? '<span class="sg-tag" style="background:#dcfce7;color:#166534">dentro de las ' + libres + ' h</span>' : ''));
-        $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu) + (extraPu > 0 && !cobradoPuerto && nc.PUERTO ? ncTag('PUERTO') : tagCobro(extraPu, cobradoPuerto, self.LIBRES_PUERTO));
-        if (esGas) $('sgResG').innerHTML = 'Tiempo de gasificado: ' + hTxt(enGas) +
-          (gasCobrar && !cobradoGas && nc.GASIFICADO ? ncTag('GASIFICADO') : gasCobrar ? '<span class="sg-tag" style="background:' + (cobradoGas ? '#dcfce7;color:#166534">✓ cobrado' : '#ede9fe;color:#5b21b6">se cobran todas las horas') + '</span>' : '');
+        $('sgRes3').innerHTML = 'Tiempo en puerto (cola → salida): ' + hTxt(enPu) + (esGas
+          ? ' <span class="sg-tag" style="background:#ede9fe;color:#5b21b6">se cobra dentro del gasificado</span>'
+          : (extraPu > 0 && !cobradoPuerto && nc.PUERTO ? ncTag('PUERTO') : tagCobro(extraPu, cobradoPuerto, self.LIBRES_PUERTO)));
+        if (esGas) $('sgResG').innerHTML = 'Tiempo de gasificado (inicio → fin): ' + hTxt(enGas) +
+          '<br>Tiempo para el cobro (inicio gasificado → salida puerto): ' + (gIni && !salPu ? '<span style="color:#94a3b8">falta la salida de puerto</span>' : hTxt(enGasPu)) +
+          (gasCobrar && !cobradoGas && nc.GASIFICADO ? ncTag('GASIFICADO') : tagCobro(extraGas, cobradoGas, self.LIBRES_GASIFICADO));
         const sug = [];
         const bNo = (c, h, txt) => nc[c]
           ? '<span style="display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:#475569;background:#e2e8f0;border-radius:9px;padding:4px 8px" title="' + esc(self._ncTxt(nc[c])) + '">' + txt + ': no se cobra (' + esc(nc[c].motivo) + ') <button data-rc="' + c + '" style="border:1px solid #64748b;color:#334155;padding:2px 7px">↺ Volver a cobrar</button></span>'
           : '<button data-nc="' + c + '" data-h="' + h + '" style="border-color:#94a3b8;color:#475569">✕ No se cobra</button>';
         ctx.ncH = { PLANTA: extra, GASIFICADO: gasCobrar, PUERTO: extraPu };
         if (extra > 0 && !cobradoPlanta) sug.push(nc.PLANTA ? bNo('PLANTA', extra, 'Horas extra en planta') : '<button data-m="HORAS EXTRAS PLANTA">+ Facturar ' + extra.toFixed(1) + ' h extra en planta</button>' + bNo('PLANTA', extra));
-        if (gasCobrar && !cobradoGas) sug.push(nc.GASIFICADO ? bNo('GASIFICADO', gasCobrar, 'Gasificado') : '<button data-m="GASIFICADO">+ Facturar ' + gasCobrar.toFixed(1) + ' h de gasificado</button>' + bNo('GASIFICADO', gasCobrar));
+        if (gasCobrar && !cobradoGas) sug.push(nc.GASIFICADO ? bNo('GASIFICADO', gasCobrar, 'Gasificado') : '<button data-m="GASIFICADO">+ Facturar ' + gasCobrar.toFixed(1) + ' h extra de gasificado</button>' + bNo('GASIFICADO', gasCobrar));
         if (extraPu > 0 && !cobradoPuerto) sug.push(nc.PUERTO ? bNo('PUERTO', extraPu, 'Horas extra en puerto') : '<button data-m="HORAS EXTRAS PUERTO">+ Facturar ' + extraPu.toFixed(1) + ' h extra en puerto</button>' + bNo('PUERTO', extraPu));
         sug.push('<button data-m="PERNOCTE">+ Facturar pernocte</button>');
         const avisos = [];
         if (extra > 0 && !cobradoPlanta && !nc.PLANTA) avisos.push('pasó las horas libres en planta');
-        if (gasCobrar && !cobradoGas && !nc.GASIFICADO) avisos.push('tiene horas de gasificado por cobrar');
+        if (gasCobrar && !cobradoGas && !nc.GASIFICADO) avisos.push('pasó las ' + self.LIBRES_GASIFICADO + ' h libres del gasificado (inicio gasificado → salida puerto)');
         if (extraPu > 0 && !cobradoPuerto && !nc.PUERTO) avisos.push('pasó las ' + self.LIBRES_PUERTO + ' h libres en puerto');
         $('sgSugerencias').innerHTML = (avisos.length ? '<span style="width:100%;font-size:.82rem;color:#b91c1c">Este viaje ' + avisos.join(', ') + ': revisa y aprueba el cobro.</span>' : '') + sug.join('');
       };
@@ -437,7 +445,7 @@ const FormDatosViaje = {
         $('dvScPrecioLbl').textContent = m === 'PERNOCTE' ? 'Tarifa por noche (con IGV)' : 'Tarifa por hora (con IGV)';
         if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = ctx.extra > 0 ? ctx.extra : ''; $('dvScObs').value = ctx.extra > 0 ? self._textoCobro(cita, ctx.lleP, ctx.salP, ctx.cb, libres) : ''; }
         else if (m === 'HORAS EXTRAS PUERTO') { $('dvScCant').value = ctx.extraPu > 0 ? ctx.extraPu : ''; $('dvScObs').value = ctx.enPu !== null ? ('Cola puerto ' + self._fh(ctx.cola) + ' · salida ' + self._fh(ctx.salPu) + ' · ' + ctx.enPu.toFixed(2) + ' h en puerto − ' + self.LIBRES_PUERTO + ' h libres') : ''; }
-        else if (m === 'GASIFICADO') { $('dvScCant').value = ctx.enGas > 0 ? ctx.enGas : ''; $('dvScObs').value = ctx.enGas > 0 ? ('Gasificado ' + self._fh(ctx.gIni) + ' → ' + self._fh(ctx.gFin) + ' · ' + ctx.enGas.toFixed(2) + ' h (se cobran todas)') : ''; }
+        else if (m === 'GASIFICADO') { $('dvScCant').value = ctx.gasCobrar > 0 ? ctx.gasCobrar : ''; $('dvScObs').value = ctx.enGasPu !== null ? ('Gasificado ' + self._fh(ctx.gIni) + ' → ' + self._fh(ctx.gFin) + ' · salida puerto ' + self._fh(ctx.salPu) + ' · ' + ctx.enGasPu.toFixed(2) + ' h (inicio gasificado → salida puerto) − ' + self.LIBRES_GASIFICADO + ' h libres') : ''; }
         else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
         $('dvFormSc').style.display = ''; total(); $('dvScPrecio').focus();
       };
@@ -509,9 +517,7 @@ const FormDatosViaje = {
         const td = 'style="border:1px solid #cbd5e1;padding:5px 8px;font-family:Arial,sans-serif;font-size:12px"';
         const th = 'style="border:1px solid #cbd5e1;padding:5px 8px;background:#1c3a5e;color:#fff;font-family:Arial,sans-serif;font-size:12px;text-align:left"';
         const fila = (a, b, c) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + (c || '') + '</td></tr>';
-        let gasH = esGas ? self._horas(val('txtGasIni'), val('txtGasFin')) : null;
-        const gasSc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '').toUpperCase()));
-        if (esGas && gasH === null && gasSc && Number(gasSc.cantidad) > 0) gasH = Number(gasSc.cantidad);
+        const gasH = esGas ? ctx.enGas : null;
         const extraPu = ctx.extraPu;
         const MOTL = { 'HORAS EXTRAS PLANTA': 'Horas extras en planta', 'H.E. PLANTA F.': 'Horas extras en planta', 'HORAS EXTRAS PUERTO': 'Horas extras en puerto', 'H.E. PUERTO F.': 'Horas extras en puerto',
           'GASIFICADO': 'Gasificado', 'GASIFICADO F.': 'Gasificado', 'REPROGRAMACION': 'Reprogramación de posicionamiento', 'REPROG. F.': 'Reprogramación de posicionamiento', 'PERNOCTE': 'Pernocte', 'PERNOCTE F.': 'Pernocte', 'SOBREESTADIA': 'Sobreestadía', 'SOBREEST. F.': 'Sobreestadía' };
@@ -521,7 +527,7 @@ const FormDatosViaje = {
         const regTipos = sc.map(x => String(x.tipo || '').toUpperCase());
         const pend = [];
         if (ctx.extra > 0 && !nc.PLANTA && !regTipos.some(x => /HORAS EXTRAS PLANTA|H\.E\. PLANTA/.test(x))) pend.push(['Horas extras en planta', ctx.extra.toFixed(2) + ' h']);
-        if (esGas && !nc.GASIFICADO && gasH >= 0.05 && gasH <= 200 && !regTipos.some(x => /^GASIF/.test(x))) pend.push(['Gasificado', gasH.toFixed(2) + ' h']);
+        if (esGas && !nc.GASIFICADO && ctx.gasCobrar > 0 && !regTipos.some(x => /^GASIF/.test(x))) pend.push(['Gasificado (horas extra)', ctx.gasCobrar.toFixed(2) + ' h']);
         if (extraPu > 0 && !nc.PUERTO && !regTipos.some(x => /HORAS EXTRAS PUERTO|H\.E\. PUERTO/.test(x))) pend.push(['Horas extras en puerto', extraPu.toFixed(2) + ' h']);
         let h = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#1e293b">';
         h += '<p style="margin:0 0 8px">Estimados, se detalla el sobrecosto del siguiente servicio:</p>';
@@ -554,8 +560,11 @@ const FormDatosViaje = {
         const fila4 = (a, b, c, d) => '<tr><td ' + td + '>' + a + '</td><td ' + td + '>' + b + '</td><td ' + td + '>' + c + '</td><td ' + td + '><b>' + d + '</b></td></tr>';
         h += fila4('Tiempo real en planta (llegada → salida)', hh(ctx.enPl), '', '');
         h += fila4('Tiempo en planta para el cobro (' + (ctx.cb && ctx.cb.desde === 'LLEGADA' ? 'desde la llegada, llegó después de la cita' : 'desde la cita') + ')', hh(ctx.cb && ctx.cb.horas), libres + ' h', ctx.extra > 0 ? (nc.PLANTA ? 'No se cobra (' + esc(nc.PLANTA.motivo) + ')' : ctx.extra.toFixed(2) + ' h') : '0 h');
-        if (esGas) h += fila4('Gasificado', hh(gasH), 'sin horas libres', gasH >= 0.05 && gasH <= 200 ? (nc.GASIFICADO ? 'No se cobra (' + esc(nc.GASIFICADO.motivo) + ')' : gasH.toFixed(2) + ' h') : '0 h');
-        h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), self.LIBRES_PUERTO + ' h', extraPu > 0 ? (nc.PUERTO ? 'No se cobra (' + esc(nc.PUERTO.motivo) + ')' : extraPu.toFixed(2) + ' h') : '0 h');
+        if (esGas) {
+          h += fila4('Gasificado (inicio → fin)', hh(gasH), '', '');
+          h += fila4('Gasificado y puerto (inicio gasificado → salida puerto)', hh(ctx.enGasPu), self.LIBRES_GASIFICADO + ' h', ctx.gasCobrar > 0 ? (nc.GASIFICADO ? 'No se cobra (' + esc(nc.GASIFICADO.motivo) + ')' : ctx.gasCobrar.toFixed(2) + ' h') : '0 h');
+          h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), 'incluido en el gasificado', '—');
+        } else h += fila4('Tiempo en puerto (cola → salida)', hh(ctx.enPu), self.LIBRES_PUERTO + ' h', extraPu > 0 ? (nc.PUERTO ? 'No se cobra (' + esc(nc.PUERTO.motivo) + ')' : extraPu.toFixed(2) + ' h') : '0 h');
         h += '</table>';
         h += '<p style="margin:10px 0 0"><b>Favor de confirmar para proceder con la facturación.</b></p>';
         h += '</div>';
@@ -675,7 +684,8 @@ const FormDatosViaje = {
       enPuerto: this._horas(this._fecha(f._llegadaPuerto), this._fecha(f._salidaPuerto)),
       retVacio: this._fecha(f._retiroVacio), salVacio: this._fecha(f._salidaVacio),
       enRetiro: this._horas(this._fecha(f._retiroVacio), this._fecha(f._salidaVacio)),
-      esGas: this._esGas(f), enGas: this._horas(this._fecha(f._gasIni), this._fecha(f._gasFin)) };
+      esGas: this._esGas(f), enGas: this._horas(this._fecha(f._gasIni), this._fecha(f._gasFin)),
+      enGasPu: this._horas(this._fecha(f._gasIni), this._fecha(f._salidaPuerto)) };
   },
   _esGas: function (f) { return /GASIF/i.test(String(f['OBSERVACION'] || '')); },
   MOTIVOS_NO_COBRO: ['CORTESIA AL CLIENTE', 'DEMORA ATRIBUIBLE A SSI', 'ACUERDO COMERCIAL', 'CLIENTE NO ACEPTO EL COBRO', 'OTRO'],
@@ -683,15 +693,19 @@ const FormDatosViaje = {
   _ncTxt: function (x) { return x ? ('No se cobra: ' + x.motivo + (x.horas ? ' · ' + Number(x.horas).toFixed(2) + ' h' : '') + (x.usuario ? ' · ' + x.usuario : '') + (x.fecha ? ' · ' + x.fecha : '')) : ''; },
   _celdaGas: function (f) {
     if (!this._esGas(f)) return '<span style="color:#94a3b8">—</span>';
-    let h = this._calc(f).enGas;
+    const c = this._calc(f);
+    const h = c.enGas, hc = c.enGasPu;
     const sc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')));
-    if (h === null && sc && Number(sc.cantidad) > 0) h = Number(sc.cantidad);
     const nc = this._nc(f).GASIFICADO;
+    const ex = hc !== null && hc >= 0 && hc <= 200 ? Math.max(0, Math.round((hc - this.LIBRES_GASIFICADO) * 100) / 100) : null;
+    const tag = (bg, col, t, tit) => '<br><span' + (tit ? ' title="' + esc(tit) + '"' : '') + ' style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:' + bg + ';color:' + col + ';font-size:.7rem;font-weight:700">' + t + '</span>';
     return '<span style="display:inline-block;padding:1px 7px;border-radius:8px;background:#ede9fe;color:#5b21b6;font-size:.72rem;font-weight:700">Sí</span>' +
       '<br>' + (h === null ? '<span style="font-size:.7rem;color:#94a3b8">sin horas</span>' : this._celdaH(h)) +
-      (sc ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#dcfce7;color:#166534;font-size:.7rem;font-weight:700">✓ cobrado</span>'
-        : nc ? '<br><span title="' + esc(this._ncTxt(nc)) + '" style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#e2e8f0;color:#475569;font-size:.7rem;font-weight:700">no se cobra</span>'
-        : (h >= 0.05 && h <= 200 ? '<br><span style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:.7rem;font-weight:700">por cobrar</span>' : ''));
+      (hc !== null ? '<br><span title="Inicio gasificado → salida puerto (' + this.LIBRES_GASIFICADO + ' h libres)" style="font-size:.7rem;color:#475569">cobro: ' + (hc < 0 || hc > 200 ? '⚠ revisar' : hc.toFixed(1) + ' h') + '</span>' : '') +
+      (sc ? tag('#dcfce7', '#166534', '✓ cobrado')
+        : ex > 0 && nc ? tag('#e2e8f0', '#475569', 'no se cobra', this._ncTxt(nc))
+        : ex > 0 ? tag('#fee2e2', '#b91c1c', '+' + ex.toFixed(1) + ' h extra')
+        : ex === 0 ? tag('#dcfce7', '#166534', 'dentro de ' + this.LIBRES_GASIFICADO + ' h') : '');
   },
   _celdaH: function (h) {
     if (h === null || h === undefined) return '<span style="color:#94a3b8">—</span>';
@@ -702,6 +716,7 @@ const FormDatosViaje = {
     const h = this._calc(f).enPuerto;
     let s = this._celdaH(h);
     if (h === null || h < 0 || h > 200) return s;
+    if (this._esGas(f)) return s + '<br><span title="En viajes gasificados el puerto se cobra dentro del gasificado (inicio gasificado → salida puerto)" style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:#ede9fe;color:#5b21b6;font-size:.7rem;font-weight:700">en gasificado</span>';
     const cobrado = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
     const ex = Math.max(0, Math.round((h - this.LIBRES_PUERTO) * 100) / 100);
     const nc = this._nc(f).PUERTO;
