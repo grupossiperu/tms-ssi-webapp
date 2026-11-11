@@ -326,10 +326,18 @@ const FormAlmacen = {
         <div class="fila-campos" style="grid-template-columns:repeat(6,minmax(0,1fr));">
           ${filtros.map(f => '<div class="campo"><label>' + f[1] + '</label><input type="text" list="dlStock_' + f[0] + '" id="fStock_' + f[0] + '" autocomplete="off">' + MT.datalist('dlStock_' + f[0], unicos(f[0])) + '</div>').join('')}
         </div>
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:-4px 0 6px">
+          <div class="campo" style="margin:0"><label>Ingresó desde</label><input type="date" id="fStock_ingDesde"></div>
+          <div class="campo" style="margin:0"><label>Ingresó hasta</label><input type="date" id="fStock_ingHasta"></div>
+          <button type="button" class="mt-mini" id="fStock_hoy">Ingresados hoy</button>
+          <button type="button" class="mt-mini" id="fStock_7">Últimos 7 días</button>
+          <label style="display:flex;gap:6px;align-items:center;font-size:.8rem"><input type="checkbox" id="fStock_orden" style="width:auto"> Más recientes primero</label>
+          <span class="mt-ayuda" id="stockIngInfo" style="margin:0"></span>
+        </div>
         <div class="mt-ayuda" id="stockCuenta" style="margin-bottom:6px;"></div>
         <div class="mt-tabla-wrap">
           <table class="tabla-lista" id="tablaStock">
-            <thead><tr><th>Código</th><th>Producto</th><th>Proveedor</th><th>Marca</th><th>Categoría</th><th>Ubicación</th><th>Precio</th><th>Stock</th></tr></thead>
+            <thead><tr><th>Código</th><th>Producto</th><th>Proveedor</th><th>Marca</th><th>Categoría</th><th>Ubicación</th><th>Precio</th><th>Stock</th><th>Último ingreso</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -342,10 +350,27 @@ const FormAlmacen = {
 
     MT.sobreventana('Consultar stock', html, function (raiz, cerrar) {
       let elegido = null;
+      // Fecha del último ingreso por producto (de los registros del almacén, sin anulados)
+      let ultIng = null;
+      const isoHoy = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      (async function () {
+        raiz.querySelector('#stockIngInfo').textContent = 'Cargando fechas de ingreso…';
+        let r = null;
+        try { r = await llamarBackend('mtRegistrosDia', {}); } catch (e) { r = null; }
+        if (!r || !r.ok) { raiz.querySelector('#stockIngInfo').textContent = 'No se pudieron cargar las fechas de ingreso.'; return; }
+        ultIng = {};
+        (r.ingresos || []).forEach(x => { const k = String(x.codigo || '').toUpperCase(), v = String(x.fecha || '') + ' ' + String(x.hora || ''); if (!ultIng[k] || v > ultIng[k]) ultIng[k] = v; });
+        raiz.querySelector('#stockIngInfo').textContent = '';
+        pintar();
+      })();
+      const fIng = p => ultIng ? (ultIng[String(p.codigo || '').toUpperCase()] || '') : '';
       function pintar() {
         const f = {};
         filtros.forEach(x => { f[x[0]] = raiz.querySelector('#fStock_' + x[0]).value.trim().toUpperCase(); });
-        const filas = self._datos.productos.filter(p => filtros.every(x => !f[x[0]] || String(p[x[0]] || '').toUpperCase().indexOf(f[x[0]]) !== -1));
+        const de = raiz.querySelector('#fStock_ingDesde').value, ha = raiz.querySelector('#fStock_ingHasta').value;
+        let filas = self._datos.productos.filter(p => filtros.every(x => !f[x[0]] || String(p[x[0]] || '').toUpperCase().indexOf(f[x[0]]) !== -1));
+        if ((de || ha) && ultIng) filas = filas.filter(p => { const d = fIng(p).slice(0, 10); return d && (!de || d >= de) && (!ha || d <= ha); });
+        if (raiz.querySelector('#fStock_orden').checked || de || ha) filas = filas.slice().sort((a, b) => fIng(b).localeCompare(fIng(a)));
         raiz.querySelector('#stockCuenta').textContent = filas.length + ' producto(s)';
         const tbody = raiz.querySelector('#tablaStock tbody');
         tbody.innerHTML = filas.map(p => {
@@ -354,10 +379,14 @@ const FormAlmacen = {
             '<td>' + esc(p.codigo) + '</td><td>' + esc(p.producto) + '</td><td>' + esc(p.proveedor) + '</td>' +
             '<td>' + esc(p.marca) + '</td><td>' + esc(p.categoria) + '</td><td>' + esc(p.ubicacion) + '</td>' +
             '<td style="white-space:nowrap">' + esc(p.moneda) + ' ' + MT.dinero(p.total) + '</td>' +
-            '<td class="mt-stock' + (bajo ? ' mt-bajo' : '') + '" style="text-align:center">' + esc(p.stock) + '</td></tr>';
-        }).join('') || '<tr><td colspan="8" style="text-align:center;color:#8b95a1;padding:16px;">Sin productos con estos filtros.</td></tr>';
+            '<td class="mt-stock' + (bajo ? ' mt-bajo' : '') + '" style="text-align:center">' + esc(p.stock) + '</td>' +
+            '<td style="white-space:nowrap;font-size:.78rem">' + (fIng(p) ? esc(MT.fechaVista(fIng(p).slice(0, 10))) + ' <small style="color:#64748b">' + esc(fIng(p).slice(11, 16)) + '</small>' : (ultIng ? '<span style="color:#94a3b8">—</span>' : '…')) + '</td></tr>';
+        }).join('') || '<tr><td colspan="9" style="text-align:center;color:#8b95a1;padding:16px;">Sin productos con estos filtros.</td></tr>';
       }
       filtros.forEach(x => raiz.querySelector('#fStock_' + x[0]).addEventListener('input', pintar));
+      ['fStock_ingDesde', 'fStock_ingHasta', 'fStock_orden'].forEach(id => raiz.querySelector('#' + id).addEventListener('change', pintar));
+      raiz.querySelector('#fStock_hoy').addEventListener('click', function () { const h = isoHoy(new Date()); raiz.querySelector('#fStock_ingDesde').value = h; raiz.querySelector('#fStock_ingHasta').value = h; pintar(); });
+      raiz.querySelector('#fStock_7').addEventListener('click', function () { const d = new Date(); raiz.querySelector('#fStock_ingHasta').value = isoHoy(d); d.setDate(d.getDate() - 6); raiz.querySelector('#fStock_ingDesde').value = isoHoy(d); pintar(); });
       raiz.querySelector('#tablaStock tbody').addEventListener('click', function (ev) {
         const tr = ev.target.closest('tr[data-codigo]');
         if (!tr) return;
@@ -371,6 +400,7 @@ const FormAlmacen = {
       });
       raiz.querySelector('#btnLimpiarStock').addEventListener('click', function () {
         filtros.forEach(x => { raiz.querySelector('#fStock_' + x[0]).value = ''; });
+        raiz.querySelector('#fStock_ingDesde').value = ''; raiz.querySelector('#fStock_ingHasta').value = ''; raiz.querySelector('#fStock_orden').checked = false;
         pintar();
       });
       raiz.querySelector('#btnCerrarStock').addEventListener('click', cerrar);
