@@ -1428,6 +1428,7 @@ const FormAlmacen = {
       $('rdUsr').innerHTML = '<option value="">Todos</option>' + usrs.map(u => '<option>' + esc(u) + '</option>').join('');
       $('rdUsr').value = f.usr;
       const totTxt = t => Object.keys(t).filter(m => t[m]).map(m => m + ' ' + MT.dinero(t[m])).join(' + ');
+      const esMaestro = typeof FormAlmacenCorregir !== 'undefined' && FormAlmacenCorregir.esMaestro();
       const abiertos = new Set();
       let vis = [];
       function filtrar() {
@@ -1461,11 +1462,16 @@ const FormAlmacen = {
           h += '<tr class="rd-doc" data-i="' + i + '"><td>' + esc(String(g.hora || '').slice(0, 5)) + '</td><td>' +
             (g.t === 'I' ? '<span class="rd-tag" style="background:#dcfce7;color:#166534">INGRESO</span>' : '<span class="rd-tag" style="background:#fee2e2;color:#991b1b">SALIDA</span>') + '</td><td>' +
             (g.t === 'I' ? '<b>' + esc(g.tipoDoc + ' ' + g.documento) + '</b>' : '<b>' + esc(g.motivo || 'SALIDA') + '</b>' + (g.placa ? ' · ' + esc(g.placa) : '')) + ' <small style="color:#64748b">' + (ab ? '▲ ocultar' : '▼ ver detalle') + '</small></td><td>' +
-            esc(g.quien) + (g.ruc ? '<br><small>RUC ' + esc(g.ruc) + '</small>' : '') + '</td><td style="text-align:center">' + g.lineas.length + '</td><td style="white-space:nowrap">' + (g.t === 'I' ? '<b>' + esc(totTxt(g.total)) + '</b>' : '') + '</td><td><small>' + esc(g.usuario) + '</small></td></tr>';
+            esc(g.quien) + (g.ruc ? '<br><small>RUC ' + esc(g.ruc) + '</small>' : '') + '</td><td style="text-align:center">' + g.lineas.length + '</td><td style="white-space:nowrap">' + (g.t === 'I' ? '<b>' + esc(totTxt(g.total)) + '</b>' : '') + '</td><td><small>' + esc(g.usuario) + '</small>' +
+            (esMaestro ? '<br><button type="button" class="mt-mini" data-edit="' + i + '" style="margin-top:3px">' + (g.t === 'I' ? '✎ Reabrir y editar' : '✎ Corregir') + '</button>' : '') + '</td></tr>';
           if (ab) h += g.lineas.map(l => '<tr class="rd-det"><td></td><td colspan="6">• ' + lineaTxt(g, l) + '</td></tr>').join('');
         });
         $('rdTabla').querySelector('tbody').innerHTML = h || '<tr><td colspan="7" style="text-align:center;color:#8b95a1;padding:16px">No hay registros en estas fechas.</td></tr>';
-        raiz.querySelectorAll('.rd-doc').forEach(tr => tr.addEventListener('click', () => { const i = +tr.dataset.i; if (abiertos.has(i)) abiertos.delete(i); else abiertos.add(i); pintar(); }));
+        raiz.querySelectorAll('.rd-doc').forEach(tr => tr.addEventListener('click', (ev) => {
+          const be = ev.target.closest('[data-edit]');
+          if (be) { ev.stopPropagation(); const g = vis[+be.dataset.edit]; if (g.t === 'I') self._reabrirIngreso(g); else self._corregirSalida(g); return; }
+          const i = +tr.dataset.i; if (abiertos.has(i)) abiertos.delete(i); else abiertos.add(i); pintar();
+        }));
         if (typeof _refrescarSnapshotFormulario === 'function') setTimeout(_refrescarSnapshotFormulario, 0);
       }
       const reiniciarYPintar = () => { abiertos.clear(); pintar(); };
@@ -1527,6 +1533,150 @@ const FormAlmacen = {
       });
       pintar();
     });
+  },
+
+  /* ===== Reabrir y editar un ingreso (factura/boleta) completo — solo MAESTRO =====
+   * Usa las acciones de Corregir (mtCorrIngresoDoc, mtCorrIngresoLinea, mtCorrAnularIngreso, que quedan
+   * en el historial) y mtGrabarIngresoV2 para los productos agregados (misma factura, fecha y hora). */
+  _reabrirIngreso: function (g) {
+    const self = this;
+    if (!(typeof FormAlmacenCorregir !== 'undefined' && FormAlmacenCorregir.esMaestro())) { mostrarMensaje('Solo los usuarios MAESTRO pueden reabrir un ingreso.', 'error'); return; }
+    const prods = (self._datos.productos || []);
+    const nomDe = c => { const p = prods.find(x => x.codigo === c); return p ? p.producto : ''; };
+    const provs = ((self._datos.proveedores) || []).map(p => p.razonSocial);
+    const l0 = g.lineas[0];
+    const r2 = n => Math.round(n * 100) / 100, r4 = n => Math.round(n * 10000) / 10000;
+    const filaHtml = (l) => '<tr data-fila="' + (l ? l.fila : '') + '" data-orig="' + esc(l ? l.codigo : '') + '">' +
+      '<td><input class="ri-prod" list="riDlProd" value="' + esc(l ? l.codigo : '') + '" placeholder="Código o nombre" style="text-transform:uppercase;width:100%"><div class="ri-nom" style="font-size:.72rem;color:#64748b">' + esc(l ? (l.producto || nomDe(l.codigo)) : '') + '</div></td>' +
+      '<td><input class="ri-cant" type="number" step="any" min="0" value="' + (l ? l.cantidad : '') + '" style="width:100%"><div style="font-size:.7rem;color:#64748b">' + esc(l ? String(l.unidadCompra || '').toLowerCase() : '') + '</div></td>' +
+      '<td><input class="ri-psin" type="number" step="any" min="0" value="' + (l && l.precioSinIgv ? r4(l.precioSinIgv) : '') + '" style="width:100%"></td>' +
+      '<td><input class="ri-pcon" type="number" step="any" min="0" value="' + (l && l.precioConIgv ? r4(l.precioConIgv) : '') + '" style="width:100%"></td>' +
+      '<td class="ri-tot" style="text-align:right;font-weight:700"></td>' +
+      '<td style="text-align:center"><button type="button" class="mt-mini ri-quitar" title="Quitar este producto de la factura">✕ Quitar</button></td></tr>';
+    const html = '<div class="mt-form">' +
+      '<div class="mt-ayuda" style="margin-bottom:8px;color:#92400e">Corrige la factura completa. Para <b>cambiar un producto</b> escribe el código correcto en su fila (se anula el anterior y entra el nuevo). Lo que quites sale del stock; si esas unidades ya se entregaron, no se podrá grabar.</div>' +
+      '<div class="fila-campos" style="grid-template-columns:1fr 1.2fr 1fr 2fr 0.8fr">' +
+      '<div class="campo"><label>Tipo</label><select id="riTipo"><option>FACTURA</option><option>BOLETA</option></select></div>' +
+      '<div class="campo"><label>N° documento</label><input id="riDoc" style="text-transform:uppercase"></div>' +
+      '<div class="campo"><label>Fecha</label><input type="date" id="riFecha"></div>' +
+      '<div class="campo"><label>Proveedor</label><input id="riProv" list="riDlProv" style="text-transform:uppercase">' + MT.datalist('riDlProv', provs) + '</div>' +
+      '<div class="campo"><label>Moneda</label><select id="riMon"><option value="S/">S/</option><option value="$">$</option></select></div></div>' +
+      '<datalist id="riDlProd">' + prods.map(p => '<option value="' + esc(p.codigo) + '">' + esc(p.producto) + '</option>').join('') + '</datalist>' +
+      '<div class="mt-tabla-wrap" style="max-height:44vh"><table class="tabla-lista" style="table-layout:fixed"><thead><tr><th style="width:38%">Producto</th><th style="width:11%">Cantidad</th><th style="width:13%">P. unit. sin IGV</th><th style="width:13%">P. unit. con IGV</th><th style="width:13%">Total línea</th><th style="width:12%"></th></tr></thead>' +
+      '<tbody id="riTb">' + g.lineas.map(filaHtml).join('') + '</tbody></table></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0;gap:10px;flex-wrap:wrap"><button type="button" class="boton-secundario" id="riAgregar">+ Agregar producto</button>' +
+      '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><span id="riQuit" style="color:#b91c1c;font-size:.82rem"></span><span>Total: <b id="riTotal"></b></span>' +
+      '<label style="font-size:.8rem">Total según comprobante <input id="riTComp" type="number" step="any" style="width:110px"></label><span id="riAviso" style="font-size:.8rem"></span></div></div>' +
+      '<div class="campo"><label>Motivo del cambio *</label><textarea id="riMotivo" style="width:100%;min-height:50px" placeholder="Ej. el filtro FS19727 se registró con otro código; la factura dice 2 unidades"></textarea></div>' +
+      '<div class="mt-botones"><button class="boton-secundario" id="riNo">Cancelar</button><button class="boton-primario" id="riSi">Guardar cambios</button></div></div>';
+    MT.sobreventana('Reabrir ' + (g.tipoDoc + ' ' + g.documento).trim() + ' · ' + g.quien, html, function (c, cerrar) {
+      const q = id => c.querySelector('#' + id);
+      q('riTipo').value = g.tipoDoc === 'BOLETA' ? 'BOLETA' : 'FACTURA'; q('riDoc').value = g.documento; q('riFecha').value = g.fecha; q('riProv').value = g.quien;
+      q('riMon').value = /S\//.test(l0.moneda) ? 'S/' : '$';
+      const quitadas = new Set();
+      const calc = function () {
+        let t = 0;
+        c.querySelectorAll('#riTb tr').forEach(tr => {
+          const cant = MT.num(tr.querySelector('.ri-cant').value) || 0, pc = MT.num(tr.querySelector('.ri-pcon').value) || 0;
+          const tot = r2(cant * pc); tr.querySelector('.ri-tot').textContent = MT.dinero(tot);
+          const p = prods.find(x => x.codigo === tr.querySelector('.ri-prod').value.trim().toUpperCase());
+          tr.querySelector('.ri-nom').textContent = p ? p.producto : (tr.querySelector('.ri-prod').value.trim() ? '⚠ código no existe en el catálogo' : '');
+          tr.querySelector('.ri-nom').style.color = p ? '#64748b' : '#b91c1c';
+          t += tot;
+        });
+        q('riTotal').textContent = q('riMon').value + ' ' + MT.dinero(t);
+        q('riQuit').textContent = quitadas.size ? quitadas.size + ' producto(s) se quitarán' : '';
+        const tc = MT.num(q('riTComp').value);
+        q('riAviso').innerHTML = !isNaN(tc) && tc > 0 ? (Math.abs(tc - t) <= 0.1 ? '<span style="color:#166534">✓ cuadra</span>' : '<span style="color:#b91c1c">no cuadra (dif. ' + MT.dinero(t - tc) + ')</span>') : '';
+        return t;
+      };
+      c.querySelector('#riTb').addEventListener('input', function (ev) {
+        const tr = ev.target.closest('tr'); if (!tr) return;
+        if (ev.target.classList.contains('ri-psin')) { const v = MT.num(ev.target.value); tr.querySelector('.ri-pcon').value = isNaN(v) ? '' : r4(v * 1.18); }
+        if (ev.target.classList.contains('ri-pcon')) { const v = MT.num(ev.target.value); tr.querySelector('.ri-psin').value = isNaN(v) ? '' : r4(v / 1.18); }
+        if (ev.target.classList.contains('ri-prod')) ev.target.value = ev.target.value.toUpperCase();
+        calc();
+      });
+      c.querySelector('#riTb').addEventListener('click', function (ev) {
+        const b = ev.target.closest('.ri-quitar'); if (!b) return;
+        const tr = b.closest('tr');
+        if (!tr.dataset.fila) { tr.remove(); calc(); return; }
+        quitadas.add(+tr.dataset.fila); tr.remove(); calc();
+      });
+      q('riAgregar').addEventListener('click', function () { c.querySelector('#riTb').insertAdjacentHTML('beforeend', filaHtml(null)); calc(); c.querySelector('#riTb tr:last-child .ri-prod').focus(); });
+      ['riMon', 'riTComp'].forEach(id => q(id).addEventListener('input', calc));
+      q('riNo').addEventListener('click', cerrar);
+      calc();
+      protegerClic(q('riSi'), async function () {
+        const motivo = q('riMotivo').value.trim();
+        if (motivo.length < 4) { mostrarMensaje('Escribe el motivo del cambio.', 'error'); return; }
+        const cab = { tipoDoc: q('riTipo').value, documento: q('riDoc').value.trim().toUpperCase(), fecha: q('riFecha').value, razonSocial: q('riProv').value.trim().toUpperCase(), moneda: q('riMon').value };
+        if (!cab.documento || !cab.fecha || !cab.razonSocial) { mostrarMensaje('Completa N° de documento, fecha y proveedor.', 'error'); return; }
+        const prov = (self._datos.proveedores || []).find(p => String(p.razonSocial).toUpperCase() === cab.razonSocial);
+        if (!prov && cab.razonSocial !== String(g.quien).toUpperCase()) { mostrarMensaje('Ese proveedor no está en el catálogo. Créalo primero en Catálogo → Proveedores.', 'error'); return; }
+        const ruc = prov ? prov.ruc : g.ruc;
+        // Clasificar filas
+        const editar = [], anular = Array.from(quitadas), agregar = [];
+        let error = '';
+        c.querySelectorAll('#riTb tr').forEach(tr => {
+          const cod = tr.querySelector('.ri-prod').value.trim().toUpperCase(), cant = MT.num(tr.querySelector('.ri-cant').value), pcon = MT.num(tr.querySelector('.ri-pcon').value), psin = MT.num(tr.querySelector('.ri-psin').value);
+          if (!cod && !tr.dataset.fila) return; // fila nueva vacía
+          if (!prods.find(x => x.codigo === cod)) { error = error || 'El código ' + (cod || '(vacío)') + ' no existe en el catálogo. Si es un producto nuevo, créalo primero desde Ingreso o Catálogo.'; return; }
+          if (!(cant > 0)) { error = error || 'La cantidad de ' + cod + ' debe ser mayor que 0. Para sacarlo usa "✕ Quitar".'; return; }
+          if (!(pcon > 0)) { error = error || 'Falta el precio de ' + cod + '.'; return; }
+          const it = { codigo: cod, cantidad: cant, precioSinIgv: r4(psin), precioConIgv: r4(pcon) };
+          if (!tr.dataset.fila) { agregar.push(it); return; }
+          const fila = +tr.dataset.fila, orig = g.lineas.find(l => l.fila === fila);
+          if (cod !== tr.dataset.orig) { anular.push(fila); agregar.push(it); return; }
+          if (Number(orig.cantidad) !== cant || Math.abs((Number(orig.precioConIgv) || 0) - pcon) > 0.0005) editar.push({ fila: fila, cantidad: cant, precioConIgv: pcon, codigo: cod });
+        });
+        if (error) { mostrarMensaje(error, 'error'); return; }
+        const cambioCab = cab.tipoDoc !== (g.tipoDoc === 'BOLETA' ? 'BOLETA' : 'FACTURA') || cab.documento !== String(g.documento).toUpperCase() || cab.fecha !== g.fecha ||
+          cab.razonSocial !== String(g.quien).toUpperCase() || cab.moneda !== (/S\//.test(l0.moneda) ? 'S/' : '$');
+        if (!cambioCab && !editar.length && !anular.length && !agregar.length) { mostrarMensaje('No hay cambios para guardar.', 'info'); return; }
+        const tc = MT.num(q('riTComp').value), tt = calc();
+        if (!isNaN(tc) && tc > 0 && Math.abs(tc - tt) > 0.1 && !confirmar('El total (' + MT.dinero(tt) + ') no cuadra con el comprobante (' + MT.dinero(tc) + '). ¿Grabar igual?')) return;
+        const res = [];
+        if (!confirmar('Se guardará:\n' + [cambioCab ? '• Datos de la cabecera' : '', editar.length ? '• ' + editar.length + ' producto(s) corregido(s)' : '', anular.length ? '• ' + anular.length + ' producto(s) quitado(s)' : '', agregar.length ? '• ' + agregar.length + ' producto(s) agregado(s)' : ''].filter(Boolean).join('\n') + '\n\nTotal: ' + cab.moneda + ' ' + MT.dinero(tt) + '\n\n¿Continuar?')) return;
+        // 1) Cabecera (todas las líneas vigentes que no se anulan)
+        const vivas = g.lineas.map(l => l.fila).filter(f => anular.indexOf(f) === -1);
+        if (cambioCab && vivas.length) {
+          const r = await MT.llamar('mtCorrIngresoDoc', { filas: vivas, tipoDoc: cab.tipoDoc, documento: cab.documento, fecha: cab.fecha, razonSocial: cab.razonSocial, ruc: ruc, moneda: cab.moneda, motivo: motivo });
+          res.push(r ? '✓ Cabecera actualizada' : '✗ No se pudo actualizar la cabecera');
+        }
+        // 2) Líneas corregidas
+        for (const e of editar) { const r = await MT.llamar('mtCorrIngresoLinea', { fila: e.fila, cantidad: e.cantidad, precioConIgv: e.precioConIgv, motivo: motivo }); res.push((r ? '✓ ' : '✗ No se pudo corregir ') + e.codigo + (r ? ' corregido' : '')); }
+        // 3) Quitadas / cambiadas de producto
+        if (anular.length) { const r = await MT.llamar('mtCorrAnularIngreso', { filas: anular, motivo: motivo }); res.push(r ? '✓ ' + anular.length + ' producto(s) quitado(s)' : '✗ No se pudieron quitar ' + anular.length + ' producto(s) (¿ya se entregaron?)'); }
+        // 4) Agregadas (misma factura, fecha y hora)
+        if (agregar.length) {
+          const r = await MT.llamar('mtGrabarIngresoV2', { fecha: cab.fecha, hora: String(g.hora || '').slice(0, 5), usuario: MT.usuario(), tipoDocumento: cab.tipoDoc, documento: cab.documento,
+            razonSocial: cab.razonSocial, ruc: ruc, observacion: 'AGREGADO AL REABRIR (' + MT.usuario() + '): ' + motivo, proveedorNuevo: null, productosNuevos: [], moneda: cab.moneda, totalComprobante: '', items: agregar });
+          res.push(r ? '✓ ' + agregar.length + ' producto(s) agregado(s)' : '✗ No se pudieron agregar los productos nuevos');
+        }
+        cerrar();
+        mostrarMensaje(res.join('\n'), res.some(x => x[0] === '✗') ? 'error' : 'exito');
+        self._datos = null;
+        await self._cargar(true);
+        self.abrirRegistrosDia();
+      });
+    });
+  },
+
+  /** Salida: abre Corregir → Salidas con la entrega ya buscada. */
+  _corregirSalida: async function (g) {
+    if (!(typeof FormAlmacenCorregir !== 'undefined' && FormAlmacenCorregir.esMaestro())) { mostrarMensaje('Solo los usuarios MAESTRO pueden corregir salidas.', 'error'); return; }
+    await FormAlmacenCorregir.abrir('salidas');
+    for (let k = 0; k < 40; k++) {
+      const b = document.getElementById('crBuscar');
+      if (b && document.getElementById('crTb')) {
+        const d = document.getElementById('crDesde'), h = document.getElementById('crHasta');
+        if (d) d.value = g.fecha; if (h) h.value = g.fecha;
+        b.value = String(g.quien || g.placa || '').toUpperCase(); b.dispatchEvent(new Event('input'));
+        return;
+      }
+      await new Promise(r => setTimeout(r, 250));
+    }
   },
 
   abrirStock: async function () {
