@@ -159,7 +159,7 @@ const FormAlmacenCorregir = {
       const linea = f => self._d.ingresos.find(x => x.fila === Number(f));
       if (b.dataset.doc) {
         const filas = b.dataset.doc.split(',').map(Number), l0 = linea(filas[0]);
-        self._dialogo('Editar comprobante', '<div class="campo"><label>Tipo</label><select id="dTipo"><option>FACTURA</option><option>BOLETA</option></select></div>' +
+        self._dialogo('Editar comprobante', '<div class="campo"><label>Tipo</label><select id="dTipo"><option>FACTURA</option><option>BOLETA</option><option>NOTA DE VENTA</option><option>SIN COMPROBANTE</option></select></div>' +
           '<div class="campo"><label>N° documento</label><input id="dDoc" style="text-transform:uppercase"></div><div class="campo"><label>Fecha</label><input type="date" id="dFecha"></div>' +
           '<div class="campo ancho2"><label>Proveedor</label><input id="dProv" list="crDlProv" style="text-transform:uppercase">' + MT.datalist('crDlProv', prov) + '</div>' +
           '<div class="campo"><label>Moneda</label><select id="dMon"><option value="">(sin cambio)</option><option value="S/">S/</option><option value="$">$</option></select></div>',

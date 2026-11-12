@@ -613,6 +613,7 @@ const FormAlmacen = {
   _lineas: function (raiz, idTabla, esSalida, alCambiar, opciones) {
     const self = this;
     const conPrecio = !esSalida && !!(opciones && opciones.precios);
+    const porLinea = !!(opciones && opciones.placaMotivo); // Salida: placa y motivo por producto (vacío = el general)
     const tbody = raiz.querySelector('#' + idTabla + ' tbody');
     const avisar = function () { if (typeof alCambiar === 'function') alCambiar(); };
     const camara = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
@@ -821,6 +822,8 @@ const FormAlmacen = {
         (esSalida ? '' : '<button type="button" class="l-nuevo" title="Producto nuevo sin código de barras">Nuevo</button>') + '</div></td>' +
         '<td class="l-prod"></td><td class="l-stock mt-stock" style="text-align:center"></td>' +
         '<td><input class="l-cant" type="number" min="0" step="any" placeholder="0"><div class="mt-ayuda l-uni"></div></td>' +
+        (!porLinea ? '' : '<td><input class="l-placa" list="' + opciones.listaPlacas + '" autocomplete="off" placeholder="(la general)" style="text-transform:uppercase"></td>' +
+          '<td><select class="l-motivo"><option value="">(el general)</option>' + (opciones.motivos || []).map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('') + '</select></td>') +
         (!conPrecio ? '' : '<td><input class="l-psin" type="number" min="0" step="any" placeholder="0.00"></td><td><input class="l-pcon" type="number" min="0" step="any" placeholder="0.00"></td>' +
           '<td><input class="l-totin" type="number" min="0" step="any" placeholder="0.00" title="Total de la línea con IGV (cantidad × precio unitario)"></td>') +
         '<td style="text-align:center"><button type="button" class="btn-quitar-l" title="Quitar">×</button></td>';
@@ -891,6 +894,7 @@ const FormAlmacen = {
         const it = { codigo: tr.querySelector('.l-cod').value.trim().toUpperCase(), cantidad: tr.querySelector('.l-cant').value.trim() };
         if (conPrecio) { it.precioSinIgv = tr.querySelector('.l-psin').value.trim(); it.precioConIgv = tr.querySelector('.l-pcon').value.trim(); it.totalLinea = tr.querySelector('.l-totin').value.trim(); }
         if (tr._nuevo) it.nuevo = tr._nuevo;
+        if (porLinea) { it.placa = tr.querySelector('.l-placa').value.trim().toUpperCase(); it.motivo = tr.querySelector('.l-motivo').value; }
         return it;
       }).filter(function (x) { return x.codigo || x.cantidad; });
     }
@@ -958,7 +962,7 @@ const FormAlmacen = {
             <div class="campo"><label>Fecha</label><input type="date" id="iFecha" value="${MT.hoy()}"></div>
             <div class="campo"><label>Hora</label><input type="time" step="1" id="iHora" value="${MT.ahora()}"></div>
             ${self._campoUsuario('iUsuario')}
-            <div class="campo"><label>Tipo de documento</label><select id="iTipoDoc"><option value=""></option><option value="FACTURA">FACTURA</option><option value="BOLETA">BOLETA</option></select></div>
+            <div class="campo"><label>Tipo de documento</label><select id="iTipoDoc"><option value=""></option><option value="FACTURA">FACTURA</option><option value="BOLETA">BOLETA</option><option value="NOTA DE VENTA">NOTA DE VENTA</option><option value="SIN COMPROBANTE">SIN COMPROBANTE</option></select></div>
             <div class="campo"><label>N° de documento</label><input type="text" id="iDocumento" autocomplete="off" placeholder="Ej. F001-000123" style="text-transform:uppercase"></div>
             <div class="campo"><label>Moneda</label><select id="iMoneda"><option value=""></option><option value="S/">S/</option><option value="$">$</option></select></div>
             <div class="campo ancho2"><label>Razón social (proveedor)</label>
@@ -1049,6 +1053,13 @@ const FormAlmacen = {
         const p = self._datos.proveedores.find(x => x.razonSocial === this.value);
         $('iRuc').value = p ? p.ruc : '';
       });
+      // SIN COMPROBANTE: N° y proveedor opcionales (el sistema pone S/N y "SIN PROVEEDOR")
+      $('iTipoDoc').addEventListener('change', function () {
+        const sc = this.value === 'SIN COMPROBANTE';
+        $('iDocumento').placeholder = sc ? 'No se pide (queda S/N)' : 'Ej. F001-000123';
+        $('iDocumento').style.background = sc ? '#f1f5f9' : '';
+        $('iRazon').title = sc ? 'Opcional: si no eliges, queda "SIN PROVEEDOR"' : '';
+      });
       ['iFecha', 'iTipoDoc', 'iDocumento', 'iMoneda', 'iTotalComp', 'iRazon', 'iObs', 'iProvRazon', 'iProvRuc', 'iProvVendedor', 'iProvDireccion', 'iProvMapa'].forEach(id => {
         $(id).addEventListener('input', programarBorrador); $(id).addEventListener('change', programarBorrador);
       });
@@ -1084,8 +1095,9 @@ const FormAlmacen = {
       protegerClic($('btnGrabarIngreso'), async function () {
         const usuario = $('iUsuario').value.trim();
         if (!usuario) { mostrarMensaje('Ingrese el usuario.', 'error'); return; }
-        if (!$('iTipoDoc').value) { mostrarMensaje('Elige si el documento es FACTURA o BOLETA.', 'error'); return; }
-        if (!$('iDocumento').value.trim()) { mostrarMensaje('Escribe el número de ' + $('iTipoDoc').value.toLowerCase() + '.', 'error'); return; }
+        if (!$('iTipoDoc').value) { mostrarMensaje('Elige el tipo de documento (FACTURA, BOLETA, NOTA DE VENTA o SIN COMPROBANTE).', 'error'); return; }
+        const sinComp = $('iTipoDoc').value === 'SIN COMPROBANTE';
+        if (!sinComp && !$('iDocumento').value.trim()) { mostrarMensaje('Escribe el número de ' + $('iTipoDoc').value.toLowerCase() + '.', 'error'); return; }
         if (!$('iMoneda').value) { mostrarMensaje('Elige la moneda del comprobante (S/ o $).', 'error'); return; }
         let razon = $('iRazon').value, proveedorNuevo = null;
         if (provNuevo) {
@@ -1097,14 +1109,14 @@ const FormAlmacen = {
           proveedorNuevo = { razonSocial: razon, ruc: $('iProvRuc').value.trim(), vendedor: $('iProvVendedor').value.trim().toUpperCase(),
             direccion: $('iProvDireccion').value.trim().toUpperCase(), ubicacion: mapa };
         }
-        if (!razon) { mostrarMensaje('Seleccione la razón social del proveedor.', 'error'); return; }
+        if (!razon && !sinComp) { mostrarMensaje('Seleccione la razón social del proveedor.', 'error'); return; }
         // Productos nuevos que quedaron con "Crear aquí" abierto sin guardar
         if (raiz.querySelector('#tablaLineasIng tr.l-sub')) { mostrarMensaje('Hay un producto nuevo sin terminar: completa sus datos y pulsa "Guardar y seguir".', 'error'); return; }
         const err = lineasObj.validar();
         if (err) { mostrarMensaje(err, 'error'); return; }
         const tcomp = MT.num($('iTotalComp').value), tsum = lineasObj.total();
         if (!isNaN(tcomp) && tcomp > 0 && Math.abs(tcomp - tsum) > 0.1) { mostrarMensaje('La suma de los productos (' + MT.dinero(tsum) + ') no cuadra con el total del comprobante (' + MT.dinero(tcomp) + '). Revisa precios o cantidades.', 'error'); return; }
-        if (!confirmar('Total del ' + $('iTipoDoc').value.toLowerCase() + ' ' + $('iDocumento').value.trim().toUpperCase() + ': ' + $('iMoneda').value + ' ' + MT.dinero(tsum) + '\n\n¿Grabar el ingreso?')) return;
+        if (!confirmar('Total ' + (sinComp ? '(sin comprobante' + (razon ? ', ' + razon : '') + ')' : 'del ' + $('iTipoDoc').value.toLowerCase() + ' ' + $('iDocumento').value.trim().toUpperCase()) + ': ' + $('iMoneda').value + ' ' + MT.dinero(tsum) + '\n\n¿Grabar el ingreso?')) return;
         MT.guardarUsuario(usuario);
         guardarBorrador();
         const items = lineasObj.leer();
@@ -1153,18 +1165,18 @@ const FormAlmacen = {
             <div class="campo"><label>Fecha</label><input type="date" id="sFecha" value="${MT.hoy()}"></div>
             <div class="campo"><label>Hora</label><input type="time" step="1" id="sHora" value="${MT.ahora()}"></div>
             ${self._campoUsuario('sUsuario')}
-            <div class="campo"><label>Motivo de salida</label><select id="sMotivo">${MT.opciones(MT_MOTIVOS_SALIDA, '')}</select></div>
+            <div class="campo"><label>Motivo de salida (general)</label><select id="sMotivo">${MT.opciones(MT_MOTIVOS_SALIDA, '')}</select></div>
             <div class="campo ancho2"><label>Entregado a</label><select id="sEntregado">${MT.opciones(d.personal, '')}</select></div>
-            <div class="campo"><label>Placa</label>${MT.campoPlaca('sPlaca', d.placas)}</div>
+            <div class="campo"><label>Placa (general)</label>${MT.campoPlaca('sPlaca', d.placas)}</div>
             <div class="campo"></div>
             <div class="campo ancho4"><label>Observación (opcional)</label><input type="text" id="sObs" autocomplete="off" style="text-transform:uppercase"></div>
           </div>
-          <div class="mt-ayuda">Las salidas con motivo MANTENIMIENTO quedan pendientes para asociarlas en "Registrar mantenimiento".</div>
+          <div class="mt-ayuda">Las salidas con motivo MANTENIMIENTO quedan pendientes para asociarlas en "Registrar mantenimiento". Si un producto va a otra placa o con otro motivo, cámbialo en su fila (vacío = el general).</div>
         </div>
         <div class="mt-seccion"><h3>Productos</h3>
           <table class="tabla-lista mt-lineas" id="tablaLineasSal">
-            <colgroup><col style="width:30%"><col><col style="width:120px"><col style="width:130px"><col style="width:40px"></colgroup>
-            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad entregada (unid. de salida)</th><th></th></tr></thead><tbody></tbody>
+            <colgroup><col style="width:26%"><col><col style="width:90px"><col style="width:110px"><col style="width:120px"><col style="width:150px"><col style="width:40px"></colgroup>
+            <thead><tr><th>Código</th><th>Producto</th><th>Stock</th><th>Cantidad entregada (unid. de salida)</th><th>Placa</th><th>Motivo</th><th></th></tr></thead><tbody></tbody>
           </table>
           <button type="button" class="mt-agregar" id="btnAgregarLineaSal">+ Agregar producto</button>
           <div class="mt-botones">
@@ -1178,7 +1190,7 @@ const FormAlmacen = {
 
     abrirPanel('Registrar salida', html, function (raiz) {
       const $ = id => raiz.querySelector('#' + id);
-      const lineas = self._lineas(raiz, 'tablaLineasSal', true);
+      const lineas = self._lineas(raiz, 'tablaLineasSal', true, null, { placaMotivo: true, listaPlacas: 'dl_sPlaca', motivos: MT_MOTIVOS_SALIDA });
       $('btnAgregarLineaSal').addEventListener('click', () => lineas.agregar().querySelector('.l-cod').focus());
       function limpiarTodo() {
         lineas.limpiar();
@@ -1198,20 +1210,39 @@ const FormAlmacen = {
       protegerClic($('btnGrabarSalida'), async function () {
         const usuario = usuarioOk();
         if (!usuario) return;
-        if (!$('sMotivo').value) { mostrarMensaje('Seleccione el motivo de salida.', 'error'); return; }
         if (!$('sEntregado').value) { mostrarMensaje('Seleccione a quién se entregó.', 'error'); return; }
-        if (!$('sPlaca').value.trim()) { mostrarMensaje('Elige o escribe la placa o unidad (ej. UG-0116).', 'error'); return; }
         const err = lineas.validar();
         if (err) { mostrarMensaje(err, 'error'); return; }
-        const r = await MT.llamar('mtGrabarSalidaLote', {
-          fecha: $('sFecha').value, hora: $('sHora').value, usuario: usuario,
-          entregadoA: $('sEntregado').value, placa: MT.placa($('sPlaca'), d.placas), motivo: $('sMotivo').value,
-          observacion: $('sObs').value, items: lineas.leer()
-        });
-        if (!r) return;
-        self._aplicarStocks(r.items);
-        mostrarMensaje(r.mensaje + (r.stockMinimo && r.stockMinimo.length ? '\n\nAtención, quedaron en stock mínimo o por debajo:\n- ' + r.stockMinimo.join('\n- ') : ''), 'exito');
-        limpiarTodo();
+        const items = lineas.leer();
+        const placaGen = $('sPlaca').value.trim() ? MT.placa($('sPlaca'), d.placas) : '', motivoGen = $('sMotivo').value;
+        // Placa y motivo por producto (vacío = el general). Se graba una salida por cada combinación placa + motivo.
+        const grupos = {}, orden = [];
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          const pl = it.placa ? MT.placa({ value: it.placa }, d.placas) : placaGen, mo = it.motivo || motivoGen;
+          if (!pl) { mostrarMensaje('Producto ' + (i + 1) + ': falta la placa (ponla en la fila o en "Placa (general)").', 'error'); return; }
+          if (!mo) { mostrarMensaje('Producto ' + (i + 1) + ': falta el motivo (ponlo en la fila o en "Motivo de salida (general)").', 'error'); return; }
+          const k = pl + '|' + mo;
+          if (!grupos[k]) { grupos[k] = { placa: pl, motivo: mo, items: [] }; orden.push(k); }
+          grupos[k].items.push({ codigo: it.codigo, cantidad: it.cantidad });
+        }
+        if (orden.length > 1 && !confirmar('Se registrarán ' + orden.length + ' salidas para ' + $('sEntregado').value + ':\n' + orden.map(k => '• ' + grupos[k].placa + ' · ' + grupos[k].motivo + ' (' + grupos[k].items.length + ' producto(s))').join('\n') + '\n\n¿Continuar?')) return;
+        const msgs = [], minimos = [];
+        let fallo = false;
+        for (const k of orden) {
+          const g = grupos[k];
+          const r = await MT.llamar('mtGrabarSalidaLote', {
+            fecha: $('sFecha').value, hora: $('sHora').value, usuario: usuario,
+            entregadoA: $('sEntregado').value, placa: g.placa, motivo: g.motivo,
+            observacion: $('sObs').value, items: g.items
+          });
+          if (!r) { fallo = true; msgs.push('✗ ' + g.placa + ' · ' + g.motivo + ': no se grabó'); break; }
+          self._aplicarStocks(r.items);
+          msgs.push('✓ ' + g.placa + ' · ' + g.motivo + ': ' + (r.mensaje || 'grabado'));
+          (r.stockMinimo || []).forEach(x => { if (minimos.indexOf(x) === -1) minimos.push(x); });
+        }
+        mostrarMensaje(msgs.join('\n') + (minimos.length ? '\n\nAtención, quedaron en stock mínimo o por debajo:\n- ' + minimos.join('\n- ') : ''), fallo ? 'error' : 'exito');
+        if (!fallo) limpiarTodo();
       });
 
     }, { clase: 'panel-servicio' });
@@ -1586,7 +1617,7 @@ const FormAlmacen = {
     const html = '<div class="mt-form">' +
       '<div class="mt-ayuda" style="margin-bottom:8px;color:#92400e">Corrige la factura completa. Para <b>cambiar un producto</b> escribe el código correcto en su fila (se anula el anterior y entra el nuevo). Lo que quites sale del stock; si esas unidades ya se entregaron, no se podrá grabar.</div>' +
       '<div class="fila-campos" style="grid-template-columns:1fr 1.2fr 1fr 2fr 0.8fr">' +
-      '<div class="campo"><label>Tipo</label><select id="riTipo"><option>FACTURA</option><option>BOLETA</option></select></div>' +
+      '<div class="campo"><label>Tipo</label><select id="riTipo"><option>FACTURA</option><option>BOLETA</option><option>NOTA DE VENTA</option><option>SIN COMPROBANTE</option></select></div>' +
       '<div class="campo"><label>N° documento</label><input id="riDoc" style="text-transform:uppercase"></div>' +
       '<div class="campo"><label>Fecha</label><input type="date" id="riFecha"></div>' +
       '<div class="campo"><label>Proveedor</label><input id="riProv" list="riDlProv" style="text-transform:uppercase">' + MT.datalist('riDlProv', provs) + '</div>' +
@@ -1601,7 +1632,7 @@ const FormAlmacen = {
       '<div class="mt-botones"><button class="boton-secundario" id="riNo">Cancelar</button><button class="boton-primario" id="riSi">Guardar cambios</button></div></div>';
     MT.sobreventana('Reabrir ' + (g.tipoDoc + ' ' + g.documento).trim() + ' · ' + g.quien, html, function (c, cerrar) {
       const q = id => c.querySelector('#' + id);
-      q('riTipo').value = g.tipoDoc === 'BOLETA' ? 'BOLETA' : 'FACTURA'; q('riDoc').value = g.documento; q('riFecha').value = g.fecha; q('riProv').value = g.quien;
+      q('riTipo').value = ['BOLETA', 'NOTA DE VENTA', 'SIN COMPROBANTE'].indexOf(g.tipoDoc) >= 0 ? g.tipoDoc : 'FACTURA'; q('riDoc').value = g.documento; q('riFecha').value = g.fecha; q('riProv').value = g.quien;
       q('riMon').value = /S\//.test(l0.moneda) ? 'S/' : '$';
       const quitadas = new Set();
       const calc = function () {
@@ -1641,9 +1672,9 @@ const FormAlmacen = {
         const motivo = q('riMotivo').value.trim();
         if (motivo.length < 4) { mostrarMensaje('Escribe el motivo del cambio.', 'error'); return; }
         const cab = { tipoDoc: q('riTipo').value, documento: q('riDoc').value.trim().toUpperCase(), fecha: q('riFecha').value, razonSocial: q('riProv').value.trim().toUpperCase(), moneda: q('riMon').value };
-        if (!cab.documento || !cab.fecha || !cab.razonSocial) { mostrarMensaje('Completa N° de documento, fecha y proveedor.', 'error'); return; }
+        if (!cab.fecha || (cab.tipoDoc !== 'SIN COMPROBANTE' && (!cab.documento || !cab.razonSocial))) { mostrarMensaje('Completa N° de documento, fecha y proveedor.', 'error'); return; }
         const prov = (self._datos.proveedores || []).find(p => String(p.razonSocial).toUpperCase() === cab.razonSocial);
-        if (!prov && cab.razonSocial !== String(g.quien).toUpperCase()) { mostrarMensaje('Ese proveedor no está en el catálogo. Créalo primero en Catálogo → Proveedores.', 'error'); return; }
+        if (!prov && cab.razonSocial && cab.razonSocial !== 'SIN PROVEEDOR' && cab.razonSocial !== String(g.quien).toUpperCase()) { mostrarMensaje('Ese proveedor no está en el catálogo. Créalo primero en Catálogo → Proveedores.', 'error'); return; }
         const ruc = prov ? prov.ruc : g.ruc;
         // Clasificar filas
         const editar = [], anular = Array.from(quitadas), agregar = [];
@@ -1661,7 +1692,7 @@ const FormAlmacen = {
           if (Number(orig.cantidad) !== cant || Math.abs((Number(orig.precioConIgv) || 0) - pcon) > 0.0005) editar.push({ fila: fila, cantidad: cant, precioConIgv: pcon, codigo: cod });
         });
         if (error) { mostrarMensaje(error, 'error'); return; }
-        const cambioCab = cab.tipoDoc !== (g.tipoDoc === 'BOLETA' ? 'BOLETA' : 'FACTURA') || cab.documento !== String(g.documento).toUpperCase() || cab.fecha !== g.fecha ||
+        const cambioCab = cab.tipoDoc !== (['BOLETA', 'NOTA DE VENTA', 'SIN COMPROBANTE'].indexOf(g.tipoDoc) >= 0 ? g.tipoDoc : 'FACTURA') || cab.documento !== String(g.documento).toUpperCase() || cab.fecha !== g.fecha ||
           cab.razonSocial !== String(g.quien).toUpperCase() || cab.moneda !== (/S\//.test(l0.moneda) ? 'S/' : '$');
         if (!cambioCab && !editar.length && !anular.length && !agregar.length) { mostrarMensaje('No hay cambios para guardar.', 'info'); return; }
         const tc = MT.num(q('riTComp').value), tt = calc();

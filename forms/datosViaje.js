@@ -367,7 +367,7 @@ const FormDatosViaje = {
       const verCobrados = function () {
         cobradoPlanta = (f._sc || []).some(x => /^HORAS EXTRAS PLANTA|^H\.E\. PLANTA/.test(x.tipo));
         cobradoPuerto = (f._sc || []).some(x => /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo));
-        cobradoGas = (f._sc || []).some(x => /^GASIFICADO/.test(x.tipo) && !(Number(x.total) === 0));
+        cobradoGas = (f._sc || []).some(x => (/^GASIFICADO/.test(x.tipo) || (esGas && /^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(x.tipo))) && !(Number(x.total) === 0));
       };
       verCobrados();
       const nc = self._nc(f);
@@ -411,7 +411,7 @@ const FormDatosViaje = {
           : '<button data-nc="' + c + '" data-h="' + h + '" style="border-color:#94a3b8;color:#475569">✕ No se cobra</button>';
         ctx.ncH = { PLANTA: extra, GASIFICADO: gasCobrar, PUERTO: extraPu };
         if (extra > 0 && !cobradoPlanta) sug.push(nc.PLANTA ? bNo('PLANTA', extra, 'Horas extra en planta') : '<button data-m="HORAS EXTRAS PLANTA">+ Facturar ' + extra.toFixed(1) + ' h extra en planta</button>' + bNo('PLANTA', extra));
-        if (gasCobrar && !cobradoGas) sug.push(nc.GASIFICADO ? bNo('GASIFICADO', gasCobrar, 'Gasificado') : '<button data-m="GASIFICADO">+ Facturar ' + gasCobrar.toFixed(1) + ' h extra de gasificado</button>' + bNo('GASIFICADO', gasCobrar));
+        if (gasCobrar && !cobradoGas) sug.push(nc.GASIFICADO ? bNo('GASIFICADO', gasCobrar, 'Gasificado') : '<button data-m="HORAS EXTRAS PUERTO">+ Facturar ' + gasCobrar.toFixed(1) + ' h extra en puerto (desde el gasificado)</button>' + bNo('GASIFICADO', gasCobrar));
         if (extraPu > 0 && !cobradoPuerto) sug.push(nc.PUERTO ? bNo('PUERTO', extraPu, 'Horas extra en puerto') : '<button data-m="HORAS EXTRAS PUERTO">+ Facturar ' + extraPu.toFixed(1) + ' h extra en puerto</button>' + bNo('PUERTO', extraPu));
         sug.push('<button data-m="PERNOCTE">+ Facturar pernocte</button>');
         const avisos = [];
@@ -444,6 +444,7 @@ const FormDatosViaje = {
         $('dvScCantLbl').textContent = m === 'PERNOCTE' ? 'Noches' : 'Horas';
         $('dvScPrecioLbl').textContent = m === 'PERNOCTE' ? 'Tarifa por noche (con IGV)' : 'Tarifa por hora (con IGV)';
         if (m === 'HORAS EXTRAS PLANTA') { $('dvScCant').value = ctx.extra > 0 ? ctx.extra : ''; $('dvScObs').value = ctx.extra > 0 ? self._textoCobro(cita, ctx.lleP, ctx.salP, ctx.cb, libres) : ''; }
+        else if (m === 'HORAS EXTRAS PUERTO' && esGas) { $('dvScCant').value = ctx.gasCobrar > 0 ? ctx.gasCobrar : ''; $('dvScObs').value = ctx.enGasPu !== null ? ('Gasificado ' + self._fh(ctx.gIni) + ' → ' + self._fh(ctx.gFin) + ' · salida puerto ' + self._fh(ctx.salPu) + ' · ' + ctx.enGasPu.toFixed(2) + ' h (inicio gasificado → salida puerto) − ' + self.LIBRES_GASIFICADO + ' h libres') : ''; }
         else if (m === 'HORAS EXTRAS PUERTO') { $('dvScCant').value = ctx.extraPu > 0 ? ctx.extraPu : ''; $('dvScObs').value = ctx.enPu !== null ? ('Cola puerto ' + self._fh(ctx.cola) + ' · salida ' + self._fh(ctx.salPu) + ' · ' + ctx.enPu.toFixed(2) + ' h en puerto − ' + self.LIBRES_PUERTO + ' h libres') : ''; }
         else if (m === 'GASIFICADO') { $('dvScCant').value = ctx.gasCobrar > 0 ? ctx.gasCobrar : ''; $('dvScObs').value = ctx.enGasPu !== null ? ('Gasificado ' + self._fh(ctx.gIni) + ' → ' + self._fh(ctx.gFin) + ' · salida puerto ' + self._fh(ctx.salPu) + ' · ' + ctx.enGasPu.toFixed(2) + ' h (inicio gasificado → salida puerto) − ' + self.LIBRES_GASIFICADO + ' h libres') : ''; }
         else { $('dvScCant').value = 1; $('dvScObs').value = ''; }
@@ -527,7 +528,7 @@ const FormDatosViaje = {
         const regTipos = sc.map(x => String(x.tipo || '').toUpperCase());
         const pend = [];
         if (ctx.extra > 0 && !nc.PLANTA && !regTipos.some(x => /HORAS EXTRAS PLANTA|H\.E\. PLANTA/.test(x))) pend.push(['Horas extras en planta', ctx.extra.toFixed(2) + ' h']);
-        if (esGas && !nc.GASIFICADO && ctx.gasCobrar > 0 && !regTipos.some(x => /^GASIF/.test(x))) pend.push(['Gasificado (horas extra)', ctx.gasCobrar.toFixed(2) + ' h']);
+        if (esGas && !nc.GASIFICADO && ctx.gasCobrar > 0 && !regTipos.some(x => /^GASIF|HORAS EXTRAS PUERTO|H\.E\. PUERTO/.test(x))) pend.push(['Horas extras en puerto (desde el gasificado)', ctx.gasCobrar.toFixed(2) + ' h']);
         if (extraPu > 0 && !nc.PUERTO && !regTipos.some(x => /HORAS EXTRAS PUERTO|H\.E\. PUERTO/.test(x))) pend.push(['Horas extras en puerto', extraPu.toFixed(2) + ' h']);
         let h = '<div style="font-family:Arial,sans-serif;font-size:13px;color:#1e293b">';
         h += '<p style="margin:0 0 8px">Estimados, se detalla el sobrecosto del siguiente servicio:</p>';
@@ -695,7 +696,7 @@ const FormDatosViaje = {
     if (!this._esGas(f)) return '<span style="color:#94a3b8">—</span>';
     const c = this._calc(f);
     const h = c.enGas, hc = c.enGasPu;
-    const sc = (f._sc || []).find(x => /^GASIF/.test(String(x.tipo || '')) && !(Number(x.total) === 0));
+    const sc = (f._sc || []).find(x => /^GASIF|^HORAS EXTRAS PUERTO|^H\.E\. PUERTO/.test(String(x.tipo || '')) && !(Number(x.total) === 0));
     const nc = this._nc(f).GASIFICADO;
     const ex = hc !== null && hc >= 0 && hc <= 200 ? Math.max(0, Math.round((hc - this.LIBRES_GASIFICADO) * 100) / 100) : null;
     const tag = (bg, col, t, tit) => '<br><span' + (tit ? ' title="' + esc(tit) + '"' : '') + ' style="display:inline-block;margin-top:2px;padding:1px 6px;border-radius:8px;background:' + bg + ';color:' + col + ';font-size:.7rem;font-weight:700">' + t + '</span>';
