@@ -210,6 +210,16 @@ const FormSelServicioContabilidad = {
     const msCliente = crearMultiSelect(raiz.querySelector('#msCliente'), { textoTodos: 'Todos', onChange: refiltrar });
     const msPacking = crearMultiSelect(raiz.querySelector('#msPacking'), { textoTodos: 'Todas', onChange: refiltrar });
     msEstado.setOpciones(self.ESTADOS);
+    // Ordenar por columna: clic en el encabezado (asc → desc → orden normal)
+    self._ordenCol = null; self._ordenDir = 1;
+    raiz.querySelector('#tablaServicios thead').addEventListener('click', function (ev) {
+      const th = ev.target.closest('th'); if (!th || th.style.cursor !== 'pointer') return;
+      const i = Array.prototype.indexOf.call(th.parentNode.children, th);
+      if (self._ordenCol !== i) { self._ordenCol = i; self._ordenDir = 1; }
+      else if (self._ordenDir === 1) self._ordenDir = -1;
+      else { self._ordenCol = null; self._ordenDir = 1; }
+      cargar(true);
+    });
 
     // soloFiltrar === true: vuelve a filtrar lo ya traído, sin ir al backend.
     async function cargar(soloFiltrar) {
@@ -246,26 +256,58 @@ const FormSelServicioContabilidad = {
       if (datos === 'completo') filas = filas.filter(f => esServicioCompleto(f));
       if (datos === 'incompleto') filas = filas.filter(f => !esServicioCompleto(f));
 
+      // Orden por defecto: programados → en curso → reprogramados → culminados (más recientes primero)
+      // → otros → falsos fletes y cancelados al final (más recientes primero).
       function prioridadEstado(estado) {
         const e = String(estado || '').trim().toUpperCase();
         if (e === '' || e === 'PROGRAMADO') return 0;
         if (['RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'EN RUTA'].indexOf(e) !== -1) return 1;
-        if (e === 'FALSO FLETE' || e === 'REPROGRAMADO' || e === 'CANCELADO') return 2;
-        return 3;
+        if (e === 'REPROGRAMADO') return 2;
+        if (e === 'CULMINADO') return 3;
+        if (e === 'FALSO FLETE' || e === 'CANCELADO') return 5;
+        return 4;
       }
+      function tiempo(v) { const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); }
       function distanciaHoy(f) {
-        const d = new Date(f['FECHA DE PROGRAMACION']);
-        if (isNaN(d.getTime())) return Infinity;
-        return Math.abs(d.getTime() - Date.now());
+        const t = tiempo(f['FECHA DE PROGRAMACION']);
+        return t === null ? Infinity : Math.abs(t - Date.now());
       }
+      const fechaDesc = (a, b) => (tiempo(b['FECHA DE PROGRAMACION']) || 0) - (tiempo(a['FECHA DE PROGRAMACION']) || 0);
+      // Orden elegido por columna (clic en el encabezado): asc → desc → orden por defecto
+      const COLS = [
+        f => tiempo(f['FECHA DE PROGRAMACION']), f => mayus(f['CLIENTE PARA FACTURACIÓN']), f => mayus(f['CONDUCTOR']), f => mayus(f['PLACA TRACTO']),
+        f => mayus(f['BOOKING']), f => tiempo(f['FECHA DE RETIRO']), f => mayus(f['DESTINO 1']), f => mayus(f['PACKING']),
+        f => { const d = mayus(f['DESTINO 2']); return d === '-' ? '' : d; }, f => tiempo(f['FECHA DE DEVOLUCION']), f => mayus(f['OBSERVACION']),
+        f => esServicioCompleto(f) ? 1 : 0, f => (typeof FormAcarreoDocs !== 'undefined' && FormAcarreoDocs.boton ? String(FormAcarreoDocs.boton(f)).indexOf('Completo') >= 0 ? 1 : 0 : 0), null,
+        f => mayus(f['ESTADO']) || 'PROGRAMADO'
+      ];
+      const oc = self._ordenCol, od = self._ordenDir || 1;
       filas = filas.slice().sort(function (a, b) {
+        if (oc !== undefined && oc !== null && COLS[oc]) {
+          const va = COLS[oc](a), vb = COLS[oc](b);
+          const na = va === null || va === '', nb = vb === null || vb === '';
+          if (na !== nb) return na ? 1 : -1; // vacíos siempre al final
+          if (!na) {
+            const c = (typeof va === 'number' && typeof vb === 'number') ? va - vb : String(va).localeCompare(String(vb), 'es', { numeric: true });
+            if (c) return c * od;
+          }
+          return fechaDesc(a, b);
+        }
         const pa = prioridadEstado(a['ESTADO']);
         const pb = prioridadEstado(b['ESTADO']);
         if (pa !== pb) return pa - pb;
+        if (pa >= 3) return fechaDesc(a, b);
         const ca = esServicioCompleto(a) ? 1 : 0;
         const cb = esServicioCompleto(b) ? 1 : 0;
         if (ca !== cb) return ca - cb;
         return distanciaHoy(a) - distanciaHoy(b);
+      });
+      raiz.querySelectorAll('#tablaServicios thead th').forEach(function (th, i) {
+        if (!COLS[i]) return;
+        th.style.cursor = 'pointer';
+        th.title = 'Ordenar (clic: menor a mayor / A→Z, otro clic: mayor a menor / Z→A, otro clic: orden normal)';
+        th.dataset.base = th.dataset.base || th.textContent;
+        th.textContent = th.dataset.base + (oc === i ? (od === 1 ? ' ▲' : ' ▼') : '');
       });
 
       const tbody = raiz.querySelector('#tablaServicios tbody');
