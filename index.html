@@ -7,12 +7,14 @@
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261113a';
-  ['styles.css', 'home.css'].forEach(function (h) {
+  window.__VERSION_APP = '20261113c';
+  ['styles.css', 'home.css', 'home2.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
 </script>
-<noscript><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="home.css"></noscript>
+<noscript><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="home.css"><link rel="stylesheet" href="home2.css"></noscript>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 </head>
 <body class="home-body">
 
@@ -493,6 +495,7 @@
 <script>
   [
     'app.js',
+    'homeLateral.js',
     'forms/multiSelect.js',
     'forms/accesoServicios.js',
     'forms/tipoCambio.js',
