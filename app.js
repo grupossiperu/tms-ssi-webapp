@@ -449,7 +449,8 @@ async function verificarAvisosVencimiento() {
     const partes = [];
     if (vencidos) partes.push(vencidos + ' vencido(s)');
     if (porVencer) partes.push(porVencer + ' por vencer en 10 días o menos');
-    let resumen = '<strong>Documentos por actualizar:</strong> ' + partes.join(' y ') + '. ';
+    window._avisosVenc = avisos;
+    let resumen = '<strong>' + (avisos.some(function (a) { return a.tipoEntidad === 'CONTRATOS'; }) ? 'Documentos y contratos por actualizar:' : 'Documentos por actualizar:') + '</strong> ' + partes.join(' y ') + '. ';
     resumen += avisos.slice(0, 5).map(function (a) {
       return a.nombre + ' - ' + a.documento + (a.vencido ? ' (vencido)' : ' (' + a.dias + ' d.)');
     }).join(' · ');
@@ -471,7 +472,9 @@ document.addEventListener('DOMContentLoaded', function () {
         franjaAvisos.classList.remove('visible');
         return;
       }
-      FormDocumentos.abrir();
+      const av = window._avisosVenc || [];
+      if (av.length && av.every(function (a) { return a.tipoEntidad === 'CONTRATOS'; }) && typeof FormContratos !== 'undefined') FormContratos.abrir();
+      else FormDocumentos.abrir();
     });
   }
 

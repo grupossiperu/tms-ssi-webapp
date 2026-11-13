@@ -7,7 +7,7 @@
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261112c';
+  window.__VERSION_APP = '20261113a';
   ['styles.css', 'home.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
@@ -326,6 +326,18 @@
           <span class="tile-texto"><strong>Clientes</strong><small>Razón social y RUC</small></span>
         </button>
 
+        <button class="tile" id="btn-contratos">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="13" y2="17"></line>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Contratos</strong><small>Personal y vencimientos</small></span>
+        </button>
+
         <button class="tile" id="btn-gestionar-peajes">
           <span class="tile-icono">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -510,6 +522,7 @@
     'forms/resultadosAlmacen.js',
     'forms/reporteFacturacion.js',
     'forms/clientes.js',
+    'forms/contratos.js',
     'forms/almacen.js',
     'forms/almacenCorregir.js',
     'forms/mantenimiento.js',
