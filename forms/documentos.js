@@ -9,7 +9,7 @@
 
 const FormDocumentos = {
   _tipos: [
-    { clave: 'GENERALES', etiqueta: 'Generales', campoClave: 'EMPRESA', tituloClave: 'Empresa', campos: [
+    { clave: 'GENERALES', etiqueta: 'Pólizas y seguros', campoClave: 'EMPRESA', tituloClave: 'Empresa', campos: [
       { campo: 'EMPRESA', etiqueta: 'Empresa' }
     ] },
     { clave: 'CONDUCTORES', etiqueta: 'Conductores', campoClave: 'DNI', tituloClave: 'DNI', campos: [
@@ -50,8 +50,7 @@ const FormDocumentos = {
     if (this._tipoActual === 'GENERALES') {
       return '' +
         '<div class="tabs-documentos">' + tabs + '</div>' +
-        '<p style="margin:4px 0 10px;color:#475569;font-size:.85rem">Documentos de la empresa (Transportes SSI S.A.C.): SCTR y pólizas.</p>' +
-        '<div id="formAgregarEntidad"></div>' +
+        '<p style="margin:4px 0 10px;color:#475569;font-size:.85rem">Pólizas y seguros de la empresa (SCTR, vehicular, carga, contenedores…). Las registra Facturación.</p>' +
         '<div id="listaEntidadesDocs">Cargando...</div>' +
         '<div class="panel-footer" style="margin-top:16px; justify-content:flex-end;">' +
           '<button type="button" class="boton-secundario" id="btnVolverMenuDocs">Volver al menú</button>' +
@@ -82,7 +81,7 @@ const FormDocumentos = {
       });
     });
     raiz.querySelector('#btnVolverMenuDocs').addEventListener('click', function () { cerrarPanel(); });
-    if (this._tipoActual === 'GENERALES') { this._cargar(raiz); return; }
+    if (this._tipoActual === 'GENERALES') { FormPolizas.render(raiz.querySelector('#listaEntidadesDocs')); return; } // v121: pólizas
     raiz.querySelector('#btnRecargarDocs').addEventListener('click', function () { self._cargar(raiz); });
     raiz.querySelector('#btnAgregarEntidad').addEventListener('click', function () {
       self._mostrarAgregar = !self._mostrarAgregar;
