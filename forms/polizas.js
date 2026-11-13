@@ -42,7 +42,7 @@ const FormPolizas = {
       </style>
       <div class="pz-barra">
         <div class="campo"><label>Tipo</label><select id="pzTipo"><option value="">Todos</option>${r.tipos.map(t => '<option>' + t + '</option>').join('')}</select></div>
-        <div class="campo"><label>Estado</label><select id="pzEst"><option value="ACTIVA">Activas</option><option value="">Todas</option><option value="ANULADA">Dadas de baja</option></select></div>
+        <div class="campo"><label>Estado</label><select id="pzEst"><option value="ACTIVA">Activas</option><option value="">Todas</option><option value="RENOVADA">Renovadas</option><option value="ANULADA">Dadas de baja</option></select></div>
         <div class="campo" style="min-width:220px"><label>Buscar</label><input id="pzQ" placeholder="Nombre, aseguradora, N° póliza, placa"></div>
         ${ed ? '<button class="boton-primario" id="pzNuevo">+ Nueva póliza</button>' : ''}
         <button class="boton-secundario" id="pzExcel">⬇ Exportar Excel</button>
@@ -69,6 +69,7 @@ const FormPolizas = {
   },
 
   _chipFin: function (x) {
+    if (x.estado === 'RENOVADA') return '<span class="pz-chip" style="background:#e0e7ff;color:#3730a3" title="' + esc(x.motivoBaja || '') + '">Renovada</span>';
     if (x.estado !== 'ACTIVA') return '<span class="pz-chip" style="background:#f1f5f9;color:#64748b">De baja</span>';
     if (x.diasFin === null) return '<span class="pz-chip" style="background:#f1f5f9;color:#64748b">Sin fecha</span>';
     if (x.diasFin < 0) return '<span class="pz-chip" style="background:#fee2e2;color:#991b1b">Vencida</span>';
@@ -114,7 +115,8 @@ const FormPolizas = {
       return;
     }
     x = x || { nombre: '', tipo: '', aseguradora: '', numero: '', moneda: 'USD', prima: '', inicio: '', fin: '', placas: '', observacion: '', cuotas: [], endosos: [], estado: 'ACTIVA' };
-    const w = UI120.ventana(x.id ? 'Póliza · ' + esc(x.nombre) : 'Nueva póliza', `
+    const w = UI120.ventana(x.id ? 'Póliza · ' + esc(x.nombre) : x._renuevaDe ? '🔄 Renovar póliza · ' + esc(x.nombre) : 'Nueva póliza', `
+      ${x._renuevaDe ? '<div class="info" style="background:#eef2ff;margin-bottom:10px"><span>Renovación: revise fechas, prima y cuotas, suba la póliza nueva y guarde. La póliza anterior quedará como <b>Renovada</b> y dejará de avisar.</span></div>' : ''}
       <div class="g">
         <div class="campo" style="grid-column:span 2"><label>Nombre de la póliza</label><input id="pfNom" value="${esc(x.nombre)}" style="text-transform:uppercase"></div>
         <div class="campo"><label>Tipo</label><input id="pfTipo" list="pfTipos" value="${esc(x.tipo)}" style="text-transform:uppercase" placeholder="Elija o escriba"><datalist id="pfTipos">${self._datos.tipos.map(t => '<option value="' + t + '">').join('')}</datalist></div>
@@ -147,6 +149,7 @@ const FormPolizas = {
         '<button type="button" class="boton-secundario" id="pfEndoso" style="margin-top:6px">Registrar endoso (venta / baja de una unidad)</button>' : ''}
       <div class="pie">
         ${x.id ? '<button class="boton-secundario" id="pfBaja" style="margin-right:auto">' + (x.estado === 'ACTIVA' ? 'Dar de baja la póliza' : 'Reactivar') + '</button>' : ''}
+        ${x.id && x.estado === 'ACTIVA' ? '<button class="boton-secundario" id="pfRenovar" style="background:#eef2ff;border-color:#c7d2fe;color:#3730a3">🔄 Renovar póliza</button>' : ''}
         <button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar</button></div>`, 920);
     w.q('#pfMon').value = x.moneda || 'USD';
     const tb = w.q('#pfCuotas');
@@ -189,6 +192,7 @@ const FormPolizas = {
       resumen();
     });
     w.q('[data-c]').addEventListener('click', w.cerrar);
+    if (x.id && w.q('#pfRenovar')) w.q('#pfRenovar').addEventListener('click', function () { w.cerrar(); self.renovar(x); });
     if (x.id) {
       w.q('#pfEndoso').addEventListener('click', () => self.endoso(x, w));
       w.q('#pfBaja').addEventListener('click', async function () {
@@ -204,7 +208,7 @@ const FormPolizas = {
       if (arch && arch.size > 10 * 1024 * 1024) { mostrarMensaje('El archivo pasa de 10 MB.', 'error'); return; }
       const datos = { id: x.id || '', nombre: w.q('#pfNom').value, tipo: w.q('#pfTipo').value, aseguradora: w.q('#pfAseg').value, numero: w.q('#pfNum').value,
         moneda: w.q('#pfMon').value, prima: w.q('#pfPrima').value, inicio: self._dmy(w.q('#pfIni').value), fin: self._dmy(w.q('#pfFin').value),
-        placas: w.q('#pfPlacas').value, observacion: w.q('#pfObs').value, cuotas: leer() };
+        placas: w.q('#pfPlacas').value, observacion: w.q('#pfObs').value, cuotas: leer(), renuevaDe: x._renuevaDe || '' };
       const b = this; b.disabled = true; b.textContent = 'Guardando…';
       try {
         const r = await llamarBackend('polizasGrabar', datos);
@@ -218,6 +222,15 @@ const FormPolizas = {
         w.cerrar(); mostrarMensaje(r.mensaje, 'exito'); self._recargar();
       } catch (e) { mostrarMensaje(e.message || String(e), 'error'); b.disabled = false; b.textContent = 'Guardar'; }
     });
+  },
+
+  /** Renovar: abre una póliza nueva con los mismos datos, un año después (cuotas corridas un año). */
+  renovar: function (x) {
+    const self = this;
+    const masAnio = s => { const d = self._f(s); if (!d) return ''; d.setFullYear(d.getFullYear() + 1); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
+    self.ficha({ nombre: x.nombre, tipo: x.tipo, aseguradora: x.aseguradora, numero: '', moneda: x.moneda, prima: x.prima, inicio: x.fin, fin: masAnio(x.fin),
+      placas: x.placas, observacion: '', endosos: [], estado: 'ACTIVA', _renuevaDe: x.id,
+      cuotas: (x.cuotas || []).filter(c => c.estado !== 'ANULADA').map(c => ({ monto: c.monto, vence: masAnio(c.vence), estado: 'PENDIENTE' })) });
   },
 
   /* ---------------- Endoso por venta / baja de unidad ---------------- */
