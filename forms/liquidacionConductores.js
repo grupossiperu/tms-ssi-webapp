@@ -97,8 +97,11 @@ const FormLiquidacionConductores = {
   _cargar: async function (primera) {
     const self = this, $ = id => self._raiz.querySelector('#' + id);
     if (primera) $('lqCuerpo').textContent = 'Cargando…';
-    const r = await llamarBackend('liqDatos', {});
+    const resp = await Promise.all([llamarBackend('liqDatos', {}), llamarBackend('descuentosListar', {}).catch(() => null)]);
+    const r = resp[0];
     if (!respuestaValida(r)) { $('lqCuerpo').textContent = (r && r.mensaje) || 'No se pudo cargar.'; return; }
+    // v120: descuentos al conductor por quincena (conductor|quincena → cuotas)
+    self._desc = (resp[1] && resp[1].ok && typeof FormDescuentos !== 'undefined') ? FormDescuentos.porQuincena(resp[1].items) : {};
     self._puede = !!r.puedeEditar;
     self._liqs = r.liquidaciones || [];
     self._filas = (r.filas || []).map(function (f) {
@@ -147,6 +150,8 @@ const FormLiquidacionConductores = {
     }, {});
   },
   _liq: function (id) { return this._liqs.filter(l => l.id === id)[0]; },
+  /** v120: total de descuentos del conductor en la quincena (y el detalle). */
+  _descDe: function (cond, q) { const l = (this._desc || {})[cond + '|' + q] || []; return { total: Math.round(l.reduce((a, x) => a + x.monto, 0) * 100) / 100, lista: l }; },
   _bonoTd: function (v) { return Math.abs(v) < 0.005 ? '<td class="c">—</td>' : '<td class="' + (v > 0 ? 'bono' : 'neg') + '">S/ ' + this._m(v) + '</td>'; },
 
   _pintar: function () {
@@ -157,6 +162,16 @@ const FormLiquidacionConductores = {
     let h = '<div class="lq-wrap">' + self._tablaHtml(vis, false) + '</div>' +
       '<div class="lq-res"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito (depositado + depósitos adicionales)</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
       '<div><span>Viajes</span><b>' + (t.n || 0) + '</b></div><div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>';
+    // v120: descuentos del conductor en las quincenas visibles
+    const qsVis = $('lqQuin').value ? [$('lqQuin').value] : Array.from(new Set(vis.map(f => f.quincena)));
+    const dsc = qsVis.map(q => ({ q: q, d: self._descDe(cond, q) })).filter(x => x.d.total);
+    if (dsc.length) {
+      const totD = dsc.reduce((a, x) => a + x.d.total, 0);
+      h += '<div class="lq-res" style="grid-template-columns:2fr 1fr 1fr"><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos al conductor</span>' +
+        dsc.map(x => x.d.lista.map(c => '<div style="font-size:.72rem">' + self._qTxt(x.q) + ' · ' + esc(c.motivo) + ' · ' + esc(c.detalle || '') + ' · <b>S/ ' + self._m(c.monto) + '</b></div>').join('')).join('') + '</div>' +
+        '<div style="border-left-color:#dc2626"><span>Total descuentos</span><b>S/ ' + self._m(totD) + '</b></div>' +
+        '<div class="bono"><span>' + (t.totalBono - totD >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe') + '</span><b>S/ ' + self._m(Math.abs(t.totalBono - totD)) + '</b></div></div>';
+    }
     // Acciones: liquidar la quincena (pendientes)
     const pend = vis.filter(f => f.liqEstado === 'PENDIENTE');
     if (self._puede && pend.length) {
@@ -193,15 +208,19 @@ const FormLiquidacionConductores = {
       const l = g[k]; const s = self._suma(l); const f0 = l[0]; const liq = f0.liqId ? self._liq(f0.liqId) : null;
       return { conductor: f0.conductor, quincena: f0.quincena, estado: f0.liqEstado, liq: liq, n: s.n, costo: liq ? (liq.gastos || 0) - (s.bono || 0) : s.costo, totalDep: liq ? liq.totalDep : s.totalDep, totalBono: liq ? liq.totalBono : s.totalBono };
     }).sort((a, b) => a.conductor.localeCompare(b.conductor) || String(b.quincena).localeCompare(String(a.quincena)));
-    const t = filas.reduce((a, r) => { a.n += r.n; a.g += r.costo; a.d += r.totalDep; a.b += r.totalBono; return a; }, { n: 0, g: 0, d: 0, b: 0 });
-    $('lqCuerpo').innerHTML = '<div class="lq-wrap"><table class="lq-t"><colgroup><col style="width:24%"><col style="width:12%"><col style="width:6%"><col><col><col><col style="width:11%"><col style="width:15%"></colgroup>' +
-      '<thead><tr><th>Conductor</th><th>Quincena</th><th>Viajes</th><th>Costo del viaje</th><th class="dep">Total depósito</th><th class="res">Total bono</th><th>Estado</th><th></th></tr></thead><tbody>' +
+    // v120: descuentos por conductor+quincena (una sola vez por grupo conductor|quincena)
+    const vistoD = {};
+    filas.forEach(r => { const k = r.conductor + '|' + r.quincena; r.desc = vistoD[k] ? 0 : self._descDe(r.conductor, r.quincena).total; vistoD[k] = 1; r.aPagar = Math.round((r.totalBono - r.desc) * 100) / 100; });
+    const t = filas.reduce((a, r) => { a.n += r.n; a.g += r.costo; a.d += r.totalDep; a.b += r.totalBono; a.ds += r.desc; a.p += r.aPagar; return a; }, { n: 0, g: 0, d: 0, b: 0, ds: 0, p: 0 });
+    $('lqCuerpo').innerHTML = '<div class="lq-wrap"><table class="lq-t"><colgroup><col style="width:21%"><col style="width:11%"><col style="width:5%"><col><col><col><col><col><col style="width:10%"><col style="width:12%"></colgroup>' +
+      '<thead><tr><th>Conductor</th><th>Quincena</th><th>Viajes</th><th>Costo del viaje</th><th class="dep">Total depósito</th><th class="res">Total bono</th><th>Descuentos</th><th class="res">A pagar</th><th>Estado</th><th></th></tr></thead><tbody>' +
       (filas.length ? filas.map(r => '<tr class="clic" data-c="' + esc(r.conductor) + '" data-q="' + r.quincena + '"><td class="i"><b>' + esc(r.conductor) + '</b></td><td class="c">' + self._qTxt(r.quincena) + '</td><td class="c">' + r.n +
         '</td><td>S/ ' + self._m(r.costo) + '</td><td class="depT">S/ ' + self._m(r.totalDep) + '</td>' + self._bonoTd(r.totalBono) +
+        '<td style="color:#b91c1c">' + (r.desc ? '− S/ ' + self._m(r.desc) : '') + '</td>' + self._bonoTd(r.aPagar) +
         '<td class="c"><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : r.estado) + '</span>' + (r.liq && r.estado === 'DEPOSITADO' ? '<span class="lq-mot">' + esc(r.liq.fechaDep || '') + ' · op. ' + esc(r.liq.operacion || '') + '</span>' : '') + '</td>' +
         '<td class="c">' + (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Depositar</button>' : '') + '<button class="lq-btn">Ver ›</button></td></tr>').join('')
-        : '<tr><td colspan="8" class="c" style="color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>') +
-      '</tbody><tfoot><tr><td class="i" colspan="2">TOTAL</td><td class="c">' + t.n + '</td><td>S/ ' + self._m(t.g) + '</td><td>S/ ' + self._m(t.d) + '</td><td>S/ ' + self._m(t.b) + '</td><td colspan="2"></td></tr></tfoot></table></div>';
+        : '<tr><td colspan="10" class="c" style="color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>') +
+      '</tbody><tfoot><tr><td class="i" colspan="2">TOTAL</td><td class="c">' + t.n + '</td><td>S/ ' + self._m(t.g) + '</td><td>S/ ' + self._m(t.d) + '</td><td>S/ ' + self._m(t.b) + '</td><td>' + (t.ds ? '− S/ ' + self._m(t.ds) : '') + '</td><td>S/ ' + self._m(t.p) + '</td><td colspan="2"></td></tr></tfoot></table></div>';
     $('lqCuerpo').querySelectorAll('tr[data-c]').forEach(tr => tr.addEventListener('click', function (ev) {
       const dep = ev.target.closest('[data-dep]');
       if (dep) { ev.stopPropagation(); self._dlgDepositar(dep.dataset.dep); return; }
@@ -352,7 +371,9 @@ const FormLiquidacionConductores = {
       '<p style="margin:0 0 8px"><b>' + esc(cond) + '</b> · ' + vs.length + ' viaje(s)</p>' +
       '<div class="lq-res" style="grid-template-columns:repeat(3,1fr)"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
       '<div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>' +
-      '<label style="margin-top:10px">Observación (opcional)</label><input data-obs maxlength="200">' +
+      (function () { const d = self._descDe(cond, q); return d.total ? '<div class="lq-res" style="grid-template-columns:1fr 1fr"><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos de la quincena</span><b>− S/ ' + self._m(d.total) + '</b></div>' +
+        '<div class="bono"><span>A pagar (bono − descuentos)</span><b>S/ ' + self._m(t.totalBono - d.total) + '</b></div></div>' : ''; })() +
+      '<label style="margin-top:10px">Observación (opcional)</label><input data-obs maxlength="200" value="' + (function () { const d = self._descDe(cond, q); return d.total ? esc('DESCUENTOS S/ ' + d.total.toFixed(2) + ' (' + d.lista.map(x => x.id).join(', ') + '). A PAGAR S/ ' + (t.totalBono - d.total).toFixed(2)) : ''; })() + '">' +
       '<p class="nota">Al liquidar, estos viajes quedan revisados y pasan a "Por depositar". Ya no se pueden corregir salvo que se reabra la quincena.</p>',
       'Liquidar', ov => self._enviar('liqLiquidar', { conductor: cond, quincena: q, claves: vs.map(f => f.clave), totalBono: Math.round(t.totalBono * 100) / 100, observacion: ov.querySelector('[data-obs]').value }, ov));
   },

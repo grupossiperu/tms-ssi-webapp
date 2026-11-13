@@ -821,6 +821,16 @@ const FormConsolidadoServicio = {
       // confirma con su check; solo los confirmados suman al depositado.
       // Grifos usados antes (históricos de recargas) para la lista desplegable.
       q('dlGrifosConsol').innerHTML = (r.grifos || []).map(function (g) { return '<option value="' + esc(g) + '">'; }).join('');
+      // v120: viaje con cambio de conductor/tracto → lo depositado al tramo anterior ya se liquidó aparte.
+      if (Array.isArray(r.tramos) && r.tramos.length > 1) {
+        const ant = r.tramos.filter(function (t) { return t.fin; });
+        if (!r.consolidado) q('txtMontoDepositadoConsol').value = 0;
+        const av = document.createElement('div');
+        av.style.cssText = 'grid-column:1/-1;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:7px 10px;font-size:.78rem';
+        av.innerHTML = '<b>Viaje con ' + r.tramos.length + ' tramos.</b> ' + ant.map(function (t) { return 'Tramo ' + t.n + ': ' + esc(t.conductor) + ' (' + esc(t.motivo || '') + ')'; }).join(' · ') +
+          '. Lo depositado a esos conductores (S/ ' + Number(r.depositadoTramosAnteriores || 0).toFixed(2) + ' + adicionales S/ ' + Number(r.extrasTramosAnteriores || 0).toFixed(2) + ') se liquida en <b>Acarreo → 🧾 Tramos</b>. Aquí registre solo lo depositado al conductor actual.';
+        listaDep.parentNode.insertBefore(av, listaDep);
+      }
       const deps = r.depositos || [];
       const confirmable = function (x) { return x.estado === 'DEPOSITADO' || x.estado === 'APROBADO'; };
       listaDep.innerHTML = deps.length

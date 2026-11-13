@@ -102,6 +102,8 @@ const FormSelServicioContabilidad = {
           <button class="boton-secundario btn-estado" data-estado="FALSO FLETE">Falso Flete</button>
           <button class="boton-secundario btn-estado" data-estado="REPROGRAMADO">Reprogramado</button>
           <button class="boton-secundario" id="btnReprogPos" title="Cambiar la cita de posicionamiento y cobrar la reprogramación">📅 Reprogramar posicionamiento</button>
+          <button class="boton-secundario" id="btnCambioCond" title="Robo, falla o accidente: el viaje sigue con otro conductor y/o tracto">🔁 Cambio de conductor / tracto</button>
+          <button class="boton-secundario" id="btnTramos" title="Ver los tramos del viaje y liquidar el tramo interrumpido">🧾 Tramos</button>
           <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
           <button class="boton-peligro" id="btnBorrarServicio" style="display:none;background:#7f1d1d" title="Solo maestros: borra el servicio y todo lo amarrado">🗑 Borrar servicio</button>
         </div>
@@ -331,7 +333,7 @@ const FormSelServicioContabilidad = {
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
           <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
-          <td>${f['CONDUCTOR'] || ''}</td>
+          <td>${f['CONDUCTOR'] || ''}${(function () { try { const t = JSON.parse(String(f['TRAMOS'] || '[]')); return t.length > 1 ? '<div><span class="badge-obs" style="background:#fee2e2;color:#991b1b" title="Hubo cambio de conductor/tracto">' + t.length + ' tramos</span></div>' : ''; } catch (e) { return ''; } })()}</td>
           <td>${linea(f['PLACA TRACTO'], reeferSeco)}</td>
           <td>${f['BOOKING'] || ''}${f['CODIGO SERVICIO'] ? '<div style="font-size:.7rem;color:#64748b">' + f['CODIGO SERVICIO'] + '</div>' : ''}</td>
           <td>${linea([f['CIUDAD DE RETIRO'], f['DEPOSITO DE RETIRO']].filter(Boolean).join(' · '), formatoFechaHora(f['FECHA DE RETIRO'], f['HORA DE RETIRO']))}</td>
@@ -543,6 +545,19 @@ const FormSelServicioContabilidad = {
           btn.disabled = false; btn.textContent = 'Reprogramar';
         }
       });
+    });
+
+    // v120: cambio de conductor/tracto en el mismo viaje y liquidación por tramos.
+    raiz.querySelector('#btnCambioCond').addEventListener('click', function () {
+      const f = self._servicioSeleccionado;
+      if (self._filaSeleccionada === null || !f) { mostrarMensaje('Seleccione un servicio para continuar.', 'error'); return; }
+      if (estadoDe(f) === 'CANCELADO') { mostrarMensaje('El servicio está CANCELADO.', 'error'); return; }
+      FormTramos.abrirCambio(f, self._filasCache || [], function () { cargar(); });
+    });
+    raiz.querySelector('#btnTramos').addEventListener('click', function () {
+      const f = self._servicioSeleccionado;
+      if (self._filaSeleccionada === null || !f) { mostrarMensaje('Seleccione un servicio para continuar.', 'error'); return; }
+      FormTramos.abrir(f);
     });
 
     raiz.querySelector('#btnCancelarSelServicio').addEventListener('click', cerrarPanel);
