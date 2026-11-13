@@ -60,6 +60,7 @@
     controlMant: () => dato('cm', async () => { const r = await llamarBackend('mtControlMant', {}); return r && r.ok ? r : null; }),
     incidencias: () => dato('inc', async () => { const r = await llamarBackend('incTablero', {}); return r && r.ok ? r.filas || [] : null; }),
     almacen: () => dato('alm', async () => { if (typeof FormAlmacen === 'undefined') return null; const r = await FormAlmacen._cargar(); return r ? FormAlmacen._alertas() : null; }),
+    polizas: () => dato('pz', async () => { const r = await llamarBackend('polizasListar', {}); return r && r.ok ? r : null; }),
     regDia: () => dato('rd', async () => { const r = await llamarBackend('mtRegistrosDia', {}); return r && r.ok ? r : null; }),
     avisos: () => dato('av', async () => {
       if (window._avisosVenc) return window._avisosVenc;
@@ -301,13 +302,14 @@
       const pintar = function () {
         if (!vigente()) return;
         const av = window._avisosVenc || [];
-        const doc = av.filter(a => a.tipoEntidad !== 'CONTRATOS'), con = av.filter(a => a.tipoEntidad === 'CONTRATOS');
+        const doc = av.filter(a => a.tipoEntidad !== 'CONTRATOS' && a.tipoEntidad !== 'POLIZAS'), con = av.filter(a => a.tipoEntidad === 'CONTRATOS'), pol = av.filter(a => a.tipoEntidad === 'POLIZAS');
         const linea = a => esc(a.nombre) + ' · ' + esc(a.documento) + (a.vencido ? ' <b class="r">vencido</b>' : ' (' + a.dias + ' d.)');
         const cm = document.getElementById('cmBadge'), cmN = cm && cm.style.display !== 'none' ? parseInt(cm.textContent, 10) || 0 : 0;
         const al = document.getElementById('mtAlertasBadge'), alN = al && al.style.display !== 'none' ? parseInt(al.textContent, 10) || 0 : 0;
         const items = [
           doc.length && { n: doc.length, t: 'Documentos de flota', d: sub3(doc, linea), c: '#D97706', f: () => FormDocumentos.abrir() },
           con.length && { n: con.length, t: 'Contratos', d: sub3(con, linea), c: '#D97706', f: () => FormContratos.abrir() },
+          pol.length && { n: pol.length, t: 'Pólizas por vencer', d: sub3(pol, linea), c: '#B91C1C', f: () => FormPolizas.abrir() },
           cmN && { n: cmN, t: 'Mantenimiento preventivo', d: 'Unidades vencidas o por vencer (km / horas)', c: '#DC2626', f: () => FormControlMant.abrir() },
           alN && { n: alN, t: 'Almacén', d: 'Stock bajo, vencimientos y reparaciones atrasadas', c: '#7C3AED', f: () => FormAlmacen.abrirAlertas() }
         ];
@@ -328,8 +330,11 @@
         { etq: 'Facturas vencidas', v: null, sub: 'por cobrar', c: '#DC2626', f: clic('btn-cobranzas') }];
       pintarKpis(k);
       const fin = puede('FIN');
-      const [serv, fact, nof, acar, cob, con] = await Promise.all([D.servicios(), fin ? D.factura() : null, fin ? D.noFact() : [], D.acarreo(),
-        fin ? D.cobranza() : null, puede('MAE') ? D.contratos() : null]);
+      const [serv, fact, nof, acar, cob, con, pz] = await Promise.all([D.servicios(), fin ? D.factura() : null, fin ? D.noFact() : [], D.acarreo(),
+        fin ? D.cobranza() : null, puede('MAE') ? D.contratos() : null, fin ? D.polizas() : null]);
+      // v121: cuotas de pólizas vencidas o que vencen en 15 días
+      const cuotasPz = []; ((pz && pz.editor && pz.items) || []).filter(x => x.estado === 'ACTIVA').forEach(x => (x.cuotas || []).forEach(c => { if (c.estado === 'PENDIENTE' && typeof c.dias === 'number' && c.dias <= 15) cuotasPz.push({ p: x, c: c }); }));
+      cuotasPz.sort((a, b) => a.c.dias - b.c.dias);
       if (!vigente()) return;
 
       // Qué está facturado: consolidados con "FACT." + códigos que aparecen en facturas de Cobranzas
@@ -371,6 +376,7 @@
         sinFact.length && { n: sinFact.length, t: 'Viajes sin facturar', d: sinFact.filter(f => !conConsol.has(may(f['CODIGO SERVICIO']))).length + ' sin consolidado · ' + sinFact.filter(f => conConsol.has(may(f['CODIGO SERVICIO']))).length + ' listos para facturar', c: '#059669', f: clic('btn-facturar') },
         sobrePend.length && { n: sobrePend.length, t: 'Sobrecostos por facturar', d: sub3(sobrePend, x => esc(x.codigo) + ' · ' + esc(x.tipoFact)), c: '#0891B2', f: clic('btn-sobrecostos') },
         venc.length && { n: venc.length, t: 'Facturas vencidas', d: 'Saldo vencido: ' + montoTxt, c: '#DC2626', f: clic('btn-cobranzas') },
+        cuotasPz.length && { n: cuotasPz.length, t: 'Cuotas de pólizas por pagar', d: sub3(cuotasPz, x => esc(x.p.nombre) + ' · cuota ' + x.c.n + (x.c.liquidacion ? ' (' + esc(x.c.liquidacion) + ')' : '') + ' · ' + (x.p.moneda === 'PEN' ? 'S/ ' : 'US$ ') + nfmt(x.c.monto, 2) + (x.c.dias < 0 ? ' <b class="r">vencida</b>' : ' (' + x.c.dias + ' d.)')), c: '#7C3AED', f: () => FormPolizas.abrir() },
         cons.length && { n: cons.length, t: 'Contratos vencidos o por vencer', d: sub3(cons, x => esc(x.nombre) + (x.dias < 0 ? ' <b class="r">vencido</b>' : ' (' + x.dias + ' d.)')), c: '#D97706', f: () => FormContratos.abrir() }
       ]);
     };

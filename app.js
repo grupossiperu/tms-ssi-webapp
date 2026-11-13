@@ -473,7 +473,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
       const av = window._avisosVenc || [];
-      if (av.length && av.every(function (a) { return a.tipoEntidad === 'CONTRATOS'; }) && typeof FormContratos !== 'undefined') FormContratos.abrir();
+      if (av.length && av.every(function (a) { return a.tipoEntidad === 'POLIZAS'; }) && typeof FormPolizas !== 'undefined') FormPolizas.abrir();
+      else if (av.length && av.every(function (a) { return a.tipoEntidad === 'CONTRATOS'; }) && typeof FormContratos !== 'undefined') FormContratos.abrir();
       else FormDocumentos.abrir();
     });
   }

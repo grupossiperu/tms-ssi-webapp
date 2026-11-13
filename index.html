@@ -7,7 +7,7 @@
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261113f';
+  window.__VERSION_APP = '20261113g';
   ['styles.css', 'home.css', 'home2.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
@@ -239,6 +239,15 @@
             </svg>
           </span>
           <span class="tile-texto"><strong>Descuentos al conductor</strong><small>Robos, multas y daños en cuotas</small></span>
+        </button>
+
+        <button class="tile" id="btn-polizas" data-modulo="FIN">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"></path><polyline points="9 12 11 14 15 10"></polyline>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Pólizas de seguro</strong><small>Cuotas, liquidaciones y endosos</small></span>
         </button>
 
         <button class="tile" id="btn-deposito" data-modulo="FIN DEP">
@@ -547,6 +556,7 @@
     'forms/cobranzas.js',
     'forms/liquidacionConductores.js',
     'forms/tramos.js',
+    'forms/polizas.js',
     'forms/incidencias.js'
   ].forEach(function (src) {
     document.write('<script src="' + src + '?v=' + window.__VERSION_APP + '"><\/script>');
