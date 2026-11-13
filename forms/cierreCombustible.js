@@ -238,7 +238,8 @@ const FormCierreCombustible = {
           : '<select class="eq"><option value="TRACTO">Tracto</option><option value="GENERADOR">Generador</option></select>') + '</td>' +
         '<td><input type="date" class="fe" value="' + esc(self._iso(a.fecha) || '') + '"></td>' +
         '<td><input class="gr" value="' + esc(a.grifo || (ini ? 'PROVEEDOR' : '')) + '" style="text-transform:uppercase"' + (ini ? '' : ' placeholder="Grifo"') + '></td>' +
-        '<td><input class="nv" value="' + esc(a.nv || '') + '" placeholder="N501-…" style="text-transform:uppercase"></td>' +
+        (ini ? '<td><input class="nv" value="" placeholder="Estimado (sin NV)" disabled title="El abastecimiento inicial es el estimado: no lleva nota de venta"></td>'
+          : '<td><input class="nv" value="' + esc(a.nv || '') + '" placeholder="N501-…" style="text-transform:uppercase"></td>') +
         '<td>' + (ini ? '<input value="Repsol" disabled>' : '<select class="pg"><option value="CONDUCTOR">Conductor</option><option value="REPSOL">Repsol</option></select>') + '</td>' +
         '<td><input class="ga" inputmode="decimal" value="' + (a.galones || '') + '"></td>' +
         '<td><input class="mo" inputmode="decimal" value="' + (a.monto || '') + '"></td>' +
@@ -300,7 +301,7 @@ const FormCierreCombustible = {
         if (gs !== null && a.galones > 0) {
           const d = (a.galones - gs) / a.galones * 100;
           const mal = Math.abs(d) > tol;
-          if (mal) fuera = true;
+          if (mal && a.tipo !== 'INICIAL') fuera = true; // el inicial es estimado: solo informativo
           td.textContent = d.toFixed(1) + ' %';
           td.style.color = mal ? '#b91c1c' : '#166534';
         } else td.textContent = '';
@@ -336,6 +337,7 @@ const FormCierreCombustible = {
         .filter(a => !(a.tipo === 'INICIAL' && a.equipo === 'GENERADOR' && !a.nv && !a.galones));
       for (let i = 0; i < ab.length; i++) {
         const a = ab[i], t = (a.tipo === 'INICIAL' ? 'Inicial ' : 'Recarga ') + (a.equipo === 'GENERADOR' ? 'generador' : 'tracto');
+        if (a.tipo === 'INICIAL') continue; // 13/11/2026: el inicial es el estimado (sin NV, fecha ni monto obligatorios)
         if (!a.fecha || !a.nv || !(a.galones > 0) || !(a.monto > 0) || (a.tipo === 'RECARGA' && !a.grifo)) {
           mostrarMensaje('Complete fecha, ' + (a.tipo === 'RECARGA' ? 'grifo, ' : '') + 'N° de nota de venta, galones y monto (' + t + ').', 'error'); return;
         }

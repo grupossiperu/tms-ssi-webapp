@@ -248,13 +248,11 @@ const FormConsolidadoServicio = {
           <div class="span2"></div><div></div>
           <div class="sub">Abastecimiento inicial (proveedor)</div>
           <table class="tabla-mini tabla-ini" id="tablaInicialConsol" style="table-layout:fixed">
-            <colgroup><col style="width:11%"><col style="width:11%"><col style="width:14%"><col style="width:14%"><col style="width:26%"><col style="width:24%"></colgroup>
-            <thead><tr><th>Equipo</th><th>Galones</th><th>Petróleo inicial</th><th>Petróleo B.I.</th><th>N° nota de venta${req}</th><th>Fecha de abastecimiento${req}</th></tr></thead>
+            <colgroup><col style="width:16%"><col style="width:16%"><col style="width:20%"><col style="width:20%"><col></colgroup>
+            <thead><tr><th>Equipo</th><th>Galones (estimado)</th><th>Petróleo inicial</th><th>Petróleo B.I.</th><th></th></tr></thead>
             <tbody>
-              <tr data-eq="TRACTO"><td><b>Tracto</b></td><td><input id="txtGLIniTractoVista" class="calc-in" disabled></td><td><input id="txtPetroleoTractoConsol" class="calc-in" disabled></td><td><input id="txtPetroleoTractoBIConsol" class="calc-in" disabled></td>
-                <td class="req-ini"><input id="txtNvTractoConsol" autocomplete="off" placeholder="Ej. N501-189226" style="text-transform:uppercase"></td><td class="req-ini"><input type="date" id="txtFechaNvTractoConsol"></td></tr>
-              <tr data-eq="GENSET"><td><b>Generador</b></td><td><input id="txtGLIniGeneradorVista" class="calc-in" disabled></td><td><input id="txtPetroleoGeneradorConsol" class="calc-in" disabled></td><td><input id="txtPetroleoGeneradorBIConsol" class="calc-in" disabled></td>
-                <td class="req-ini"><input id="txtNvGeneradorConsol" autocomplete="off" placeholder="Ej. N501-189227" style="text-transform:uppercase"></td><td class="req-ini"><input type="date" id="txtFechaNvGeneradorConsol"></td></tr>
+              <tr data-eq="TRACTO"><td><b>Tracto</b></td><td><input id="txtGLIniTractoVista" class="calc-in" disabled></td><td><input id="txtPetroleoTractoConsol" class="calc-in" disabled></td><td><input id="txtPetroleoTractoBIConsol" class="calc-in" disabled></td><td></td></tr>
+              <tr data-eq="GENSET"><td><b>Generador</b></td><td><input id="txtGLIniGeneradorVista" class="calc-in" disabled></td><td><input id="txtPetroleoGeneradorConsol" class="calc-in" disabled></td><td><input id="txtPetroleoGeneradorBIConsol" class="calc-in" disabled></td><td></td></tr>
             </tbody>
           </table>
           <div class="sub">Recargas en ruta</div>
@@ -332,9 +330,11 @@ const FormConsolidadoServicio = {
     raiz.querySelector('#txtGLGeneradorRealConsol').value = servicio['GL GENERADOR'] || 0;
     raiz.querySelector('#txtGLIniTractoVista').value = servicio['GL TRACTO'] || 0;
     raiz.querySelector('#txtGLIniGeneradorVista').value = servicio['GL GENERADOR'] || 0;
-    // Nota de venta del abastecimiento inicial: obligatoria si ese equipo cargó galones.
+    // 13/11/2026: el abastecimiento inicial es el ESTIMADO (no lleva nota de venta ni fecha);
+    // lo real del viaje son las recargas en ruta. Ya no se exige nada aquí.
     function inicialIncompleto() {
       const falta = [];
+      if (true) return falta;
       [['TRACTO', 'txtGLTractoRealConsol', 'txtNvTractoConsol', 'txtFechaNvTractoConsol'],
        ['GENSET', 'txtGLGeneradorRealConsol', 'txtNvGeneradorConsol', 'txtFechaNvGeneradorConsol']].forEach(function (x) {
         if (!(self._n(raiz.querySelector('#' + x[1]).value) > 0)) return;
