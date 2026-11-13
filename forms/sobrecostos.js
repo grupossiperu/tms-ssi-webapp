@@ -52,7 +52,7 @@ const FormSobrecostos = {
         .scr-t tr.scr-grupo td{background:#eef4fb;border-top:2px solid #c7d6ea}
       </style>
       <div class="scr-barra">
-        <div class="campo"><label>Estado</label><select id="scrEstado"><option value="pend">Por facturar</option><option value="fact">Facturados</option><option value="cero">No se cobran (0)</option><option value="">Todos</option></select></div>
+        <div class="campo"><label>Estado</label><select id="scrEstado"><option value="pend">Por facturar</option><option value="fact">Facturados</option><option value="cero">No se cobran (0)</option><option value="anul">Anulados</option><option value="">Todos</option></select></div>
         <div class="campo"><label>Cliente</label><div id="scrCliente"></div></div>
         <div class="campo"><label>Motivo</label><div id="scrMotivo"></div></div>
         <div class="campo"><label>Desde</label><input type="date" id="scrDesde"></div>
@@ -96,13 +96,16 @@ const FormSobrecostos = {
         const x = self._items.find(i => i.fila === Number(b.dataset.f)); if (!x) return;
         if (b.dataset.acc === 'fact') FormFacturaSobrecosto.abrir(x.fila);
         if (b.dataset.acc === 'seg') self._verSeguimiento(x);
+        if (b.dataset.acc === 'editar') self._editar(x);
+        if (b.dataset.acc === 'cero' || b.dataset.acc === 'anular') self._ceroAnular(x, b.dataset.acc);
+        if (b.dataset.acc === 'hist') self._historial(x);
       });
       $('scrCopiar').addEventListener('click', () => self._correo(false));
       $('scrImprimir').addEventListener('click', () => self._correo(true));
       let r = null;
       try { r = await llamarBackend('sobrecostosListar', {}); } catch (e) { r = null; }
       if (!r || !r.ok) { $('scrCuerpo').innerHTML = '<tr><td colspan="12" style="text-align:center;color:#b91c1c;padding:16px">' + esc((r && r.mensaje) || 'No se pudo cargar la lista.') + '</td></tr>'; return; }
-      self._items = (r.items || []).map(function (x) { x.sinCobro = !x.facturado && !(Number(x.total) > 0); if (x.sinCobro && /h/.test(String(x.obs)) && !x.unidad) { x.cantidad = 0; x.unidad = 'h'; } return x; });
+      self._items = (r.items || []).map(function (x) { x.sinCobro = !x.facturado && !x.anulado && !(Number(x.total) > 0); if (x.sinCobro && /h/.test(String(x.obs)) && !x.unidad) { x.cantidad = 0; x.unidad = 'h'; } return x; });
       self._msCli.setOpciones(Array.from(new Set(self._items.map(x => String(x.cliente).toUpperCase()).filter(Boolean))).sort());
       self._msMot.setOpciones(Array.from(new Set(self._items.map(x => self._mot(x.tipo)).filter(Boolean))).sort());
       self._pintar();
@@ -111,10 +114,81 @@ const FormSobrecostos = {
     else abrirPanel('Sobrecostos', html, wire, { ancho: true });
   },
 
+  _rol: function () { const d = (typeof Sesion !== 'undefined' && Sesion.datos) ? (Sesion.datos() || {}) : {}; return String(d.rol || '').toUpperCase(); },
+  _recargar: async function () {
+    const r = await llamarBackend('sobrecostosListar', { t: Date.now() });
+    if (r && r.ok) { this._items = (r.items || []).map(function (x) { x.sinCobro = !x.facturado && !x.anulado && !(Number(x.total) > 0); return x; }); this._pintar(); }
+  },
+  /** Editar cantidad, tarifa, moneda y detalle (Facturación y Maestro, solo no facturados). */
+  _editar: function (x) {
+    const self = this;
+    const capa = document.createElement('div');
+    capa.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    const mon = /S\//.test(x.moneda) ? 'S/' : '$';
+    capa.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)">' +
+      '<div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0"><b>✎ Editar sobrecosto · ' + esc(x.codigo) + '</b><div style="font-size:.78rem;opacity:.85">' + esc(self._mot(x.tipo)) + ' · BK ' + esc(x.booking || '') + ' · ' + esc(x.cliente || '') + '</div></div>' +
+      '<div style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:.85rem">' +
+      '<div class="campo"><label>Cantidad' + (x.unidad ? ' (' + esc(x.unidad) + ')' : '') + '</label><input id="seCant" type="number" step="any" min="0" value="' + (Number(x.cantidad) || '') + '"></div>' +
+      '<div class="campo"><label>Tarifa con IGV</label><input id="sePre" type="number" step="any" min="0" value="' + (Number(x.precio) || '') + '"></div>' +
+      '<div class="campo"><label>Moneda</label><select id="seMon"><option value="$">$</option><option value="S/">S/</option></select></div>' +
+      '<div class="campo" style="grid-column:1/-1"><label>Detalle</label><textarea id="seObs" style="width:100%;min-height:48px">' + esc(x.obs || '') + '</textarea></div>' +
+      '<div style="grid-column:1/-1;font-size:.9rem">Total antes: <b>' + mon + ' ' + Number(x.total || 0).toFixed(2) + '</b> → nuevo: <b id="seTot"></b></div>' +
+      '<div class="campo" style="grid-column:1/-1"><label>Motivo del cambio *</label><textarea id="seMot" style="width:100%;min-height:44px" placeholder="Ej. el cliente aceptó solo 1 h"></textarea></div>' +
+      '</div><div style="display:flex;justify-content:flex-end;gap:8px;padding:0 16px 14px"><button class="boton-secundario" id="seNo">Cancelar</button><button class="boton-primario" id="seSi">Guardar cambios</button></div></div>';
+    document.body.appendChild(capa);
+    const q = id => capa.querySelector('#' + id);
+    q('seMon').value = mon;
+    const calc = () => { q('seTot').textContent = q('seMon').value + ' ' + ((Number(q('seCant').value) || 0) * (Number(q('sePre').value) || 0)).toFixed(2); };
+    ['seCant', 'sePre', 'seMon'].forEach(id => q(id).addEventListener('input', calc)); calc();
+    q('seNo').addEventListener('click', () => capa.remove());
+    protegerClic(q('seSi'), async function () {
+      const d = { fila: x.fila, cantidad: Number(q('seCant').value), precio: Number(q('sePre').value), moneda: q('seMon').value, observacion: q('seObs').value.trim(), motivo: q('seMot').value.trim() };
+      if (!(d.cantidad > 0)) { mostrarMensaje('La cantidad debe ser mayor que 0.', 'error'); return; }
+      if (d.motivo.length < 4) { mostrarMensaje('Escribe el motivo del cambio.', 'error'); return; }
+      const r = await llamarBackend('sobrecostoEditar', d);
+      if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo guardar.', 'error'); return; }
+      capa.remove(); mostrarMensaje(r.mensaje, 'exito'); self._recargar();
+    });
+  },
+  /** Maestro: poner en 0 o anular, con motivo. */
+  _ceroAnular: function (x, acc) {
+    const self = this, anular = acc === 'anular';
+    const capa = document.createElement('div');
+    capa.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    capa.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)">' +
+      '<div style="background:' + (anular ? '#991b1b' : '#475569') + ';color:#fff;padding:12px 16px;border-radius:14px 14px 0 0"><b>' + (anular ? '✕ Anular' : '0 Poner en 0') + ' · ' + esc(x.codigo) + '</b></div>' +
+      '<div style="padding:14px 16px;font-size:.85rem">' + (anular ? 'El sobrecosto queda <b>ANULADO</b>: no sale en Facturar ni en los totales (queda tachado en la lista).' : 'El sobrecosto queda registrado con total <b>0</b> (no se cobra).') +
+      '<div class="campo" style="margin-top:10px"><label>Motivo *</label><textarea id="caMot" style="width:100%;min-height:50px"></textarea></div></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;padding:0 16px 14px"><button class="boton-secundario" id="caNo">Cancelar</button><button class="boton-primario" id="caSi">' + (anular ? 'Anular' : 'Poner en 0') + '</button></div></div>';
+    document.body.appendChild(capa);
+    capa.querySelector('#caNo').addEventListener('click', () => capa.remove());
+    protegerClic(capa.querySelector('#caSi'), async function () {
+      const motivo = capa.querySelector('#caMot').value.trim();
+      if (motivo.length < 4) { mostrarMensaje('Escribe el motivo.', 'error'); return; }
+      const r = await llamarBackend(anular ? 'sobrecostoAnular' : 'sobrecostoCero', { fila: x.fila, motivo: motivo });
+      if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo grabar.', 'error'); return; }
+      capa.remove(); mostrarMensaje(r.mensaje, 'exito'); self._recargar();
+    });
+  },
+  _historial: async function (x) {
+    const r = await llamarBackend('sobrecostoHistorial', { codigo: x.codigo });
+    const items = (r && r.items) || [];
+    const capa = document.createElement('div');
+    capa.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    capa.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)">' +
+      '<div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between"><b>🕘 Historial · ' + esc(x.codigo) + '</b><button id="hiX" style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>' +
+      '<table class="tabla-lista" style="font-size:.78rem;width:100%"><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Antes</th><th>Después</th><th>Motivo</th></tr></thead><tbody>' +
+      (items.length ? items.map(h => '<tr><td>' + esc(h.fecha) + '</td><td>' + esc(h.usuario) + '</td><td>' + esc(h.accion) + '</td><td>' + esc(h.antes) + '</td><td>' + esc(h.despues) + '</td><td>' + esc(h.motivo) + '</td></tr>').join('') : '<tr><td colspan="6" style="text-align:center;color:#64748b">Sin cambios.</td></tr>') +
+      '</tbody></table></div>';
+    document.body.appendChild(capa);
+    capa.querySelector('#hiX').addEventListener('click', () => capa.remove());
+    capa.addEventListener('click', ev => { if (ev.target === capa) capa.remove(); });
+  },
+
   _vis: function () {
     const $ = id => this._raiz.querySelector('#' + id);
     const est = $('scrEstado').value, de = $('scrDesde').value, ha = $('scrHasta').value, q = $('scrBuscar').value.trim().toUpperCase();
-    return (this._items || []).filter(x => (!est || (est === 'pend' ? (!x.facturado && !x.sinCobro) : (est === 'cero' ? x.sinCobro : x.facturado))) &&
+    return (this._items || []).filter(x => (!est || (est === 'anul' ? x.anulado : (!x.anulado && (est === 'pend' ? (!x.facturado && !x.sinCobro) : (est === 'cero' ? x.sinCobro : x.facturado))))) &&
       this._msCli.cumple(String(x.cliente).toUpperCase()) && this._msMot.cumple(this._mot(x.tipo)) &&
       (!de || (x.iso && x.iso >= de)) && (!ha || (x.iso && x.iso <= ha)) &&
       (!q || [x.codigo, x.booking, x.contenedor, x.conductor, x.placa, x.obs].join(' ').toUpperCase().indexOf(q) >= 0));
@@ -125,7 +199,7 @@ const FormSobrecostos = {
     if (typeof _refrescarSnapshotFormulario === 'function') setTimeout(_refrescarSnapshotFormulario, 0);
     const vis = self._vis();
     const sum = (arr, m) => arr.filter(x => (/S\//.test(x.moneda) ? 'S/' : '$') === m).reduce((a, x) => a + x.total, 0);
-    const pend = vis.filter(x => !x.facturado && !x.sinCobro);
+    const pend = vis.filter(x => !x.facturado && !x.sinCobro && !x.anulado);
     $('scrKpi').innerHTML = [['Sobrecostos', vis.length], ['Por facturar', pend.length],
       ['Por cobrar US$', '$ ' + sum(pend, '$').toFixed(2)], ['Por cobrar S/', 'S/ ' + sum(pend, 'S/').toFixed(2)]]
       .map(k => '<div><span>' + k[0] + '</span><b>' + k[1] + '</b></div>').join('');
@@ -133,7 +207,7 @@ const FormSobrecostos = {
     const grupos = [], idx = {};
     vis.forEach(function (x) { const k = String(x.booking || x.codigoServicio).toUpperCase(); if (!(k in idx)) { idx[k] = grupos.length; grupos.push({ bk: x.booking || '—', k: k, items: [] }); } grupos[idx[k]].items.push(x); });
     $('scrCuerpo').innerHTML = grupos.length ? grupos.map(function (g) {
-      const p = g.items.filter(x => !x.facturado && !x.sinCobro), x0 = g.items[0];
+      const p = g.items.filter(x => !x.facturado && !x.sinCobro && !x.anulado), x0 = g.items[0];
       const tU = p.filter(x => !/S\//.test(x.moneda)).reduce((a, x) => a + x.total, 0), tS = p.filter(x => /S\//.test(x.moneda)).reduce((a, x) => a + x.total, 0);
       const todosMarc = g.items.every(x => self._marcados.has(x.fila));
       let h = '<tr class="scr-grupo"><td><input type="checkbox" class="scr-chkbk" data-bk="' + esc(g.k) + '"' + (todosMarc ? ' checked' : '') + ' title="Marcar todos los de este booking"></td>' +
@@ -146,12 +220,18 @@ const FormSobrecostos = {
       h += g.items.map(function (x) {
         const mon = /S\//.test(x.moneda) ? 'S/' : '$';
         const est = x.facturado ? '<span class="scr-tag" style="background:#dcfce7;color:#166534">Facturado</span>' + (x.factura ? '<span class="sub">' + esc(x.factura) + (x.fechaFactura ? ' · ' + esc(x.fechaFactura) : '') + '</span>' : '')
-          : x.sinCobro ? '<span class="scr-tag" style="background:#e2e8f0;color:#475569" title="No supera las horas libres">No se cobra (0)</span>'
+          : x.anulado ? '<span class="scr-tag" style="background:#fee2e2;color:#991b1b">Anulado</span>'
+          : x.sinCobro ? '<span class="scr-tag" style="background:#e2e8f0;color:#475569" title="No se cobra">No se cobra (0)</span>'
           : '<span class="scr-tag" style="background:#fef3c7;color:#92400e">Por facturar</span>';
-        return '<tr><td><input type="checkbox" class="scr-chk" data-f="' + x.fila + '"' + (self._marcados.has(x.fila) ? ' checked' : '') + '></td>' +
+        const rol = self._rol(), editable = !x.facturado && !x.anulado;
+        const acc = (editable && (rol === 'MAESTRO' || rol === 'FACTURACION') ? '<button type="button" class="scr-b" data-acc="editar" data-f="' + x.fila + '">✎ Editar</button>' : '') +
+          (editable && rol === 'MAESTRO' ? '<button type="button" class="scr-b" data-acc="cero" data-f="' + x.fila + '">0 Poner en 0</button><button type="button" class="scr-b" style="color:#b91c1c;border-color:#fca5a5" data-acc="anular" data-f="' + x.fila + '">✕ Anular</button>' : '') +
+          (x.edicion ? '<button type="button" class="scr-b" data-acc="hist" data-f="' + x.fila + '">🕘 Historial</button>' : '');
+        const editTxt = x.edicion ? '<span class="sub" title="' + esc(x.edicion.motivo || '') + '">✎ ' + esc(String(x.edicion.accion || '').toLowerCase()) + ' · ' + esc(x.edicion.usuario) + ' · ' + esc(x.edicion.fecha) + '</span>' : '';
+        return '<tr' + (x.anulado ? ' style="opacity:.55;text-decoration:line-through"' : '') + '><td><input type="checkbox" class="scr-chk" data-f="' + x.fila + '"' + (self._marcados.has(x.fila) ? ' checked' : '') + '></td>' +
           '<td style="color:#64748b">' + esc(x.fecha) + '</td><td style="color:#64748b">' + esc(x.codigo) + '</td><td></td><td style="color:#64748b">' + esc(x.placa) + '</td><td><b>' + esc(self._mot(x.tipo)) + '</b></td>' +
           '<td>' + (x.unidad ? x.cantidad + ' ' + x.unidad : x.cantidad) + '</td><td>' + mon + ' ' + Number(x.precio).toFixed(2) + '</td>' +
-          '<td style="text-align:right">' + mon + ' ' + Number(x.total).toFixed(2) + '</td><td>' + esc(x.obs) + '</td><td>' + est + '</td><td></td></tr>';
+          '<td style="text-align:right">' + mon + ' ' + Number(x.total).toFixed(2) + '</td><td>' + esc(x.obs) + '</td><td>' + est + editTxt + '</td><td>' + acc + '</td></tr>';
       }).join('');
       return h;
     }).join('') : '<tr><td colspan="12" style="text-align:center;color:#64748b;padding:16px">No hay sobrecostos con estos filtros.</td></tr>';
@@ -161,7 +241,7 @@ const FormSobrecostos = {
   // se graba un registro por sobrecosto con el MISMO N° de factura (Cobranzas los junta como una factura).
   _facturarBK: async function (k) {
     const self = this;
-    const items = (self._items || []).filter(x => !x.facturado && !x.sinCobro && String(x.booking || x.codigoServicio).toUpperCase() === k);
+    const items = (self._items || []).filter(x => !x.facturado && !x.sinCobro && !x.anulado && String(x.booking || x.codigoServicio).toUpperCase() === k);
     if (!items.length) return;
     if (items.length === 1) { FormFacturaSobrecosto.abrir(items[0].fila); return; }
     const datos = [];
