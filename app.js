@@ -20,6 +20,30 @@ const CONFIG_APP = {
 };
 
 /**
+ * v124: el servidor manda las listas grandes "empacadas" (los nombres de columna una sola
+ * vez en vez de repetidos en cada fila). Aquí se rearman EXACTAMENTE como eran: mismo
+ * orden de columnas y mismos valores. Si la respuesta no viene empacada no cambia nada.
+ */
+function _desempacarLista(p) {
+  const cols = p.c, n = cols.length;
+  return p.f.map(function (fila) {
+    const o = {};
+    for (let i = 0; i < n; i++) o[cols[i]] = fila[i];
+    return o;
+  });
+}
+function _esEmpacado(x) {
+  return !!x && typeof x === 'object' && x.__pk === 1 && Array.isArray(x.c) && Array.isArray(x.f);
+}
+function _desempacar(r) {
+  if (_esEmpacado(r)) return _desempacarLista(r);
+  if (r && typeof r === 'object' && !Array.isArray(r)) {
+    for (const k in r) { if (_esEmpacado(r[k])) r[k] = _desempacarLista(r[k]); }
+  }
+  return r;
+}
+
+/**
  * Llama a una acción del backend (Code.gs -> ACCIONES[accion]).
  * Devuelve una Promise con la respuesta ya parseada (JSON).
  */
@@ -34,7 +58,7 @@ async function llamarBackend(accion, datos) {
     // text/plain evita que el navegador dispare un preflight OPTIONS,
     // que los Web Apps de Apps Script no responden.
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ accion: accion, datos: datos || {}, token: Sesion.token(), amVer: window.__amVer || '' })
+    body: JSON.stringify({ accion: accion, datos: datos || {}, token: Sesion.token(), amVer: window.__amVer || '', pk: 1 })
   });
 
   if (!respuesta.ok) {
@@ -45,7 +69,7 @@ async function llamarBackend(accion, datos) {
   const texto = await respuesta.text();
   let r;
   try {
-    r = JSON.parse(texto);
+    r = _desempacar(JSON.parse(texto));
   } catch (e) {
     throw new Error('El servidor no respondió correctamente (' + accion + '). Intente de nuevo en unos segundos.');
   }
