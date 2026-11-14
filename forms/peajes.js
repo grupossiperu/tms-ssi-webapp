@@ -60,11 +60,11 @@ const FormPeajes = {
       const costo = Number(p['COSTO 6 EJES']) || 0;
       return `
         <tr data-fila="${p._fila}">
-          <td>${p['SENTIDO'] || ''}</td>
-          <td>${p['PEAJES'] || ''}</td>
+          <td>${esc(p['SENTIDO'] || '')}</td>
+          <td>${esc(p['PEAJES'] || '')}</td>
           <td class="celda-costo">S/ ${costo.toFixed(2)}</td>
-          <td>${p['UBICACION'] || ''}</td>
-          <td>${p['DEPARTAMENTO'] || ''}</td>
+          <td>${esc(p['UBICACION'] || '')}</td>
+          <td>${esc(p['DEPARTAMENTO'] || '')}</td>
           <td><button type="button" class="boton-secundario btn-editar-peaje">Editar</button></td>
         </tr>`;
     }).join('');

@@ -295,11 +295,6 @@ const FormResultados = {
   },
 
   /* ----------------------------- utilidades ----------------------------- */
-  _num: function (v) {
-    if (v === null || v === undefined || v === '') return 0;
-    const n = Number(String(v).replace(/S\//g, '').replace(/\$/g, '').replace(/,/g, '').trim());
-    return isNaN(n) ? 0 : n;
-  },
   _fecha: function (v) {
     if (!v) return null;
     const d = new Date(v);

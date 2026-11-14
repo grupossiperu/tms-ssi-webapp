@@ -96,14 +96,14 @@ const FormServiciosCulminados = {
         tr.dataset.fila = f._fila;
         tr.innerHTML = `
           <td>${formatoFecha(f['FECHA DE PROGRAMACION'])}</td>
-          <td>${f['CLIENTE PARA FACTURACIÓN'] || ''}</td>
-          <td>${f['BOOKING'] || ''}</td>
-          <td>${f['CONDUCTOR'] || ''}</td>
-          <td>${f['PLACA TRACTO'] || ''}</td>
-          <td>${f['TIPO DE CARGA'] || ''}</td>
-          <td>${f['LUGAR DE POSICIONAMIENTO 1'] || ''}</td>
-          <td>${f['DESTINO 1'] || ''}</td>
-          <td>${f['ESTADO'] || ''}</td>
+          <td>${esc(f['CLIENTE PARA FACTURACIÓN'] || '')}</td>
+          <td>${esc(f['BOOKING'] || '')}</td>
+          <td>${esc(f['CONDUCTOR'] || '')}</td>
+          <td>${esc(f['PLACA TRACTO'] || '')}</td>
+          <td>${esc(f['TIPO DE CARGA'] || '')}</td>
+          <td>${esc(f['LUGAR DE POSICIONAMIENTO 1'] || '')}</td>
+          <td>${esc(f['DESTINO 1'] || '')}</td>
+          <td>${esc(f['ESTADO'] || '')}</td>
           <td style="text-align:center;">
             ${completo
               ? '<span class="badge-datos completo" title="Doble clic para revisar el detalle">Completo</span>'

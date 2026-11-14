@@ -22,7 +22,7 @@ const FormTarifas = {
     const datos = await llamarBackend('datosIniciales_Tarifas', {});
 
     const opciones = function (lista) {
-      return (lista || []).map(function (v) { return `<option value="${v}">`; }).join('');
+      return (lista || []).map(function (v) { return `<option value="${esc(v)}">`; }).join('');
     };
 
     const html = `
@@ -163,7 +163,7 @@ const FormTarifas = {
     function poblarSelect(select, valores) {
       const actual = select.value;
       const opciones = valores.map(function (v) {
-        return `<option value="${v}">${v}</option>`;
+        return `<option value="${esc(v)}">${esc(v)}</option>`;
       }).join('');
       select.innerHTML = '<option value="">Todos</option>' + opciones;
       if (valores.indexOf(actual) !== -1) select.value = actual;
@@ -217,12 +217,12 @@ const FormTarifas = {
         if (!vigente) tr.style.opacity = '.55';
         tr.innerHTML = `
           <td>${formatoFecha(t['FECHA'])}</td>
-          <td>${t['CLIENTE'] || ''}</td>
-          <td>${t['CIUDAD DE RETIRO'] || ''}</td>
-          <td>${t['DESTINO 1'] || ''}</td>
-          <td>${t['DESTINO 2'] || ''}</td>
-          <td>${t['CIUDAD DE DEVOLUCION'] || ''}</td>
-          <td>${t['TIPO'] || ''}</td>
+          <td>${esc(t['CLIENTE'] || '')}</td>
+          <td>${esc(t['CIUDAD DE RETIRO'] || '')}</td>
+          <td>${esc(t['DESTINO 1'] || '')}</td>
+          <td>${esc(t['DESTINO 2'] || '')}</td>
+          <td>${esc(t['CIUDAD DE DEVOLUCION'] || '')}</td>
+          <td>${esc(t['TIPO'] || '')}</td>
           <td>${simbolo(t['MONEDA'])}${(Number(t['TARIFA']) || 0).toFixed(2)}</td>
           <td>${vigente
             ? '<span class="badge-datos completo">Vigente</span>'

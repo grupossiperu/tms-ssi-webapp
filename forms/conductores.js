@@ -72,8 +72,8 @@ const FormConductores = {
     cuerpo.innerHTML = conductores.map(function (c) {
       return `
         <tr data-fila="${c._fila}">
-          <td class="celda-conductor">${c['CONDUCTOR'] || ''}</td>
-          <td class="celda-dni">${c['N° DNI'] || ''}</td>
+          <td class="celda-conductor">${esc(c['CONDUCTOR'] || '')}</td>
+          <td class="celda-dni">${esc(c['N° DNI'] || '')}</td>
           <td><button type="button" class="boton-secundario btn-editar-conductor">Editar</button></td>
         </tr>`;
     }).join('');

@@ -570,11 +570,6 @@ const FormServicio = {
     if (typeof self._actualizarTotalVenta === 'function') self._actualizarTotalVenta();
   },
 
-  _fechaHoy: function () {
-    const hoy = new Date();
-    return String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
-  },
-
   /**
    * Vista imprimible (A4) del servicio. Nunca incluye la Tarifa (dato
    * confidencial). Si el combustible lo abastece un proveedor tampoco salen
