@@ -144,8 +144,9 @@ const FormPolizas = {
       </div>
       <table><thead><tr><th style="width:34px">N°</th><th>N° liquidación</th><th style="width:110px">Monto</th><th style="width:140px">Vence</th><th style="width:140px">Fecha de pago</th><th style="width:118px">Estado</th><th style="width:30px"></th></tr></thead><tbody id="pfCuotas"></tbody></table>
       <div class="res" id="pfRes"></div>
-      ${x.id ? '<div class="sub">Endosos (venta / baja de unidad)</div>' + (x.endosos.length ? '<table><thead><tr><th>Fecha baja</th><th>Placa</th><th>Días usados</th><th>Usado</th><th>Pagado</th><th>Devolución</th><th>Cuotas anuladas</th><th>Registró</th></tr></thead><tbody>' +
-        x.endosos.map(e => '<tr><td>' + esc(e.fechaBaja) + '</td><td>' + esc(e.placa) + '</td><td>' + e.dias + '</td><td>' + UI120.m(e.usado) + '</td><td>' + UI120.m(e.pagado) + '</td><td><b>' + self._mon(x.moneda) + ' ' + UI120.m(e.devolucion) + '</b>' + (e.manual ? ' (manual)' : '') + '</td><td>' + (e.anuladas || []).join(', ') + '</td><td>' + esc(e.por) + '<div style="color:#94a3b8">' + esc(e.registrado) + '</div></td></tr>').join('') + '</tbody></table>' : '<div style="color:#64748b;font-size:.8rem">Sin endosos.</div>') +
+      ${x.id ? '<div class="sub">Endosos (venta / baja de unidad)</div>' + (x.endosos.length ? '<table><thead><tr><th>Fecha baja</th><th>Placa</th><th>Días usados</th><th>Usado</th><th>Pagado</th><th>Devolución</th><th>Nota de crédito</th><th>Cuotas anuladas</th><th>Registró</th></tr></thead><tbody>' +
+        x.endosos.map((e, i) => '<tr><td>' + esc(e.fechaBaja) + '</td><td>' + esc(e.placa) + '</td><td>' + e.dias + '</td><td>' + UI120.m(e.usado) + '</td><td>' + UI120.m(e.pagado) + '</td><td><b>' + self._mon(x.moneda) + ' ' + UI120.m(e.devolucion) + '</b>' + (e.manual ? ' (manual)' : '') + '</td><td>' + (e.nc ? '<b>' + esc(e.nc.numero) + '</b><div style="color:#64748b">' + esc(e.nc.fecha || '') + ' · ' + self._mon(x.moneda) + ' ' + UI120.m(e.nc.monto) + '</div>' : '<span style="color:#b45309">Pendiente</span>') +
+          ' <button type="button" class="boton-secundario pf-nc" data-i="' + i + '" style="padding:2px 8px;font-size:.72rem;margin-top:2px">' + (e.nc ? '✎ Editar' : '+ Agregar') + '</button></td><td>' + (e.anuladas || []).join(', ') + '</td><td>' + esc(e.por) + '<div style="color:#94a3b8">' + esc(e.registrado) + '</div></td></tr>').join('') + '</tbody></table>' : '<div style="color:#64748b;font-size:.8rem">Sin endosos.</div>') +
         '<button type="button" class="boton-secundario" id="pfEndoso" style="margin-top:6px">Registrar endoso (venta / baja de una unidad)</button>' : ''}
       <div class="pie">
         ${x.id ? '<button class="boton-secundario" id="pfBaja" style="margin-right:auto">' + (x.estado === 'ACTIVA' ? 'Dar de baja la póliza' : 'Reactivar') + '</button>' : ''}
@@ -168,11 +169,14 @@ const FormPolizas = {
     const numerar = () => tb.querySelectorAll('tr').forEach((tr, i) => { tr.querySelector('.n').textContent = i + 1; });
     const leer = () => Array.from(tb.querySelectorAll('tr')).map(tr => ({ liquidacion: tr.querySelector('.cl').value.trim(), monto: UI120.n(tr.querySelector('.cm').value),
       vence: self._dmy(tr.querySelector('.cv').value), pago: self._dmy(tr.querySelector('.cp').value), estado: tr.querySelector('.ce').value }));
+    const ncTot = (x.endosos || []).reduce((a, e) => a + (e.nc ? Number(e.nc.monto) || 0 : 0), 0);
     const resumen = function () {
       const cs = leer(), mo = self._mon(w.q('#pfMon').value), prima = UI120.n(w.q('#pfPrima').value);
       const tot = cs.filter(c => c.estado !== 'ANULADA').reduce((a, c) => a + c.monto, 0), pag = cs.filter(c => c.estado === 'PAGADA').reduce((a, c) => a + c.monto, 0);
       w.q('#pfRes').innerHTML = '<div><span>Total cuotas</span><b>' + mo + ' ' + UI120.m(tot) + '</b>' + (prima && Math.abs(tot - prima) > 0.01 && cs.length ? '<div style="font-size:.68rem;color:#b45309">Prima anual: ' + mo + ' ' + UI120.m(prima) + '</div>' : '') + '</div>' +
-        '<div><span>Pagado</span><b>' + mo + ' ' + UI120.m(pag) + '</b></div><div><span>Saldo</span><b>' + mo + ' ' + UI120.m(tot - pag) + '</b></div>';
+        '<div><span>Pagado</span><b>' + mo + ' ' + UI120.m(pag) + '</b></div>' +
+        (ncTot ? '<div><span>Notas de crédito</span><b>− ' + mo + ' ' + UI120.m(ncTot) + '</b></div>' : '') +
+        '<div><span>Saldo</span><b>' + mo + ' ' + UI120.m(Math.max(0, Math.round((tot - pag - ncTot) * 100) / 100)) + '</b>' + (ncTot ? '<div style="font-size:.68rem;color:#64748b">cuotas pendientes − notas de crédito</div>' : '') + '</div>';
     };
     (x.cuotas || []).forEach(fila); resumen();
     ['#pfPrima', '#pfMon'].forEach(s => w.q(s).addEventListener('input', resumen));
@@ -195,6 +199,7 @@ const FormPolizas = {
     if (x.id && w.q('#pfRenovar')) w.q('#pfRenovar').addEventListener('click', function () { w.cerrar(); self.renovar(x); });
     if (x.id) {
       w.q('#pfEndoso').addEventListener('click', () => self.endoso(x, w));
+      w.velo.querySelectorAll('.pf-nc').forEach(b => b.addEventListener('click', () => self.notaCredito(x, Number(b.dataset.i), w)));
       w.q('#pfBaja').addEventListener('click', async function () {
         const baja = x.estado === 'ACTIVA'; let motivo = '';
         if (baja) { motivo = prompt('Motivo de la baja de la póliza:'); if (!motivo || !motivo.trim()) return; }
@@ -248,11 +253,15 @@ const FormPolizas = {
         <div class="campo"><label>Pagado (base)</label><input id="enPag" inputmode="decimal" value="${pagado.toFixed(2)}"></div>
         <div class="campo"><label>Devolución (escribir para fijarla)</label><input id="enMan" inputmode="decimal" placeholder="Automática"></div>
         <div class="campo"><label>Observación</label><input id="enObs" placeholder="N° de endoso, comprador…"></div>
+        <div class="campo"><label>N° nota de crédito (si ya la tiene)</label><input id="enNcN" style="text-transform:uppercase"></div>
+        <div class="campo"><label>Fecha de la nota de crédito</label><input type="date" id="enNcF"></div>
+        <div class="campo"><label>Monto de la nota de crédito</label><input id="enNcM" inputmode="decimal" placeholder="Igual a la devolución"></div>
       </div>
       <label style="display:flex;gap:6px;align-items:center;margin-top:8px;font-size:.8rem"><input type="checkbox" id="enAnu" checked style="width:auto"> Anular las cuotas pendientes que vencen después de la fecha de baja</label>
       <div class="res" id="enRes"></div>
       <div class="nota" id="enAnuTxt"></div>
       <div class="nota">Usado = prima anual ÷ 365 × días desde el inicio hasta la baja. Devolución = pagado − usado (si sale negativo, no hay devolución).</div>
+      <div class="nota">La nota de crédito es opcional aquí: se puede agregar después desde la ficha de la póliza. Su monto se resta del saldo por pagar.</div>
       <div class="pie"><button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Registrar endoso</button></div>`, 760);
     const calc = function () {
       const fb = w.q('#enFec').value ? new Date(w.q('#enFec').value + 'T00:00:00') : null;
@@ -268,12 +277,46 @@ const FormPolizas = {
     w.q('[data-c]').addEventListener('click', w.cerrar);
     w.q('[data-ok]').addEventListener('click', async function () {
       const datos = { id: x.id, placa: w.q('#enPla').value, fechaBaja: self._dmy(w.q('#enFec').value), primaBase: w.q('#enPri').value, pagadoBase: w.q('#enPag').value,
-        devolucionManual: w.q('#enMan').value.trim(), anularPosteriores: w.q('#enAnu').checked, observacion: w.q('#enObs').value };
+        devolucionManual: w.q('#enMan').value.trim(), anularPosteriores: w.q('#enAnu').checked, observacion: w.q('#enObs').value,
+        ncNumero: w.q('#enNcN').value.trim().toUpperCase(), ncFecha: self._dmy(w.q('#enNcF').value), ncMonto: w.q('#enNcM').value.trim() };
+      if (!datos.ncNumero && (datos.ncFecha || datos.ncMonto)) { mostrarMensaje('Escriba el N° de la nota de crédito o deje vacíos su fecha y monto.', 'error'); return; }
       if (!confirm('¿Registrar el endoso de ' + (datos.placa || '?') + ' al ' + (datos.fechaBaja || '?') + '?')) return;
       const b = this; b.disabled = true;
       const r = await llamarBackend('polizasEndoso', datos);
       if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo registrar.', 'error'); b.disabled = false; return; }
       w.cerrar(); if (wFicha) wFicha.cerrar(); mostrarMensaje(r.mensaje, 'exito'); self._recargar();
+    });
+  },
+
+  /* ---------------- Nota de crédito de un endoso ---------------- */
+  notaCredito: function (x, i, wFicha) {
+    const self = this, e = (x.endosos || [])[i]; if (!e) return;
+    const mo = self._mon(x.moneda), nc = e.nc || {};
+    const w = UI120.ventana('Nota de crédito · endoso ' + esc(e.placa), `
+      <div class="info"><span>Póliza: <b>${esc(x.nombre)}</b></span><span>Baja: <b>${esc(e.fechaBaja)}</b></span><span>Devolución: <b>${mo} ${UI120.m(e.devolucion)}</b></span></div>
+      <div class="g" style="margin-top:10px">
+        <div class="campo"><label>N° nota de crédito</label><input id="ncN" style="text-transform:uppercase" value="${esc(nc.numero || '')}"></div>
+        <div class="campo"><label>Fecha</label><input type="date" id="ncF" value="${self._iso(nc.fecha)}"></div>
+        <div class="campo"><label>Monto (${mo})</label><input id="ncM" inputmode="decimal" value="${nc.numero ? nc.monto : e.devolucion}"></div>
+      </div>
+      <div class="nota">El monto de la nota de crédito se resta del saldo por pagar de la póliza.</div>
+      <div class="pie">${e.nc ? '<button class="boton-secundario" data-q style="margin-right:auto;color:#b91c1c">Quitar nota de crédito</button>' : ''}<button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar</button></div>`, 620);
+    const enviar = async function (b, datos) {
+      b.disabled = true;
+      const r = await llamarBackend('polizasEndosoNC', datos);
+      if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo guardar.', 'error'); b.disabled = false; return; }
+      w.cerrar(); if (wFicha) wFicha.cerrar(); mostrarMensaje(r.mensaje, 'exito'); self._recargar();
+    };
+    w.q('[data-c]').addEventListener('click', w.cerrar);
+    w.q('[data-ok]').addEventListener('click', function () {
+      const numero = w.q('#ncN').value.trim().toUpperCase(), monto = UI120.n(w.q('#ncM').value);
+      if (!numero) { mostrarMensaje('Escriba el N° de la nota de crédito.', 'error'); return; }
+      if (!(monto > 0)) { mostrarMensaje('El monto debe ser mayor que 0.', 'error'); return; }
+      enviar(this, { id: x.id, idx: i, numero: numero, fecha: self._dmy(w.q('#ncF').value), monto: monto });
+    });
+    if (e.nc) w.q('[data-q]').addEventListener('click', function () {
+      if (!confirm('¿Quitar la nota de crédito ' + e.nc.numero + ' de este endoso?')) return;
+      enviar(this, { id: x.id, idx: i, quitar: true });
     });
   },
 
