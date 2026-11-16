@@ -27,6 +27,15 @@ const FormUsuarios = {
     const self = this;
     const html = `
       <div id="usrSolicitudes" style="display:none;background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px 12px;margin-bottom:12px;"></div>
+      <div id="usrBot" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:.82rem;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b style="color:#1e3a8a">📱 Bot de Telegram</b>
+          <span id="usrBotEstado" style="color:#475569">Cargando…</span>
+          <button class="boton-primario" id="usrBotCodigo" type="button" style="margin-left:auto;padding:5px 12px;font-size:.8rem">Vincular mi Telegram</button>
+        </div>
+        <div id="usrBotCod" style="display:none;margin-top:8px"></div>
+        <div id="usrBotChats" style="margin-top:6px"></div>
+      </div>
       <div class="usr-caja">
         <h3 id="usrTitulo" style="margin:0 0 10px;color:var(--azul-marino-oscuro);font-size:1rem;">Nuevo usuario</h3>
         <div class="usr-form">
@@ -128,7 +137,43 @@ const FormUsuarios = {
       }
       pintar();
       cargarSolicitudes();
+      cargarBot();
     };
+
+    // Bot de Telegram: chats vinculados y código para vincular (solo MAESTRO).
+    const cargarBot = async function () {
+      let r = null;
+      try { r = await llamarBackend('botChats', {}); } catch (e) { r = null; }
+      if (!r || !r.ok) { $('usrBot').style.display = 'none'; return; }
+      $('usrBotEstado').innerHTML = r.configurado ? '<span style="color:#166534">conectado</span>' + (r.gemini ? ' · preguntas libres con IA activas' : ' · <span style="color:#b45309">sin clave de IA: solo comandos</span>')
+        : '<span style="color:#b45309">falta configurar el token del bot (ver guía)</span>';
+      const chats = r.chats || [];
+      $('usrBotChats').innerHTML = chats.length ? '<table style="width:100%;border-collapse:collapse;font-size:.78rem"><thead><tr style="text-align:left;color:#475569"><th>Usuario</th><th>Telegram</th><th>Estado</th><th>Resúmenes 7:00 y 18:00</th><th>Último mensaje</th><th></th></tr></thead><tbody>' +
+        chats.map(function (c) {
+          const act = String(c.estado).toUpperCase() === 'ACTIVO';
+          return '<tr style="border-top:1px solid #dbeafe"><td><b>' + esc(c.usuario) + '</b></td><td>' + esc(c.telegram) + '</td><td>' + (act ? '<span class="usr-badge usr-ok">Activo</span>' : '<span class="usr-badge usr-no">Desvinculado</span>') + '</td>' +
+            '<td>' + (String(c.resumenes).toUpperCase() === 'NO' ? 'No' : 'Sí') + ' <button class="boton-secundario" type="button" data-bres="' + esc(c.chatId) + '" data-v="' + (String(c.resumenes).toUpperCase() === 'NO' ? 'SI' : 'NO') + '" style="padding:2px 8px;font-size:.72rem">' + (String(c.resumenes).toUpperCase() === 'NO' ? 'Prender' : 'Apagar') + '</button></td>' +
+            '<td>' + esc(c.ultimo || '—') + '</td><td>' + (act ? '<button class="boton-secundario" type="button" data-bdes="' + esc(c.chatId) + '" style="padding:2px 8px;font-size:.72rem;color:#b91c1c">Desvincular</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table>' : '<span style="color:#64748b">Aún no hay chats vinculados.</span>';
+      $('usrBotChats').querySelectorAll('[data-bres],[data-bdes]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          if (b.dataset.bdes && !confirmar('¿Desvincular este chat? Dejará de recibir datos del sistema.')) return;
+          b.disabled = true;
+          const r2 = await llamarBackend('botChatGuardar', b.dataset.bdes ? { chatId: b.dataset.bdes, estado: 'DESVINCULADO' } : { chatId: b.dataset.bres, resumenes: b.dataset.v });
+          if (!r2 || !r2.ok) mostrarMensaje((r2 && r2.mensaje) || 'No se pudo guardar.', 'error');
+          cargarBot();
+        });
+      });
+    };
+    protegerClic($('usrBotCodigo'), async function () {
+      const r = await llamarBackend('botVincularCodigo', {});
+      if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo generar el código.', 'error'); return; }
+      $('usrBotCod').style.display = '';
+      $('usrBotCod').innerHTML = '<div style="background:#fff;border:1px dashed #60a5fa;border-radius:8px;padding:8px 10px">' +
+        'En Telegram abre ' + (r.bot ? '<a href="https://t.me/' + encodeURIComponent(r.bot) + '" target="_blank" rel="noopener"><b>@' + esc(r.bot) + '</b></a>' : 'tu bot') +
+        ' y envía este mensaje (vale 10 minutos):<div style="font-size:1.3rem;font-weight:800;letter-spacing:2px;margin:4px 0;color:#1e3a8a">/vincular ' + esc(r.codigo) + '</div>' +
+        '<span style="color:#64748b">Solo usuarios MAESTRO. Después recarga esta ventana para ver el chat vinculado.</span></div>';
+    });
 
     // Solicitudes de "Olvidé mi contraseña" (las aprueba el maestro).
     const cargarSolicitudes = async function () {

@@ -197,6 +197,14 @@ const FormFacturasRepsol = {
         <div class="campo"><label>&nbsp;</label><button class="boton-secundario" id="rpNotas" type="button" style="width:100%">Notas de venta</button></div>
       </div>
       <div class="nv-resumen" id="rpResumen">Cargando…</div>
+      <div id="rpCredito" style="background:#f0f9ff;border:1px solid #7dd3fc;border-radius:10px;padding:8px 12px;margin:6px 0;font-size:.8rem">
+        <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+          <div class="campo" style="margin:0;min-width:200px"><label>Línea de crédito Repsol (S/) — cópiala del portal de Repsol</label><input id="rpLinea" inputmode="decimal" style="text-transform:none"></div>
+          <button class="boton-primario" id="rpLineaGuardar" type="button" style="padding:6px 12px">Guardar línea</button>
+          <span id="rpLineaInfo" style="color:#64748b"></span>
+        </div>
+        <div id="rpCreditoRes" style="margin-top:6px;color:#0c4a6e">Calculando crédito…</div>
+      </div>
       <div class="nv-scroll">
         <table class="tabla-lista nv-tabla">
           <colgroup><col style="width:12%"><col style="width:11%"><col style="width:5%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:19%"></colgroup>
@@ -269,6 +277,27 @@ const FormFacturasRepsol = {
       msEstado.setOpciones(['PENDIENTE', 'PAGADO PARCIAL', 'PAGADO']);
       pintar();
     };
+    // Crédito Repsol: línea (del portal) − por pagar − NV sin factura vs lo que piden los viajes programados
+    const cargarCredito = async function () {
+      let r = null;
+      try { r = await llamarBackend('repsolCredito', {}); } catch (e) { r = null; }
+      if (!r || !r.ok || !r.credito) { $('rpCreditoRes').textContent = (r && r.mensaje) || 'No se pudo calcular el crédito.'; return; }
+      const c = r.credito, d = NV_UTIL.dinero;
+      if (c.linea) $('rpLinea').value = c.linea;
+      $('rpLineaInfo').textContent = c.lineaActualizada ? 'Actualizada ' + c.lineaActualizada + (c.lineaPor ? ' por ' + c.lineaPor : '') : 'Sin registrar';
+      $('rpCreditoRes').innerHTML = (c.linea ? 'Disponible <b>' + d(c.disponible) + '</b> = línea ' + d(c.linea) + ' − facturas por pagar ' + d(c.facturasPorPagar) + ' − notas de venta sin factura ' + d(c.nvSinFactura) + ' (' + c.nvSinFacturaCantidad + ')'
+        : 'Deuda actual: facturas por pagar ' + d(c.facturasPorPagar) + ' + notas de venta sin factura ' + d(c.nvSinFactura) + '. Escribe la línea para ver el disponible.') +
+        '<br>Viajes programados con Repsol: <b>' + c.viajesProgramados.length + '</b> · necesitan ≈ <b>' + d(c.necesario) + '</b> (precio de referencia ' + d(c.precioGalonReferencia) + ' por galón)' +
+        (c.alcanza === true ? ' · <b style="color:#166534">✅ alcanza</b>' : c.alcanza === false ? ' · <b style="color:#b91c1c">⚠️ faltan ' + d(c.faltante) + '</b>' : '');
+      _refrescarSnapshotFormulario();
+    };
+    protegerClic($('rpLineaGuardar'), async function () {
+      const r = await llamarBackend('repsolLineaGuardar', { linea: $('rpLinea').value });
+      if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo guardar.', 'error'); return; }
+      mostrarMensaje(r.mensaje, 'exito');
+      cargarCredito();
+    });
+    cargarCredito();
     $('rpBuscar').addEventListener('input', pintar);
     $('rpCerrar').addEventListener('click', solicitarCierrePanel);
     $('rpNotas').addEventListener('click', function () { FormNotasVenta.abrir(); });
