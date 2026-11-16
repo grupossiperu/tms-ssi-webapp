@@ -52,6 +52,13 @@ const FormLiquidacionConductores = {
         .lq-liqs { margin-top:10px; font-size:.72rem; }
         .lq-liqs table { width:100%; border-collapse:collapse; } .lq-liqs td, .lq-liqs th { border-bottom:1px solid #eef2f7; padding:4px; text-align:left; }
         .lq-liqs th { background:#f1f5f9; font-size:.64rem; }
+        .lq-t tr.lq-arr-h td { background:#ffedd5; color:#9a3412; font-weight:800; text-align:left; font-size:.62rem; padding:5px 6px; }
+        .lq-t tr.lq-arr td { background:#fff7ed; }
+        .lq-tag { display:inline-block; margin-left:4px; padding:1px 5px; border-radius:8px; background:#fdba74; color:#7c2d12; font-size:.55rem; font-weight:800; }
+        .lq-t tfoot tr.sub td { background:#f8fafc; font-weight:700; }
+        .lq-arrbox { margin-top:10px; border:1px solid #fdba74; background:#fff7ed; border-radius:10px; padding:8px 10px; font-size:.72rem; }
+        .lq-arrbox b.t { color:#9a3412; } .lq-arrbox table { width:100%; border-collapse:collapse; margin-top:4px; }
+        .lq-arrbox td, .lq-arrbox th { border-bottom:1px solid #fed7aa; padding:3px 4px; text-align:left; } .lq-arrbox th { font-size:.64rem; color:#9a3412; }
         .lq-ov { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:10050; display:flex; align-items:center; justify-content:center; }
         .lq-dlg { background:#fff; border-radius:12px; padding:16px 18px; width:min(620px,94vw); max-height:88vh; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
         .lq-dlg h4 { margin:0 0 10px; color:#1c3a5e; }
@@ -69,6 +76,7 @@ const FormLiquidacionConductores = {
           <option value="DEPOSITADO">Depositados</option><option value="">Todos</option></select></div>
         <div class="campo" style="min-width:230px"><label>Conductor</label><select id="lqCond"><option value="">Todos (resumen)</option></select></div>
         <div class="campo"><label>Placa</label><div id="msLqPlaca"></div></div>
+        <div class="campo" title="Las liquidaciones sin depositar y los viajes sin liquidar de quincenas anteriores (desde esta) se arrastran a la quincena que estés viendo"><label>Arrastrar pendientes desde</label><select id="lqDesde"></select></div>
         <button class="boton-secundario" id="lqBorrar" type="button">Borrar filtros</button>
         <button class="boton-secundario" id="lqHist" type="button">Historial de cambios</button>
       </div>
@@ -84,6 +92,7 @@ const FormLiquidacionConductores = {
       const $ = id => raiz.querySelector('#' + id);
       self._msPlaca = crearMultiSelect($('msLqPlaca'), { onChange: () => self._pintar() });
       ['lqCond', 'lqQuin', 'lqEst'].forEach(id => $(id).addEventListener('change', () => self._pintar()));
+      $('lqDesde').addEventListener('change', function () { self._desdeQ = this.value; try { localStorage.setItem('tms_lq_desde', this.value); } catch (e) { /* sin almacenamiento */ } self._pintar(); });
       $('lqBorrar').addEventListener('click', function () { $('lqCond').value = ''; $('lqEst').value = 'PENDIENTE'; $('lqQuin').value = ''; self._msPlaca.limpiar(); self._pintar(); });
       $('lqCerrar').addEventListener('click', cerrarPanel);
       $('lqCopiar').addEventListener('click', () => self._copiar());
@@ -115,8 +124,13 @@ const FormLiquidacionConductores = {
     const conds = Array.from(new Set(self._filas.map(f => f.conductor))).sort();
     $('lqCond').innerHTML = '<option value="">Todos (resumen)</option>' + conds.map(c => '<option>' + esc(c) + '</option>').join('');
     if (selC && conds.indexOf(selC) >= 0) $('lqCond').value = selC;
-    const quins = Array.from(new Set(self._filas.map(f => f.quincena).filter(Boolean))).sort().reverse();
-    $('lqQuin').innerHTML = '<option value="">Todas</option>' + quins.map(q => '<option value="' + q + '">' + self._qTxt(q) + '</option>').join('');
+    const quins = Array.from(new Set(self._filas.map(f => f.quincena).filter(Boolean).concat([self._qActual()]))).sort().reverse();
+    $('lqQuin').innerHTML = '<option value="">Todas</option>' + quins.map(q => '<option value="' + q + '">' + self._qTxt(q) + (q === self._qActual() ? ' (actual)' : '') + '</option>').join('');
+    // Arrastre: desde qué quincena se revisan pendientes anteriores (por defecto 1ra de octubre 2026; se recuerda)
+    if (!self._desdeQ) { let d = ''; try { d = localStorage.getItem('tms_lq_desde') || ''; } catch (e) { d = ''; } self._desdeQ = d || self.DESDE_DEFECTO; }
+    $('lqDesde').innerHTML = quins.slice().reverse().map(q => '<option value="' + q + '">' + self._qTxt(q) + '</option>').join('');
+    if (quins.indexOf(self._desdeQ) < 0) $('lqDesde').insertAdjacentHTML('afterbegin', '<option value="' + self._desdeQ + '">' + self._qTxt(self._desdeQ) + '</option>');
+    $('lqDesde').value = self._desdeQ;
     if (primera) {
       // Por defecto: la última quincena ya cerrada con viajes pendientes (si no, la más reciente)
       const hoy = new Date(); const hIso = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
@@ -129,6 +143,35 @@ const FormLiquidacionConductores = {
     self._pintar();
   },
 
+  DESDE_DEFECTO: '2026-10-Q1',
+  _qActual: function () { const h = new Date(); return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + (h.getDate() <= 15 ? 'Q1' : 'Q2'); },
+  /**
+   * Pendientes de quincenas ANTERIORES a qSel (desde _desdeQ): viajes sin liquidar y liquidaciones por depositar.
+   * Respeta los filtros de conductor y placa. Una fila por conductor + quincena + liquidación.
+   */
+  _arrastre: function (qSel) {
+    const self = this, $ = id => self._raiz.querySelector('#' + id);
+    if (!qSel || $('lqEst').value === 'DEPOSITADO') return [];
+    const desde = self._desdeQ || self.DESDE_DEFECTO;
+    return self._porPagar(q => q >= desde && q < qSel, true);
+  },
+  /** Grupos sin depositar (sin liquidar o por depositar) cuyas quincenas cumplen enQ. Respeta conductor y placa. */
+  _porPagar: function (enQ, arrastre) {
+    const self = this, $ = id => self._raiz.querySelector('#' + id);
+    const c = $('lqCond').value, g = {};
+    self._filas.filter(f => f.quincena && enQ(f.quincena) && (f.liqEstado === 'PENDIENTE' || f.liqEstado === 'LIQUIDADO') &&
+      (!c || f.conductor === c) && self._msPlaca.cumple(f.placa))
+      .forEach(f => { const k = f.conductor + '|' + f.quincena + '|' + (f.liqId || 'P'); (g[k] = g[k] || []).push(f); });
+    const visto = {};
+    return Object.keys(g).map(k => {
+      const l = g[k], s = self._suma(l), f0 = l[0], liq = f0.liqId ? self._liq(f0.liqId) : null;
+      const r = { conductor: f0.conductor, quincena: f0.quincena, estado: f0.liqEstado, liq: liq, n: s.n, arrastre: !!arrastre,
+        costo: liq ? (liq.gastos || 0) - (s.bono || 0) : s.costo, totalDep: liq ? liq.totalDep : s.totalDep, totalBono: liq ? liq.totalBono : s.totalBono };
+      const kd = r.conductor + '|' + r.quincena; r.desc = visto[kd] ? 0 : self._descDe(r.conductor, r.quincena).total; visto[kd] = 1;
+      r.aPagar = Math.round((r.totalBono - r.desc) * 100) / 100;
+      return r;
+    }).sort((a, b) => a.conductor.localeCompare(b.conductor) || String(a.quincena).localeCompare(String(b.quincena)));
+  },
   _m: function (n) { return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
   _f: function (iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(iso || ''); },
   _qTxt: function (q) {
@@ -172,6 +215,23 @@ const FormLiquidacionConductores = {
         '<div style="border-left-color:#dc2626"><span>Total descuentos</span><b>S/ ' + self._m(totD) + '</b></div>' +
         '<div class="bono"><span>' + (t.totalBono - totD >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe') + '</span><b>S/ ' + self._m(Math.abs(t.totalBono - totD)) + '</b></div></div>';
     }
+    // Arrastre: pendientes de quincenas anteriores de este conductor
+    const arr = self._arrastre($('lqQuin').value);
+    if (arr.length) {
+      const qa = $('lqQuin').value;
+      const estaQ = Math.round(self._porPagar(x => x === qa, false).reduce((a, r) => a + r.aPagar, 0) * 100) / 100;
+      const totA = Math.round(arr.reduce((a, r) => a + r.aPagar, 0) * 100) / 100;
+      h += '<div class="lq-arrbox"><b class="t">⚠ Pendientes de quincenas anteriores de ' + esc(cond) + ' (desde ' + self._qTxt(self._desdeQ) + ')</b>' +
+        '<table><thead><tr><th>Quincena</th><th>Estado</th><th>Viajes</th><th>Total bono</th><th>Descuentos</th><th>A pagar</th><th></th></tr></thead><tbody>' +
+        arr.map(r => '<tr><td>' + self._qTxt(r.quincena) + '</td><td><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : 'SIN LIQUIDAR') + '</span></td><td>' + r.n +
+          '</td><td>S/ ' + self._m(r.totalBono) + '</td><td>' + (r.desc ? '− S/ ' + self._m(r.desc) : '') + '</td><td><b>S/ ' + self._m(r.aPagar) + '</b></td><td>' +
+          (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Marcar depositado</button>' : '') +
+          '<button class="lq-btn" data-irq="' + r.quincena + '">Ver ›</button></td></tr>').join('') +
+        '</tbody></table>' +
+        '<div class="lq-res" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><span>Esta quincena (sin depositar)</span><b>S/ ' + self._m(estaQ) + '</b></div>' +
+        '<div style="border-left-color:#f97316"><span>Quincenas anteriores (a pagar)</span><b>S/ ' + self._m(totA) + '</b></div>' +
+        '<div class="bono"><span>Total a pagar ahora</span><b>S/ ' + self._m(estaQ + totA) + '</b></div></div></div>';
+    }
     // Acciones: liquidar la quincena (pendientes)
     const pend = vis.filter(f => f.liqEstado === 'PENDIENTE');
     if (self._puede && pend.length) {
@@ -196,6 +256,7 @@ const FormLiquidacionConductores = {
     $('lqCuerpo').querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => self._dlgDepositar(b.dataset.dep)));
     $('lqCuerpo').querySelectorAll('[data-reab]').forEach(b => b.addEventListener('click', () => self._dlgReabrir(b.dataset.reab)));
     $('lqCuerpo').querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => self._dlgCorregir(b.dataset.edit)));
+    $('lqCuerpo').querySelectorAll('[data-irq]').forEach(b => b.addEventListener('click', () => { $('lqQuin').value = b.dataset.irq; $('lqEst').value = ''; self._pintar(); }));
     _refrescarSnapshotFormulario();
   },
 
@@ -212,15 +273,21 @@ const FormLiquidacionConductores = {
     const vistoD = {};
     filas.forEach(r => { const k = r.conductor + '|' + r.quincena; r.desc = vistoD[k] ? 0 : self._descDe(r.conductor, r.quincena).total; vistoD[k] = 1; r.aPagar = Math.round((r.totalBono - r.desc) * 100) / 100; });
     const t = filas.reduce((a, r) => { a.n += r.n; a.g += r.costo; a.d += r.totalDep; a.b += r.totalBono; a.ds += r.desc; a.p += r.aPagar; return a; }, { n: 0, g: 0, d: 0, b: 0, ds: 0, p: 0 });
+    // Arrastre: pendientes de quincenas anteriores (se pagan junto con la quincena elegida)
+    const arr = self._arrastre($('lqQuin').value);
+    const tA = arr.reduce((a, r) => { a.n += r.n; a.p += r.aPagar; return a; }, { n: 0, p: 0 });
+    const filaHtml = r => '<tr class="clic' + (r.arrastre ? ' lq-arr' : '') + '" data-c="' + esc(r.conductor) + '" data-q="' + r.quincena + '"><td class="i"><b>' + esc(r.conductor) + '</b></td><td class="c">' + self._qTxt(r.quincena) + (r.arrastre ? '<span class="lq-tag">de quincena anterior</span>' : '') + '</td><td class="c">' + r.n +
+      '</td><td>S/ ' + self._m(r.costo) + '</td><td class="depT">S/ ' + self._m(r.totalDep) + '</td>' + self._bonoTd(r.totalBono) +
+      '<td style="color:#b91c1c">' + (r.desc ? '− S/ ' + self._m(r.desc) : '') + '</td>' + self._bonoTd(r.aPagar) +
+      '<td class="c"><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : r.estado) + '</span>' + (r.liq && r.estado === 'DEPOSITADO' ? '<span class="lq-mot">' + esc(r.liq.fechaDep || '') + ' · op. ' + esc(r.liq.operacion || '') + '</span>' : '') + '</td>' +
+      '<td class="c">' + (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Depositar</button>' : '') + '<button class="lq-btn">Ver ›</button></td></tr>';
+    const pieArr = arr.length ? '<tr class="sub"><td class="i" colspan="2">+ Pendientes de quincenas anteriores</td><td class="c">' + tA.n + '</td><td colspan="4"></td><td>S/ ' + self._m(tA.p) + '</td><td colspan="2"></td></tr>' +
+      '<tr><td class="i" colspan="2">TOTAL (QUINCENA + ANTERIORES)</td><td class="c">' + (t.n + tA.n) + '</td><td colspan="4"></td><td>S/ ' + self._m(t.p + tA.p) + '</td><td colspan="2"></td></tr>' : '';
     $('lqCuerpo').innerHTML = '<div class="lq-wrap"><table class="lq-t"><colgroup><col style="width:21%"><col style="width:11%"><col style="width:5%"><col><col><col><col><col><col style="width:10%"><col style="width:12%"></colgroup>' +
       '<thead><tr><th>Conductor</th><th>Quincena</th><th>Viajes</th><th>Costo del viaje</th><th class="dep">Total depósito</th><th class="res">Total bono</th><th>Descuentos</th><th class="res">A pagar</th><th>Estado</th><th></th></tr></thead><tbody>' +
-      (filas.length ? filas.map(r => '<tr class="clic" data-c="' + esc(r.conductor) + '" data-q="' + r.quincena + '"><td class="i"><b>' + esc(r.conductor) + '</b></td><td class="c">' + self._qTxt(r.quincena) + '</td><td class="c">' + r.n +
-        '</td><td>S/ ' + self._m(r.costo) + '</td><td class="depT">S/ ' + self._m(r.totalDep) + '</td>' + self._bonoTd(r.totalBono) +
-        '<td style="color:#b91c1c">' + (r.desc ? '− S/ ' + self._m(r.desc) : '') + '</td>' + self._bonoTd(r.aPagar) +
-        '<td class="c"><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : r.estado) + '</span>' + (r.liq && r.estado === 'DEPOSITADO' ? '<span class="lq-mot">' + esc(r.liq.fechaDep || '') + ' · op. ' + esc(r.liq.operacion || '') + '</span>' : '') + '</td>' +
-        '<td class="c">' + (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Depositar</button>' : '') + '<button class="lq-btn">Ver ›</button></td></tr>').join('')
-        : '<tr><td colspan="10" class="c" style="color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>') +
-      '</tbody><tfoot><tr><td class="i" colspan="2">TOTAL</td><td class="c">' + t.n + '</td><td>S/ ' + self._m(t.g) + '</td><td>S/ ' + self._m(t.d) + '</td><td>S/ ' + self._m(t.b) + '</td><td>' + (t.ds ? '− S/ ' + self._m(t.ds) : '') + '</td><td>S/ ' + self._m(t.p) + '</td><td colspan="2"></td></tr></tfoot></table></div>';
+      (filas.length ? filas.map(filaHtml).join('') : '<tr><td colspan="10" class="c" style="color:#8b95a1;padding:14px">Sin viajes con estos filtros.</td></tr>') +
+      (arr.length ? '<tr class="lq-arr-h"><td colspan="10">⚠ Pendientes de quincenas anteriores (desde ' + self._qTxt(self._desdeQ) + ') — también se pagan ahora</td></tr>' + arr.map(filaHtml).join('') : '') +
+      '</tbody><tfoot>' + (arr.length ? '<tr class="sub"><td class="i" colspan="2">TOTAL DE LA QUINCENA</td>' : '<tr><td class="i" colspan="2">TOTAL</td>') + '<td class="c">' + t.n + '</td><td>S/ ' + self._m(t.g) + '</td><td>S/ ' + self._m(t.d) + '</td><td>S/ ' + self._m(t.b) + '</td><td>' + (t.ds ? '− S/ ' + self._m(t.ds) : '') + '</td><td>S/ ' + self._m(t.p) + '</td><td colspan="2"></td></tr>' + pieArr + '</tfoot></table></div>';
     $('lqCuerpo').querySelectorAll('tr[data-c]').forEach(tr => tr.addEventListener('click', function (ev) {
       const dep = ev.target.closest('[data-dep]');
       if (dep) { ev.stopPropagation(); self._dlgDepositar(dep.dataset.dep); return; }
