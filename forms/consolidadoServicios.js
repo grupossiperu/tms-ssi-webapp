@@ -101,13 +101,24 @@ const FormConsolidadoServicios = {
         fechaHasta: raiz.querySelector('#filtroConsHasta').value.trim()
       });
       // Culminados + falsos fletes (también tienen gastos, combustible, bono y a veces se facturan).
-      const [filas, falsos] = await Promise.all([pedir('CULMINADO'), pedir('FALSO FLETE')]);
+      const [filas, falsos, todos] = await Promise.all([pedir('CULMINADO'), pedir('FALSO FLETE'), pedir('')]);
       if (!Array.isArray(filas)) {
         mostrarMensaje((filas && filas.mensaje) || 'No se pudo cargar la lista de servicios.', 'error');
         return;
       }
       filas.forEach(f => { f._estadoServ = 'CULMINADO'; });
       (Array.isArray(falsos) ? falsos : []).forEach(f => { f._estadoServ = 'FALSO FLETE'; filas.push(f); });
+      // Tramos interrumpidos (cambio de conductor/tracto): una fila propia por tramo cerrado, no se factura.
+      const tramos = [];
+      (Array.isArray(todos) ? todos : filas).forEach(function (f) {
+        let lst = []; try { lst = JSON.parse(String(f['TRAMOS'] || '[]')) || []; } catch (e) { lst = []; }
+        lst.filter(t => t && t.fin).forEach(function (t) {
+          tramos.push({ _tramo: true, _serv: f, _t: t, _fila: f._fila, 'FECHA DE PROGRAMACION': f['FECHA DE PROGRAMACION'], 'CLIENTE PARA FACTURACIÓN': f['CLIENTE PARA FACTURACIÓN'],
+            'BOOKING': f['BOOKING'], 'CONDUCTOR': t.conductor, 'PLACA TRACTO': t.tracto, 'TIPO DE CARGA': f['TIPO DE CARGA'], 'DESTINO 1': f['DESTINO 1'], 'PACKING': f['PACKING'],
+            'CODIGO SERVICIO': f['CODIGO SERVICIO'], 'CONSOLIDADO REGISTRADO': t.liquidado ? 'TRUE' : '' });
+        });
+      });
+      tramos.forEach(x => filas.push(x));
       filasCache = filas;
       msConductor.setOpciones(unicos('CONDUCTOR'));
       msCliente.setOpciones(unicos('CLIENTE PARA FACTURACIÓN'));
@@ -139,7 +150,7 @@ const FormConsolidadoServicios = {
       visibles = filas;
       const pendientes = filas.filter(f => !completo(f)).length;
       raiz.querySelector('#consCuenta').textContent = filas.length + ' servicio' + (filas.length === 1 ? '' : 's') +
-        ' (culminados y falsos fletes) · ' + pendientes + ' por completar';
+        ' (culminados, falsos fletes y tramos) · ' + pendientes + ' por completar';
 
       const tbody = raiz.querySelector('#tablaConsolidadoServicios tbody');
       tbody.innerHTML = '';
@@ -147,6 +158,37 @@ const FormConsolidadoServicios = {
         tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#8b95a1; padding:18px;">No hay servicios culminados ni falsos fletes con estos filtros.</td></tr>';
       }
       filas.forEach(function (f) {
+        if (f._tramo) {
+          const t = f._t, ok = completo(f);
+          const trT = document.createElement('tr');
+          trT.style.background = '#fffbeb';
+          trT.innerHTML =
+            '<td>' + esc(formatoFecha(f['FECHA DE PROGRAMACION'], '')) + '</td>' +
+            '<td>' + esc(f['CLIENTE PARA FACTURACIÓN']) + '</td>' +
+            '<td>' + esc(f['BOOKING']) + '<div><span class="badge-datos incompleto" style="background:#fef3c7;color:#92400e">TRAMO ' + esc(t.n) + ' · NO SE FACTURA</span></div>' +
+              '<div class="sub">' + esc(f['CODIGO SERVICIO'] || '') + '-T' + esc(t.n) + '</div></td>' +
+            '<td>' + esc(t.conductor) + '<div class="sub">Hasta ' + esc(t.fin) + ' · ' + esc(t.motivo || '') + '</div></td>' +
+            '<td>' + esc(t.tracto) + '</td>' +
+            '<td>' + esc(f['TIPO DE CARGA']) + '</td>' +
+            '<td>' + esc(f['DESTINO 1']) + '</td>' +
+            '<td>' + esc(f['PACKING']) + '</td>' +
+            '<td style="text-align:center;">' + (ok ? '<span class="badge-datos completo">Completo</span>' : '<span class="badge-datos incompleto">Por completar</span>') + '</td>' +
+            '<td style="text-align:center;"><button type="button" class="boton-primario boton-chico">' + (ok ? 'Revisar' : 'Completar') + '</button></td>';
+          trT.querySelector('button').addEventListener('click', async function (ev) {
+            ev.stopPropagation();
+            const b = this; b.disabled = true; const txt = b.textContent; b.textContent = 'Abriendo…';
+            try {
+              const r = await llamarBackend('tramosDatos', { codigo: f['CODIGO SERVICIO'], fila: f._fila });
+              if (!r || !r.ok) throw new Error((r && r.mensaje) || 'No se pudo abrir el tramo.');
+              const tt = (r.tramos || []).filter(x => String(x.n) === String(t.n))[0];
+              if (!tt) throw new Error('No se encontró el tramo ' + t.n + '.');
+              FormTramos._liquidar(f._serv, r, tt, null, function () { cargar(); });
+            } catch (e) { mostrarMensaje(e.message || String(e), 'error'); }
+            b.disabled = false; b.textContent = txt;
+          });
+          tbody.appendChild(trT);
+          return;
+        }
         const ok = completo(f);
         const d2 = (f['DESTINO 2'] && String(f['DESTINO 2']).trim() !== '-') ? String(f['DESTINO 2']) : '';
         const tr = document.createElement('tr');
@@ -206,7 +248,8 @@ const FormConsolidadoServicios = {
         });
         const conCons = [], sinCons = [];
         visibles.forEach(function (f) {
-          const row = porCod[mayus(f['CODIGO SERVICIO'])] || porFila[String(f._fila)];
+          const row = f._tramo ? porCod[mayus(f['CODIGO SERVICIO']) + '-T' + f._t.n] : (porCod[mayus(f['CODIGO SERVICIO'])] || porFila[String(f._fila)]);
+          if (f._tramo && !row) return;
           if (row) conCons.push(row);
           else sinCons.push([formatoFecha(f['FECHA DE PROGRAMACION'], ''), f['CODIGO SERVICIO'] || '', f['CLIENTE PARA FACTURACIÓN'] || '', f['BOOKING'] || '', f['N° CONTENEDOR'] || '',
             f['CONDUCTOR'] || '', f['PLACA TRACTO'] || '', f['DESTINO 1'] || '', f['PACKING'] || '', f._estadoServ || '']);

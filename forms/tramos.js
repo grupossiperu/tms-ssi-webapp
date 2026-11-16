@@ -107,7 +107,7 @@ const FormTramos = {
           '<button class="boton-secundario" style="padding:3px 8px;font-size:.74rem" data-liq="' + t.n + '">' + (t.consolidado ? 'Revisar' : 'Liquidar') + '</button> ' +
           '<button class="boton-secundario" style="padding:3px 8px;font-size:.74rem" data-desc="' + t.n + '">Descuento</button>'
           : '<span style="color:#64748b">Se liquida con el Consolidado del viaje</span>') + '</td></tr>').join('') + '</tbody></table>' +
-      '<div class="nota">El tramo interrumpido se liquida aquí (gastos hasta el cambio vs. lo que se le depositó) y aparece en <b>Liquidación de conductores</b>. El último tramo se cierra con el Consolidado del viaje, que ya no cuenta los depósitos del tramo anterior.</div>';
+      '<div class="nota">El tramo interrumpido también aparece en <b>Consolidado de servicios</b> (fila amarilla "Tramo · no se factura") para completarlo; al guardarlo pasa a <b>Liquidación de conductores</b>. El último tramo se cierra con el Consolidado del viaje, que ya no cuenta los depósitos del tramo anterior.</div>';
     c.querySelectorAll('[data-liq]').forEach(b => b.addEventListener('click', () => self._liquidar(f, r, r.tramos.filter(t => String(t.n) === b.dataset.liq)[0], w)));
     c.querySelectorAll('[data-desc]').forEach(b => b.addEventListener('click', function () {
       const t = r.tramos.filter(x => String(x.n) === b.dataset.desc)[0];
@@ -115,7 +115,7 @@ const FormTramos = {
     }));
   },
 
-  _liquidar: function (f, r, t, wPadre) {
+  _liquidar: function (f, r, t, wPadre, alGuardar) {
     const d = (t.consolidado && t.consolidado.datos) || {};
     const v = (k, def) => d[k] !== undefined && d[k] !== '' ? d[k] : (def === undefined ? '' : def);
     const campos = [['viatico', 'Viático', 'VIATICO'], ['peaje', 'Peaje', 'PEAJE'], ['peajeSdcf', 'Peaje S.D.C.F.', 'PEAJE S.D.C.F.'], ['peajeAdicional', 'Peaje adicional', 'PEAJE ADICIONAL'],
@@ -194,7 +194,7 @@ const FormTramos = {
       try {
         const res = await llamarBackend('tramoGrabar', datos);
         if (!res || !res.ok) throw new Error((res && res.mensaje) || 'No se pudo guardar.');
-        w.cerrar(); wPadre.cerrar(); mostrarMensaje(res.mensaje, 'exito'); FormTramos.abrir(f);
+        w.cerrar(); if (wPadre && wPadre.cerrar) wPadre.cerrar(); mostrarMensaje(res.mensaje, 'exito'); if (typeof alGuardar === 'function') alGuardar(res); else FormTramos.abrir(f);
       } catch (e) { mostrarMensaje(e.message || String(e), 'error'); b.disabled = false; b.textContent = 'Guardar liquidación del tramo'; }
     });
   }
