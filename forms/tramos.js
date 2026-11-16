@@ -121,6 +121,8 @@ const FormTramos = {
     const campos = [['viatico', 'Viático', 'VIATICO'], ['peaje', 'Peaje', 'PEAJE'], ['peajeSdcf', 'Peaje S.D.C.F.', 'PEAJE S.D.C.F.'], ['peajeAdicional', 'Peaje adicional', 'PEAJE ADICIONAL'],
       ['llanta', 'Llanta', 'LLANTA'], ['cochera', 'Cochera', 'COCHERA'], ['lavado', 'Lavado', 'LAVADO'], ['otros', 'Otros', 'OTROS'], ['bono', 'Bono', 'BONO']];
     const deps = (r.depositos || []).filter(x => (t.depIds || []).indexOf(x.id) >= 0);
+    let cb = {}; try { cb = (JSON.parse(String(d['FORM DATOS'] || '{}')) || {}).combustible || {}; } catch (e) { cb = {}; }
+    const precioServ = Number(f['COSTO DEL PETRÓLEO X GALÓN']) || '';
     const w = UI120.ventana('Liquidar tramo ' + t.n + ' · ' + esc(t.conductor), `
       <div class="info"><span>Conductor: <b>${esc(t.conductor)}</b></span><span>Tracto: <b>${esc(t.tracto)}</b></span><span>Hasta: <b>${esc(t.fin)}</b></span><span>Motivo: <b>${esc(t.motivo)}</b>${t.denuncia ? ' · denuncia ' + esc(t.denuncia) : ''}</span></div>
       <div class="sub">Lo que se le depositó</div>
@@ -138,9 +140,17 @@ const FormTramos = {
         <div class="campo"><label>KM inicial</label><input id="lt_kmI" inputmode="decimal" value="${esc(v('KM INICIAL', t.kmInicio || ''))}"></div>
         <div class="campo"><label>KM final (al cambio)</label><input id="lt_kmF" inputmode="decimal" value="${esc(v('KM FINAL', t.kmFin || ''))}"></div>
       </div>
+      <div class="sub">Combustible del tramo</div>
+      <div class="g">
+        <div class="campo"><label>Abastecimiento inicial · GL tracto</label><input id="lt_cIniT" inputmode="decimal" value="${esc(cb.inicialTracto || '')}"></div>
+        <div class="campo"><label>Abastecimiento inicial · GL generador</label><input id="lt_cIniG" inputmode="decimal" value="${esc(cb.inicialGenerador || '')}"></div>
+        <div class="campo"><label>Precio por galón (S/)</label><input id="lt_cPrecio" inputmode="decimal" value="${esc(cb.precio || precioServ || '')}"></div>
+      </div>
+      <table style="margin-top:8px"><thead><tr><th style="width:15%">Fecha</th><th>Grifo</th><th style="width:12%">N° NV</th><th style="width:13%">Equipo</th><th style="width:13%">Pagó</th><th style="width:9%">Galones</th><th style="width:10%">Precio</th><th style="width:4%"></th></tr></thead><tbody id="lt_rec"></tbody></table>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><button class="boton-secundario" style="padding:3px 10px;font-size:.74rem" data-addrec>+ Agregar recarga en ruta</button><span id="lt_cRes" style="font-size:.76rem;color:#475569"></span></div>
       <div class="res" id="lt_res"></div>
       <div class="nota">Si el conductor debe devolver dinero o se le descontará lo robado, regístrelo con <b>Descuento</b> (una sola vez o en cuotas por quincena).</div>
-      <div class="pie"><button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar liquidación del tramo</button></div>`, 760);
+      <div class="pie"><button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar liquidación del tramo</button></div>`, 900);
     const calc = function () {
       const g = campos.reduce((a, c) => a + UI120.n(w.q('#lt_' + c[0]).value), 0);
       const dep = UI120.n(w.q('#lt_depositado').value) + UI120.n(w.q('#lt_extras').value);
@@ -148,12 +158,38 @@ const FormTramos = {
       w.q('#lt_res').innerHTML = '<div><span>Gastos</span><b>S/ ' + UI120.m(g) + '</b></div><div><span>Depositado</span><b>S/ ' + UI120.m(dep) + '</b></div>' +
         '<div style="background:' + (s < 0 ? '#fef2f2' : s > 0 ? '#fff7ed' : '#f0fdf4') + '"><span>' + (s < 0 ? 'Conductor devuelve' : s > 0 ? 'Reintegrar al conductor' : 'Cuadrado') + '</span><b>S/ ' + UI120.m(Math.abs(s)) + '</b></div>';
     };
+    const filaRec = function (x) {
+      x = x || {};
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><input type="date" class="rc-f" value="' + esc(x.fecha || '') + '"></td><td><input class="rc-l" value="' + esc(x.lugar || '') + '" style="text-transform:uppercase"></td>' +
+        '<td><input class="rc-nv" value="' + esc(x.nv || '') + '"></td><td><select class="rc-e"><option' + (x.equipo === 'GENERADOR' ? '' : ' selected') + '>TRACTO</option><option' + (x.equipo === 'GENERADOR' ? ' selected' : '') + '>GENERADOR</option></select></td>' +
+        '<td><select class="rc-p"><option' + (x.pago === 'REPSOL' ? '' : ' selected') + '>CONDUCTOR</option><option' + (x.pago === 'REPSOL' ? ' selected' : '') + '>REPSOL</option></select></td>' +
+        '<td><input class="rc-g" inputmode="decimal" value="' + esc(x.gal || '') + '"></td><td><input class="rc-pr" inputmode="decimal" value="' + esc(x.precio || precioServ || '') + '"></td>' +
+        '<td><button class="boton-secundario" style="padding:2px 6px" title="Quitar" data-qrec>✕</button></td>';
+      tr.querySelector('[data-qrec]').addEventListener('click', () => { tr.remove(); resComb(); });
+      tr.querySelectorAll('input,select').forEach(i => i.addEventListener('input', resComb));
+      w.q('#lt_rec').appendChild(tr);
+    };
+    const recargas = () => Array.from(w.q('#lt_rec').querySelectorAll('tr')).map(tr => ({ fecha: tr.querySelector('.rc-f').value, lugar: tr.querySelector('.rc-l').value.trim().toUpperCase(), nv: tr.querySelector('.rc-nv').value.trim().toUpperCase(),
+      equipo: tr.querySelector('.rc-e').value, pago: tr.querySelector('.rc-p').value, gal: UI120.n(tr.querySelector('.rc-g').value), precio: UI120.n(tr.querySelector('.rc-pr').value) }));
+    const resComb = function () {
+      const rc = recargas(), p = UI120.n(w.q('#lt_cPrecio').value);
+      const gT = UI120.n(w.q('#lt_cIniT').value) + rc.filter(x => x.equipo === 'TRACTO').reduce((a, x) => a + x.gal, 0);
+      const gG = UI120.n(w.q('#lt_cIniG').value) + rc.filter(x => x.equipo === 'GENERADOR').reduce((a, x) => a + x.gal, 0);
+      const monto = (UI120.n(w.q('#lt_cIniT').value) + UI120.n(w.q('#lt_cIniG').value)) * p + rc.reduce((a, x) => a + x.gal * x.precio, 0);
+      w.q('#lt_cRes').innerHTML = 'Total: <b>' + UI120.m(gT) + ' gl tracto</b> · <b>' + UI120.m(gG) + ' gl generador</b> · S/ ' + UI120.m(monto);
+    };
+    (cb.recargas || []).forEach(filaRec);
+    w.q('[data-addrec]').addEventListener('click', () => { filaRec({}); resComb(); });
+    ['#lt_cIniT', '#lt_cIniG', '#lt_cPrecio'].forEach(sl => w.q(sl).addEventListener('input', resComb));
+    resComb();
     w.velo.querySelectorAll('input').forEach(i => i.addEventListener('input', calc)); calc();
     w.q('[data-c]').addEventListener('click', w.cerrar);
     w.q('[data-ok]').addEventListener('click', async function () {
       const datos = { fila: f._fila, codigo: r.codigo, n: t.n, depositado: w.q('#lt_depositado').value, extras: w.q('#lt_extras').value, nViatico: w.q('#lt_nv').value,
         motivoOtros: w.q('#lt_motivoOtros').value, observacion: w.q('#lt_obs').value, kmInicial: w.q('#lt_kmI').value.trim(), kmFinal: w.q('#lt_kmF').value.trim() };
       campos.forEach(c => { datos[c[0]] = w.q('#lt_' + c[0]).value; });
+      datos.combustible = { inicialTracto: w.q('#lt_cIniT').value, inicialGenerador: w.q('#lt_cIniG').value, precio: w.q('#lt_cPrecio').value, recargas: recargas() };
       const b = this; b.disabled = true; b.textContent = 'Guardando…';
       try {
         const res = await llamarBackend('tramoGrabar', datos);
