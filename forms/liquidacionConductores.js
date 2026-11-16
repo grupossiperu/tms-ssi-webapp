@@ -43,6 +43,10 @@ const FormLiquidacionConductores = {
         .lq-res b { font-size:1.05rem; color:#1c3a5e; } .lq-res .bono { border-left-color:#f59e0b; background:#fff7ed; } .lq-res .bono b { color:#b45309; }
         .lq-mot { display:block; font-size:.6rem; color:#64748b; }
         .lq-mod { display:block; font-size:.58rem; color:#7c3aed; font-weight:700; }
+        .lq-corr-res { display:block; margin-top:2px; padding:2px 4px; background:#fef9c3; border-left:3px solid #eab308; border-radius:3px; color:#713f12; font-weight:600; line-height:1.3 }
+        .lq-corr-res i { display:block; font-weight:400; color:#854d0e; font-style:italic }
+        .lq-t td.lq-corr { background:#fff59d !important; }
+        .lq-antes { display:block; font-size:.6rem; color:#9a6b00; font-weight:400; }
         .lq-est { display:inline-block; padding:2px 7px; border-radius:10px; font-size:.6rem; font-weight:800; }
         .lq-est.PENDIENTE { background:#fef3c7; color:#92400e; } .lq-est.LIQUIDADO { background:#dbeafe; color:#1e40af; } .lq-est.DEPOSITADO { background:#dcfce7; color:#166534; }
         .lq-est.REABIERTO { background:#f1f5f9; color:#64748b; }
@@ -61,6 +65,13 @@ const FormLiquidacionConductores = {
         .lq-arrbox td, .lq-arrbox th { border-bottom:1px solid #fed7aa; padding:3px 4px; text-align:left; } .lq-arrbox th { font-size:.64rem; color:#9a3412; }
         .lq-ov { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:10050; display:flex; align-items:center; justify-content:center; }
         .lq-dlg { background:#fff; border-radius:12px; padding:16px 18px; width:min(620px,94vw); max-height:88vh; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+        .lq-dsc { margin:10px 0; padding:8px 10px; border:1px solid #fecaca; background:#fff7f7; border-radius:10px; }
+        .lq-dsc .t { display:block; font-size:.78rem; color:#991b1b; margin-bottom:6px; }
+        .lq-dsc table { width:100%; border-collapse:collapse; font-size:.74rem; }
+        .lq-dsc th { text-align:left; font-size:.66rem; color:#64748b; padding:3px 4px; border-bottom:1px solid #fecaca; }
+        .lq-dsc td { padding:4px; border-bottom:1px solid #fde2e2; vertical-align:top; }
+        .lq-dsc input { width:100%; padding:4px 6px; font-weight:700; text-align:right; }
+        .lq-dsc .s { font-size:.64rem; color:#64748b; margin-top:2px; }
         .lq-dlg h4 { margin:0 0 10px; color:#1c3a5e; }
         .lq-dlg .g { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 10px; }
         .lq-dlg label { font-size:.68rem; font-weight:700; color:#475569; display:block; }
@@ -106,11 +117,14 @@ const FormLiquidacionConductores = {
   _cargar: async function (primera) {
     const self = this, $ = id => self._raiz.querySelector('#' + id);
     if (primera) $('lqCuerpo').textContent = 'Cargando…';
-    const resp = await Promise.all([llamarBackend('liqDatos', {}), llamarBackend('descuentosListar', {}).catch(() => null)]);
+    const resp = await Promise.all([llamarBackend('liqDatos', {}), llamarBackend('descuentosListar', {}).catch(() => null), llamarBackend('liqHistorial', {}).catch(() => null)]);
     const r = resp[0];
     if (!respuestaValida(r)) { $('lqCuerpo').textContent = (r && r.mensaje) || 'No se pudo cargar.'; return; }
     // v120: descuentos al conductor por quincena (conductor|quincena → cuotas)
     self._desc = (resp[1] && resp[1].ok && typeof FormDescuentos !== 'undefined') ? FormDescuentos.porQuincena(resp[1].items) : {};
+    // 16/11: descuentos completos (saldo por descuento) y correcciones por viaje (antes → después)
+    self._descItems = (resp[1] && resp[1].ok) ? resp[1].items || [] : [];
+    self._corr = self._armarCorr(resp[2] && resp[2].ok ? resp[2].filas || [] : []);
     self._puede = !!r.puedeEditar;
     self._liqs = r.liquidaciones || [];
     self._filas = (r.filas || []).map(function (f) {
@@ -194,6 +208,70 @@ const FormLiquidacionConductores = {
   },
   _liq: function (id) { return this._liqs.filter(l => l.id === id)[0]; },
   /** v120: total de descuentos del conductor en la quincena (y el detalle). */
+  /* ---------- 16/11: correcciones visibles (de LIQ_AUDITORIA, acción CORREGIR) ---------- */
+  _CORR_NOMBRE: { peajes: 'Peajes', viatico: 'Viático', llanta: 'Llanta', cochera: 'Cochera', lavado: 'Lavado', otros: 'Otros', feriado: 'Feriado', dominical: 'Dominical', bono: 'Bono', depositado: 'Monto depositado', nroViatico: 'N° de viático', motivoOtros: 'Motivo de otros' },
+  /** Campo de la auditoría → columna de la tabla. */
+  _corrKey: function (campo) {
+    const c = String(campo || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z ]/g, '').trim();
+    if (/MOTIVO/.test(c)) return 'motivoOtros';
+    if (/^N ?VIATICO|NRO|NUMERO/.test(c)) return 'nroViatico';
+    if (/PEAJE|SDCF|ADICIONAL/.test(c)) return 'peajes';
+    if (/DEPOSIT/.test(c)) return 'depositado';
+    const k = { VIATICO: 'viatico', LLANTA: 'llanta', COCHERA: 'cochera', LAVADO: 'lavado', OTROS: 'otros', FERIADO: 'feriado', DOMINICAL: 'dominical', BONO: 'bono' }[c];
+    return k || '';
+  },
+  /** clave del viaje → { lista:[{key, campo, antes, despues, motivo, usuario, fecha}], porKey:{key:{delta, antes, despues}} } */
+  _armarCorr: function (filas) {
+    const self = this, out = {};
+    // El historial llega del más nuevo al más antiguo: se recorre al revés para quedarse con el primer "antes" y el último "después".
+    filas.filter(h => String(h['ACCION']).toUpperCase() === 'CORREGIR').slice().reverse().forEach(function (h) {
+      const clave = String(h['CLAVE'] || ''); if (!clave) return;
+      const o = out[clave] = out[clave] || { lista: [], porCampo: {} };
+      const campo = String(h['CAMPO'] || ''), key = self._corrKey(campo);
+      let c = o.porCampo[campo];
+      if (!c) { c = o.porCampo[campo] = { key: key, campo: campo, antes: h['ANTES'], despues: h['DESPUES'], motivo: '', usuario: '', fecha: '' }; o.lista.push(c); }
+      c.despues = h['DESPUES']; c.motivo = String(h['MOTIVO'] || ''); c.usuario = String(h['USUARIO'] || ''); c.fecha = String(h['FECHA'] || '');
+    });
+    Object.keys(out).forEach(function (k) {
+      const o = out[k]; o.porKey = {};
+      o.lista = o.lista.filter(c => String(c.antes) !== String(c.despues));
+      o.lista.forEach(function (c) {
+        if (!c.key) return;
+        const p = o.porKey[c.key] = o.porKey[c.key] || { delta: 0, texto: false };
+        const a = Number(c.antes), d = Number(c.despues);
+        if (c.key === 'nroViatico' || c.key === 'motivoOtros' || isNaN(a) || isNaN(d)) { p.texto = true; p.antesTxt = c.antes; } else p.delta += d - (a || 0);
+      });
+    });
+    return out;
+  },
+  _corrDe: function (clave) { return (this._corr || {})[clave] || null; },
+  /** Valor anterior de una columna numérica del viaje (null si no se corrigió). */
+  _antesDe: function (f, key) {
+    const c = this._corrDe(f.clave); if (!c) return null;
+    const G = ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'feriado', 'dominical'];
+    const d = k => (c.porKey[k] && !c.porKey[k].texto) ? c.porKey[k].delta : 0;
+    let delta;
+    if (key === 'costo') delta = G.reduce((a, k) => a + d(k), 0);
+    else if (key === 'totalDep') delta = d('depositado');
+    else if (key === 'totalBono') delta = G.reduce((a, k) => a + d(k), 0) + d('bono') - d('depositado');
+    else { if (!c.porKey[key]) return null; if (c.porKey[key].texto) return c.porKey[key].antesTxt; delta = c.porKey[key].delta; }
+    if (Math.abs(delta) < 0.005) return null;
+    return Math.round(((Number(f[key]) || 0) - delta) * 100) / 100;
+  },
+  _fmtCorr: function (v) { const n = Number(v); return v === '' || v === null || v === undefined ? '(vacío)' : isNaN(n) ? String(v) : this._m(n); },
+  /** Cuadro "Correcciones" para copiar/imprimir (lo que el conductor necesita para que le cuadre). */
+  _tablaCorr: function (vis, paraCorreo) {
+    const self = this, filas = [];
+    vis.forEach(f => { const c = self._corrDe(f.clave); if (c) c.lista.forEach(x => filas.push({ f: f, c: x })); });
+    if (!filas.length) return '';
+    const th = 'style="background:#fde68a;border:1px solid #c9a227;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:left"';
+    const td = 'style="border:1px solid #e5d48a;padding:3px 6px;font-family:Calibri,Arial;font-size:10pt;vertical-align:top"';
+    return '<p style="font-family:Calibri,Arial;font-size:11pt;margin:12px 0 4px"><b>CORRECCIONES REALIZADAS (' + filas.length + ')</b></p><table style="border-collapse:collapse">' +
+      '<tr><th ' + th + '>Fecha del servicio</th><th ' + th + '>Código</th><th ' + th + '>Destino</th><th ' + th + '>Concepto</th><th ' + th + '>Antes</th><th ' + th + '>Después</th><th ' + th + '>Motivo</th><th ' + th + '>Corregido por</th></tr>' +
+      filas.map(x => '<tr><td ' + td + '>' + self._f(x.f.fecha) + '</td><td ' + td + '>' + esc(x.f.clave) + '</td><td ' + td + '>' + esc(x.f.destino) + '</td><td ' + td + '><b>' + esc(self._CORR_NOMBRE[x.c.key] || x.c.campo) + (x.c.key === 'peajes' ? ' (' + esc(x.c.campo) + ')' : '') + '</b></td>' +
+        '<td ' + td + '>' + esc(self._fmtCorr(x.c.antes)) + '</td><td ' + td + '><b>' + esc(self._fmtCorr(x.c.despues)) + '</b></td><td ' + td + '>' + esc(x.c.motivo) + '</td><td ' + td + '>' + esc(x.c.usuario) + ' · ' + esc(x.c.fecha) + '</td></tr>').join('') + '</table>';
+  },
+
   _descDe: function (cond, q) { const l = (this._desc || {})[cond + '|' + q] || []; return { total: Math.round(l.reduce((a, x) => a + x.monto, 0) * 100) / 100, lista: l }; },
   _bonoTd: function (v) { return Math.abs(v) < 0.005 ? '<td class="c">—</td>' : '<td class="' + (v > 0 ? 'bono' : 'neg') + '">S/ ' + this._m(v) + '</td>'; },
 
@@ -214,6 +292,15 @@ const FormLiquidacionConductores = {
         dsc.map(x => x.d.lista.map(c => '<div style="font-size:.72rem">' + self._qTxt(x.q) + ' · ' + esc(c.motivo) + ' · ' + esc(c.detalle || '') + ' · <b>S/ ' + self._m(c.monto) + '</b></div>').join('')).join('') + '</div>' +
         '<div style="border-left-color:#dc2626"><span>Total descuentos</span><b>S/ ' + self._m(totD) + '</b></div>' +
         '<div class="bono"><span>' + (t.totalBono - totD >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe') + '</span><b>S/ ' + self._m(Math.abs(t.totalBono - totD)) + '</b></div></div>';
+    }
+    // 16/11: descuentos con saldo pendiente (se descuentan al liquidar, en partes o de una vez)
+    const conSaldo = (self._descItems || []).filter(x => x.conductor === cond && x.estado !== 'ANULADO' && (x.saldo || 0) > 0.005);
+    if (conSaldo.length || self._puede) {
+      h += '<div class="lq-dsc"><b class="t">Descuentos con saldo pendiente' + (conSaldo.length ? ' — total S/ ' + self._m(conSaldo.reduce((a, x) => a + x.saldo, 0)) : ': ninguno') + '</b>' +
+        (conSaldo.length ? '<table><thead><tr><th>Registrado</th><th>Descuento</th><th>Total</th><th>Ya descontado</th><th>Saldo</th></tr></thead><tbody>' +
+          conSaldo.map(x => '<tr><td>' + esc(String(x.fecha).split(' ')[0]) + '</td><td><b>' + esc(x.motivo) + '</b> · ' + esc(x.detalle || '') + (x.cuotas && x.cuotas.length ? '<div class="s">' + x.cuotas.map(c => self._qTxt(c.quincena) + ': S/ ' + self._m(c.monto)).join(' · ') + '</div>' : '') + '</td>' +
+            '<td>S/ ' + self._m(x.monto) + '</td><td>S/ ' + self._m(x.aplicado || 0) + '</td><td><b>S/ ' + self._m(x.saldo) + '</b></td></tr>').join('') + '</tbody></table>' : '') +
+        '<div class="s">Se descuentan al pulsar <b>Liquidar quincena</b>: ahí eliges cuánto descontar en esa quincena.' + (self._puede ? ' <a href="#" data-nuevodesc>+ Registrar un descuento a este conductor</a>' : '') + '</div></div>';
     }
     // Arrastre: pendientes de quincenas anteriores de este conductor
     const arr = self._arrastre($('lqQuin').value);
@@ -253,6 +340,11 @@ const FormLiquidacionConductores = {
     }
     $('lqCuerpo').innerHTML = h;
     $('lqCuerpo').querySelectorAll('[data-liq]').forEach(b => b.addEventListener('click', () => self._dlgLiquidar(cond, b.dataset.liq)));
+    $('lqCuerpo').querySelectorAll('[data-nuevodesc]').forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      if (typeof FormDescuentos === 'undefined') return;
+      FormDescuentos.nuevo({ conductor: cond }, () => self._cargar(false));
+    }));
     $('lqCuerpo').querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => self._dlgDepositar(b.dataset.dep)));
     $('lqCuerpo').querySelectorAll('[data-reab]').forEach(b => b.addEventListener('click', () => self._dlgReabrir(b.dataset.reab)));
     $('lqCuerpo').querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => self._dlgCorregir(b.dataset.edit)));
@@ -314,16 +406,28 @@ const FormLiquidacionConductores = {
     const g = n => n ? self._m(n) : '';
     let h = paraCorreo ? '<table style="border-collapse:collapse">' : '<table class="lq-t"><colgroup><col style="width:8.5%"><col style="width:4.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:4%"><col style="width:3.8%"><col style="width:3.8%"><col><col><col><col><col><col style="width:5.5%"><col><col><col><col><col><col><col><col><col style="width:6.5%"></colgroup>';
     h += '<thead><tr>' + cols.map(th).join('') + '</tr></thead><tbody>';
+    // 16/11: celda corregida = fondo amarillo + valor anterior tachado
+    const tdc = function (f, key, txt, al, cls, extra) {
+      const a = self._antesDe(f, key);
+      if (a === null) return td(txt, al, cls, extra);
+      const at = esc(self._fmtCorr(a) === '0.00' ? '0' : self._fmtCorr(a));
+      const v = txt + (paraCorreo ? '<br><s style="color:#9a6b00;font-size:8pt;font-weight:normal">antes ' + at + '</s>' : '<s class="lq-antes" title="Valor antes de la corrección">antes ' + at + '</s>');
+      return paraCorreo ? '<td ' + st.td(al, (extra || '') + ';background:#fff59d') + '>' + v + '</td>' : '<td class="' + (al === 'left' ? 'i ' : al === 'center' ? 'c ' : '') + (cls || '') + ' lq-corr">' + v + '</td>';
+    };
     vis.forEach(function (f) {
       const b = f.totalBono;
-      const condCel = esc(f.conductor) + (!paraCorreo && f.modPor ? '<span class="lq-mod" title="Última corrección">✎ ' + esc(f.modPor) + ' · ' + esc(f.modFecha || '') + '</span>' : '');
-      h += '<tr>' + td(condCel, 'left') + td(esc(f.placa), 'center') + td(esc(f.destino), 'left') + td(esc(f.producto || ''), 'left') + td(self._f(f.fecha), 'center') + td(esc(f.nroViatico), 'center') +
+      const cr = self._corrDe(f.clave);
+      const resumen = cr && cr.lista.length ? cr.lista.map(c => esc(self._CORR_NOMBRE[c.key] || c.campo) + ' ' + esc(self._fmtCorr(c.antes)) + ' → ' + esc(self._fmtCorr(c.despues))) : [];
+      const motivos = cr ? Array.from(new Set(cr.lista.map(c => c.motivo).filter(Boolean))) : [];
+      const condCel = esc(f.conductor) + (!paraCorreo && (f.modPor || resumen.length) ? '<span class="lq-mod" title="' + esc(motivos.join(' | ')) + '">✎ ' + esc(f.modPor || (cr && cr.lista[0] ? cr.lista[0].usuario : '')) + ' · ' + esc(f.modFecha || '') +
+        (resumen.length ? '<span class="lq-corr-res">' + resumen.join('<br>') + (motivos.length ? '<i>' + esc(motivos.join(' · ')) + '</i>' : '') + '</span>' : '') + '</span>' : '');
+      h += '<tr>' + td(condCel, 'left') + td(esc(f.placa), 'center') + td(esc(f.destino), 'left') + td(esc(f.producto || ''), 'left') + td(self._f(f.fecha), 'center') + tdc(f, 'nroViatico', esc(f.nroViatico), 'center') +
         td(g(f.glTracto), 'right', 'gl') + td(g(f.glGenset), 'right', 'gl') +
-        td(m(f.peajes), 'right') + td(m(f.viatico), 'right') + td(m(f.llanta), 'right') + td(m(f.cochera), 'right') + td(m(f.lavado), 'right') +
-        td(m(f.otros) + (f.otros && f.motivoOtros ? (paraCorreo ? '<br><span style="font-size:8pt;color:#555">' + esc(f.motivoOtros) + '</span>' : '<span class="lq-mot">' + esc(f.motivoOtros) + '</span>') : ''), 'right') +
-        td(m(f.feriado), 'right') + td(m(f.dominical), 'right') + td(m(f.bono), 'right') + td(self._m(f.costo), 'right', 'tot', 'font-weight:bold;background:#f1f5f9') +
-        td(m(f.depositado), 'right', 'dep') + td(m(f.extras), 'right', 'dep') + td(self._m(f.totalDep), 'right', 'depT', 'font-weight:bold;background:#e6f2dc') +
-        td('S/ ' + self._m(b), 'right', b > 0 ? 'bono' : 'neg', 'color:#b45309;font-weight:bold;background:#fff3e0') +
+        tdc(f, 'peajes', m(f.peajes), 'right') + tdc(f, 'viatico', m(f.viatico), 'right') + tdc(f, 'llanta', m(f.llanta), 'right') + tdc(f, 'cochera', m(f.cochera), 'right') + tdc(f, 'lavado', m(f.lavado), 'right') +
+        tdc(f, 'otros', m(f.otros) + (f.otros && f.motivoOtros ? (paraCorreo ? '<br><span style="font-size:8pt;color:#555">' + esc(f.motivoOtros) + '</span>' : '<span class="lq-mot">' + esc(f.motivoOtros) + '</span>') : ''), 'right') +
+        tdc(f, 'feriado', m(f.feriado), 'right') + tdc(f, 'dominical', m(f.dominical), 'right') + tdc(f, 'bono', m(f.bono), 'right') + tdc(f, 'costo', self._m(f.costo), 'right', 'tot', 'font-weight:bold;background:#f1f5f9') +
+        tdc(f, 'depositado', m(f.depositado), 'right', 'dep') + td(m(f.extras), 'right', 'dep') + tdc(f, 'totalDep', self._m(f.totalDep), 'right', 'depT', 'font-weight:bold;background:#e6f2dc') +
+        tdc(f, 'totalBono', 'S/ ' + self._m(b), 'right', b > 0 ? 'bono' : 'neg', 'color:#b45309;font-weight:bold;background:#fff3e0') +
         (conAcc ? '<td class="c"><span class="lq-est ' + f.liqEstado + '">' + (f.liqEstado === 'LIQUIDADO' ? 'POR DEPOSITAR' : f.liqEstado) + '</span>' +
           (self._puede && f.liqEstado === 'PENDIENTE' ? '<br><button class="lq-btn" data-edit="' + esc(f.clave) + '">✎ Corregir</button>' : '') + '</td>' : '') + '</tr>';
     });
@@ -333,6 +437,7 @@ const FormLiquidacionConductores = {
       tf(self._m(t.glTracto || 0)) + tf(self._m(t.glGenset || 0)) +
       ['peajes', 'viatico', 'llanta', 'cochera', 'lavado', 'otros', 'feriado', 'dominical', 'bono', 'costo', 'depositado', 'extras', 'totalDep'].map(k => tf(self._m(t[k]))).join('') +
       tf('S/ ' + self._m(t.totalBono)) + (conAcc ? '<td></td>' : '') + '</tr></tfoot></table>';
+    if (paraCorreo) h += self._tablaCorr(vis, true);
     return h;
   },
 
@@ -430,19 +535,70 @@ const FormLiquidacionConductores = {
     return '';
   },
 
+  /** 16/11: descuentos del conductor con saldo (o con monto ya puesto en la quincena q). */
+  _descPend: function (cond, q) {
+    return (this._descItems || []).filter(x => x.conductor === cond && x.estado !== 'ANULADO').map(function (x) {
+      const enQ = (x.cuotas || []).filter(c => c.quincena === q).reduce((a, c) => a + (Number(c.monto) || 0), 0);
+      const aplic = (x.cuotas || []).reduce((a, c) => a + (Number(c.monto) || 0), 0);
+      return { x: x, enQ: Math.round(enQ * 100) / 100, saldoSinQ: Math.max(0, Math.round((x.monto - aplic + enQ) * 100) / 100) };
+    }).filter(d => d.saldoSinQ > 0.005 || d.enQ > 0);
+  },
+
   _dlgLiquidar: function (cond, q) {
     const self = this;
     const vs = self._filas.filter(f => f.conductor === cond && f.quincena === q && f.liqEstado === 'PENDIENTE');
     const t = self._suma(vs);
-    self._dlg('Liquidar quincena ' + self._qTxt(q),
+    const dp = self._descPend(cond, q);
+    const bono = Math.round(t.totalBono * 100) / 100;
+    // Monto propuesto: lo ya puesto en esta quincena; si no hay, la cuota sugerida (o todo el saldo), sin pasar del saldo
+    let disp = Math.max(0, bono);
+    const prop = dp.map(function (d) {
+      let v = d.enQ > 0 ? d.enQ : Math.min(d.x.cuotaSugerida > 0 ? d.x.cuotaSugerida : d.saldoSinQ, d.saldoSinQ);
+      if (d.enQ <= 0) { v = Math.min(v, disp); disp -= v; }
+      return Math.max(0, Math.round(v * 100) / 100);
+    });
+    const tablaDesc = dp.length ? '<div class="lq-dsc"><b class="t">Descuentos al conductor — ¿cuánto se descuenta en esta quincena?</b>' +
+      '<table><thead><tr><th>Descuento</th><th>Total</th><th>Saldo</th><th style="width:120px">Descontar ahora (S/)</th></tr></thead><tbody>' +
+      dp.map((d, i) => '<tr><td><b>' + esc(d.x.motivo) + '</b> · ' + esc(d.x.detalle || '') + '<div class="s">' + esc(d.x.id) + (d.x.cuotaSugerida ? ' · cuota sugerida S/ ' + self._m(d.x.cuotaSugerida) : '') + '</div></td>' +
+        '<td>S/ ' + self._m(d.x.monto) + '</td><td>S/ ' + self._m(d.saldoSinQ) + '</td>' +
+        '<td><input data-dsc="' + i + '" inputmode="decimal" value="' + (prop[i] ? prop[i].toFixed(2) : '0') + '"><div class="s"><a href="#" data-todo="' + i + '">todo</a> · <a href="#" data-nada="' + i + '">nada</a></div></td></tr>').join('') +
+      '</tbody></table><div class="s">Puede descontar todo de una vez, una parte o nada; lo que quede sigue como saldo para las próximas quincenas.</div></div>' : '';
+    const ov = self._dlg('Liquidar quincena ' + self._qTxt(q),
       '<p style="margin:0 0 8px"><b>' + esc(cond) + '</b> · ' + vs.length + ' viaje(s)</p>' +
       '<div class="lq-res" style="grid-template-columns:repeat(3,1fr)"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
-      '<div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>' +
-      (function () { const d = self._descDe(cond, q); return d.total ? '<div class="lq-res" style="grid-template-columns:1fr 1fr"><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos de la quincena</span><b>− S/ ' + self._m(d.total) + '</b></div>' +
-        '<div class="bono"><span>A pagar (bono − descuentos)</span><b>S/ ' + self._m(t.totalBono - d.total) + '</b></div></div>' : ''; })() +
-      '<label style="margin-top:10px">Observación (opcional)</label><input data-obs maxlength="200" value="' + (function () { const d = self._descDe(cond, q); return d.total ? esc('DESCUENTOS S/ ' + d.total.toFixed(2) + ' (' + d.lista.map(x => x.id).join(', ') + '). A PAGAR S/ ' + (t.totalBono - d.total).toFixed(2)) : ''; })() + '">' +
-      '<p class="nota">Al liquidar, estos viajes quedan revisados y pasan a "Por depositar". Ya no se pueden corregir salvo que se reabra la quincena.</p>',
-      'Liquidar', ov => self._enviar('liqLiquidar', { conductor: cond, quincena: q, claves: vs.map(f => f.clave), totalBono: Math.round(t.totalBono * 100) / 100, observacion: ov.querySelector('[data-obs]').value }, ov));
+      '<div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>' + tablaDesc +
+      (dp.length ? '<div class="lq-res" style="grid-template-columns:1fr 1fr"><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos de la quincena</span><b data-tdesc></b></div>' +
+        '<div class="bono"><span data-tpag-t>A pagar (bono − descuentos)</span><b data-tpag></b></div></div>' : '') +
+      '<label style="margin-top:10px">Observación (opcional)</label><input data-obs maxlength="300">' +
+      '<p class="nota">Al liquidar, estos viajes quedan revisados y pasan a "Por depositar". Ya no se pueden corregir (ni cambiar sus descuentos) salvo que se reabra la quincena.</p>',
+      'Liquidar', async function (ov) {
+        const montos = dp.map((d, i) => Math.round((parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0) * 100) / 100);
+        for (let i = 0; i < dp.length; i++) {
+          if (montos[i] < 0) return 'El descuento no puede ser negativo.';
+          if (montos[i] > dp[i].saldoSinQ + 0.005) return 'El descuento "' + dp[i].x.motivo + '" tiene saldo S/ ' + self._m(dp[i].saldoSinQ) + '.';
+        }
+        const cambia = dp.map((d, i) => ({ id: d.x.id, monto: montos[i] })).filter((it, i) => Math.abs(it.monto - dp[i].enQ) > 0.005);
+        if (cambia.length) {
+          const r = await llamarBackend('descuentosAplicar', { conductor: cond, quincena: q, items: cambia });
+          if (!r || !r.ok) return (r && r.mensaje) || 'No se pudieron guardar los descuentos.';
+        }
+        return self._enviar('liqLiquidar', { conductor: cond, quincena: q, claves: vs.map(f => f.clave), totalBono: bono, observacion: ov.querySelector('[data-obs]').value }, ov);
+      });
+    const calc = function () {
+      const tot = dp.reduce((a, d, i) => a + (parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0), 0);
+      const pag = Math.round((bono - tot) * 100) / 100;
+      if (dp.length) {
+        ov.querySelector('[data-tdesc]').textContent = '− S/ ' + self._m(tot);
+        ov.querySelector('[data-tpag-t]').textContent = pag >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe';
+        ov.querySelector('[data-tpag]').textContent = 'S/ ' + self._m(Math.abs(pag));
+      }
+      const usados = dp.map((d, i) => ({ d: d, m: parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0 })).filter(u => u.m > 0);
+      ov.querySelector('[data-obs]').value = usados.length ? 'DESCUENTOS S/ ' + tot.toFixed(2) + ' (' + usados.map(u => u.d.x.motivo + ' ' + u.m.toFixed(2) + ' de ' + u.d.saldoSinQ.toFixed(2)).join('; ') + '). A PAGAR S/ ' + pag.toFixed(2) : '';
+    };
+    ov.querySelectorAll('[data-dsc]').forEach(inp => inp.addEventListener('input', calc));
+    ov.querySelectorAll('[data-todo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const i = +a.dataset.todo; ov.querySelector('[data-dsc="' + i + '"]').value = dp[i].saldoSinQ.toFixed(2); calc(); }));
+    ov.querySelectorAll('[data-nada]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); ov.querySelector('[data-dsc="' + a.dataset.nada + '"]').value = '0'; calc(); }));
+    calc();
   },
 
   _dlgDepositar: function (id) {
