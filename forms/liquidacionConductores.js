@@ -43,10 +43,15 @@ const FormLiquidacionConductores = {
         .lq-res b { font-size:1.05rem; color:#1c3a5e; } .lq-res .bono { border-left-color:#f59e0b; background:#fff7ed; } .lq-res .bono b { color:#b45309; }
         .lq-mot { display:block; font-size:.6rem; color:#64748b; }
         .lq-mod { display:block; font-size:.58rem; color:#7c3aed; font-weight:700; }
-        .lq-corr-res { display:block; margin-top:2px; padding:2px 4px; background:#fef9c3; border-left:3px solid #eab308; border-radius:3px; color:#713f12; font-weight:600; line-height:1.3 }
-        .lq-corr-res i { display:block; font-weight:400; color:#854d0e; font-style:italic }
-        .lq-t td.lq-corr { background:#fff59d !important; }
-        .lq-antes { display:block; font-size:.6rem; color:#9a6b00; font-weight:400; }
+        .lq-pto { color:#d97706; font-size:.7rem; margin-left:2px; cursor:help; }
+        .lq-ncorr { display:inline-block; margin-top:2px; background:#fef3c7; color:#92400e; border-radius:6px; padding:0 6px; font-size:.62rem; font-weight:700; text-decoration:none; white-space:nowrap; }
+        .lq-corrbox { margin:10px 0; border:1px solid #fcd34d; border-radius:10px; background:#fffdf5; padding:6px 10px; }
+        .lq-corrbox summary { cursor:pointer; font-weight:700; color:#92400e; font-size:.8rem; }
+        .lq-corrbox table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:.72rem; margin-top:6px; }
+        .lq-corrbox th { text-align:left; color:#64748b; font-size:.66rem; padding:3px 4px; border-bottom:1px solid #fde68a; }
+        .lq-corrbox td { padding:4px; border-bottom:1px solid #fef3c7; vertical-align:top; overflow-wrap:anywhere; }
+        .lq-corrbox td .s { color:#94a3b8; }
+        .lq-corrbox tr.resalta td { background:#fde68a; }
         .lq-est { display:inline-block; padding:2px 7px; border-radius:10px; font-size:.6rem; font-weight:800; }
         .lq-est.PENDIENTE { background:#fef3c7; color:#92400e; } .lq-est.LIQUIDADO { background:#dbeafe; color:#1e40af; } .lq-est.DEPOSITADO { background:#dcfce7; color:#166534; }
         .lq-est.REABIERTO { background:#f1f5f9; color:#64748b; }
@@ -272,6 +277,20 @@ const FormLiquidacionConductores = {
         '<td ' + td + '>' + esc(self._fmtCorr(x.c.antes)) + '</td><td ' + td + '><b>' + esc(self._fmtCorr(x.c.despues)) + '</b></td><td ' + td + '>' + esc(x.c.motivo) + '</td><td ' + td + '>' + esc(x.c.usuario) + ' · ' + esc(x.c.fecha) + '</td></tr>').join('') + '</table>';
   },
 
+  /** Cuadro plegable "Correcciones de esta quincena" (pantalla). */
+  _cajaCorr: function (vis) {
+    const self = this, filas = [];
+    vis.forEach(f => { const c = self._corrDe(f.clave); if (c) c.lista.forEach(x => filas.push({ f: f, c: x })); });
+    if (!filas.length) return '';
+    let abierto = true; try { abierto = localStorage.getItem('tms_lq_corr_oculto') !== '1'; } catch (e) { }
+    return '<details class="lq-corrbox" id="lqCorrBox"' + (abierto ? ' open' : '') + '><summary>Correcciones de esta selección (' + filas.length + ')</summary>' +
+      '<table><colgroup><col style="width:13%"><col style="width:13%"><col style="width:11%"><col style="width:13%"><col><col style="width:16%"></colgroup>' +
+      '<thead><tr><th>Servicio</th><th>Código</th><th>Concepto</th><th>Antes → después</th><th>Motivo</th><th>Corregido por</th></tr></thead><tbody>' +
+      filas.map(x => '<tr data-corrde="' + esc(x.f.clave) + '"><td>' + self._f(x.f.fecha) + ' · ' + esc(x.f.destino) + '</td><td>' + esc(x.f.clave) + '</td><td><b>' + esc(self._CORR_NOMBRE[x.c.key] || x.c.campo) + '</b>' + (x.c.key === 'peajes' ? ' <span class="s">(' + esc(x.c.campo) + ')</span>' : '') + '</td>' +
+        '<td>' + esc(self._fmtCorr(x.c.antes)) + ' → <b>' + esc(self._fmtCorr(x.c.despues)) + '</b></td><td>' + esc(x.c.motivo) + '</td><td>' + esc(x.c.usuario) + '<span class="s"> · ' + esc(x.c.fecha) + '</span></td></tr>').join('') +
+      '</tbody></table></details>';
+  },
+
   _descDe: function (cond, q) { const l = (this._desc || {})[cond + '|' + q] || []; return { total: Math.round(l.reduce((a, x) => a + x.monto, 0) * 100) / 100, lista: l }; },
   _bonoTd: function (v) { return Math.abs(v) < 0.005 ? '<td class="c">—</td>' : '<td class="' + (v > 0 ? 'bono' : 'neg') + '">S/ ' + this._m(v) + '</td>'; },
 
@@ -280,7 +299,7 @@ const FormLiquidacionConductores = {
     const vis = self._vis(), cond = $('lqCond').value;
     if (!cond) { self._pintarResumen(vis); _refrescarSnapshotFormulario(); return; }
     const t = self._suma(vis);
-    let h = '<div class="lq-wrap">' + self._tablaHtml(vis, false) + '</div>' +
+    let h = '<div class="lq-wrap">' + self._tablaHtml(vis, false) + '</div>' + self._cajaCorr(vis) +
       '<div class="lq-res"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito (depositado + depósitos adicionales)</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
       '<div><span>Viajes</span><b>' + (t.n || 0) + '</b></div><div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>';
     // v120: descuentos del conductor en las quincenas visibles
@@ -340,6 +359,17 @@ const FormLiquidacionConductores = {
     }
     $('lqCuerpo').innerHTML = h;
     $('lqCuerpo').querySelectorAll('[data-liq]').forEach(b => b.addEventListener('click', () => self._dlgLiquidar(cond, b.dataset.liq)));
+    $('lqCuerpo').querySelectorAll('[data-vercorr]').forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      const box = $('lqCorrBox'); if (!box) return;
+      box.open = true;
+      box.querySelectorAll('tr.resalta').forEach(tr => tr.classList.remove('resalta'));
+      const trs = box.querySelectorAll('tr[data-corrde="' + a.dataset.vercorr + '"]');
+      trs.forEach(tr => tr.classList.add('resalta'));
+      (trs[0] || box).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }));
+    const cb = $('lqCorrBox');
+    if (cb) cb.addEventListener('toggle', () => { try { localStorage.setItem('tms_lq_corr_oculto', cb.open ? '0' : '1'); } catch (e) { } });
     $('lqCuerpo').querySelectorAll('[data-nuevodesc]').forEach(a => a.addEventListener('click', e => {
       e.preventDefault();
       if (typeof FormDescuentos === 'undefined') return;
@@ -406,21 +436,22 @@ const FormLiquidacionConductores = {
     const g = n => n ? self._m(n) : '';
     let h = paraCorreo ? '<table style="border-collapse:collapse">' : '<table class="lq-t"><colgroup><col style="width:8.5%"><col style="width:4.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:5%"><col style="width:4%"><col style="width:3.8%"><col style="width:3.8%"><col><col><col><col><col><col style="width:5.5%"><col><col><col><col><col><col><col><col><col style="width:6.5%"></colgroup>';
     h += '<thead><tr>' + cols.map(th).join('') + '</tr></thead><tbody>';
-    // 16/11: celda corregida = fondo amarillo + valor anterior tachado
+    // Celda corregida: solo un punto ● con el detalle al pasar el mouse (en copiar/imprimir la celda va normal; el detalle va en el cuadro de correcciones)
     const tdc = function (f, key, txt, al, cls, extra) {
+      if (paraCorreo) return td(txt, al, cls, extra);
+      const c = self._corrDe(f.clave);
+      const lst = c ? c.lista.filter(x => x.key === key) : [];
       const a = self._antesDe(f, key);
-      if (a === null) return td(txt, al, cls, extra);
-      const at = esc(self._fmtCorr(a) === '0.00' ? '0' : self._fmtCorr(a));
-      const v = txt + (paraCorreo ? '<br><s style="color:#9a6b00;font-size:8pt;font-weight:normal">antes ' + at + '</s>' : '<s class="lq-antes" title="Valor antes de la corrección">antes ' + at + '</s>');
-      return paraCorreo ? '<td ' + st.td(al, (extra || '') + ';background:#fff59d') + '>' + v + '</td>' : '<td class="' + (al === 'left' ? 'i ' : al === 'center' ? 'c ' : '') + (cls || '') + ' lq-corr">' + v + '</td>';
+      if (!lst.length && a === null) return td(txt, al, cls, extra);
+      const tip = lst.length ? lst.map(x => (self._CORR_NOMBRE[x.key] || x.campo) + ': ' + self._fmtCorr(x.antes) + ' → ' + self._fmtCorr(x.despues) + (x.motivo ? ' · ' + x.motivo : '')).join('\n')
+        : 'Antes de las correcciones: ' + self._fmtCorr(a);
+      return td(txt + '<sup class="lq-pto" title="' + esc(tip) + '">●</sup>', al, cls, extra);
     };
     vis.forEach(function (f) {
       const b = f.totalBono;
       const cr = self._corrDe(f.clave);
-      const resumen = cr && cr.lista.length ? cr.lista.map(c => esc(self._CORR_NOMBRE[c.key] || c.campo) + ' ' + esc(self._fmtCorr(c.antes)) + ' → ' + esc(self._fmtCorr(c.despues))) : [];
-      const motivos = cr ? Array.from(new Set(cr.lista.map(c => c.motivo).filter(Boolean))) : [];
-      const condCel = esc(f.conductor) + (!paraCorreo && (f.modPor || resumen.length) ? '<span class="lq-mod" title="' + esc(motivos.join(' | ')) + '">✎ ' + esc(f.modPor || (cr && cr.lista[0] ? cr.lista[0].usuario : '')) + ' · ' + esc(f.modFecha || '') +
-        (resumen.length ? '<span class="lq-corr-res">' + resumen.join('<br>') + (motivos.length ? '<i>' + esc(motivos.join(' · ')) + '</i>' : '') + '</span>' : '') + '</span>' : '');
+      const nC = cr ? cr.lista.length : 0;
+      const condCel = esc(f.conductor) + (!paraCorreo && nC ? ' <a href="#" class="lq-ncorr" data-vercorr="' + esc(f.clave) + '" title="Ver las correcciones de este viaje">✎ ' + nC + (nC === 1 ? ' cambio' : ' cambios') + '</a>' : '');
       h += '<tr>' + td(condCel, 'left') + td(esc(f.placa), 'center') + td(esc(f.destino), 'left') + td(esc(f.producto || ''), 'left') + td(self._f(f.fecha), 'center') + tdc(f, 'nroViatico', esc(f.nroViatico), 'center') +
         td(g(f.glTracto), 'right', 'gl') + td(g(f.glGenset), 'right', 'gl') +
         tdc(f, 'peajes', m(f.peajes), 'right') + tdc(f, 'viatico', m(f.viatico), 'right') + tdc(f, 'llanta', m(f.llanta), 'right') + tdc(f, 'cochera', m(f.cochera), 'right') + tdc(f, 'lavado', m(f.lavado), 'right') +
