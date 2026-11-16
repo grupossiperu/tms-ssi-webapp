@@ -54,6 +54,7 @@ body.hl svg{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
   width:100%; display:flex; align-items:center; gap:10px; background:none; border:0; cursor:pointer; text-align:left;
   color:#C9D4E3; font-family:inherit; font-weight:500; font-size:.86rem; padding:7px 8px; border-radius:7px; position:relative;
 }
+.hl-item[hidden], .hl-grupo[hidden]{ display:none !important; }
 .hl-item:hover{ background:var(--t-lado-2); color:#fff; }
 .hl-item:hover .hl-ico svg{ stroke:var(--c); }
 .hl-item:focus-visible{ outline:2px solid #3B82F6; outline-offset:-2px; }
