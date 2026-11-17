@@ -129,6 +129,7 @@ const FormLiquidacionConductores = {
     self._desc = (resp[1] && resp[1].ok && typeof FormDescuentos !== 'undefined') ? FormDescuentos.porQuincena(resp[1].items) : {};
     // 16/11: descuentos completos (saldo por descuento) y correcciones por viaje (antes → después)
     self._descItems = (resp[1] && resp[1].ok) ? resp[1].items || [] : [];
+    self._tcHoy = (resp[1] && resp[1].ok) ? resp[1].tcHoy || null : null;
     self._corr = self._armarCorr(resp[2] && resp[2].ok ? resp[2].filas || [] : []);
     self._puede = !!r.puedeEditar;
     self._liqs = r.liquidaciones || [];
@@ -308,18 +309,21 @@ const FormLiquidacionConductores = {
     if (dsc.length) {
       const totD = dsc.reduce((a, x) => a + x.d.total, 0);
       h += '<div class="lq-res" style="grid-template-columns:2fr 1fr 1fr"><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos al conductor</span>' +
-        dsc.map(x => x.d.lista.map(c => '<div style="font-size:.72rem">' + self._qTxt(x.q) + ' · ' + esc(c.motivo) + ' · ' + esc(c.detalle || '') + ' · <b>S/ ' + self._m(c.monto) + '</b></div>').join('')).join('') + '</div>' +
+        dsc.map(x => x.d.lista.map(c => '<div style="font-size:.72rem">' + self._qTxt(x.q) + ' · ' + esc(c.motivo) + ' · ' + esc(c.detalle || '') + ' · <b>S/ ' + self._m(c.monto) + '</b>' + (c.moneda === 'USD' ? ' (US$ ' + self._m(c.montoOrig) + ' × TC ' + c.tc + ')' : '') + '</div>').join('')).join('') + '</div>' +
         '<div style="border-left-color:#dc2626"><span>Total descuentos</span><b>S/ ' + self._m(totD) + '</b></div>' +
         '<div class="bono"><span>' + (t.totalBono - totD >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe') + '</span><b>S/ ' + self._m(Math.abs(t.totalBono - totD)) + '</b></div></div>';
     }
     // 16/11: descuentos con saldo pendiente (se descuentan al liquidar, en partes o de una vez)
     const conSaldo = (self._descItems || []).filter(x => x.conductor === cond && x.estado !== 'ANULADO' && (x.saldo || 0) > 0.005);
     if (conSaldo.length || self._puede) {
-      h += '<div class="lq-dsc"><b class="t">Descuentos con saldo pendiente' + (conSaldo.length ? ' — total S/ ' + self._m(conSaldo.reduce((a, x) => a + x.saldo, 0)) : ': ninguno') + '</b>' +
-        (conSaldo.length ? '<table><thead><tr><th>Registrado</th><th>Descuento</th><th>Total</th><th>Ya descontado</th><th>Saldo</th></tr></thead><tbody>' +
-          conSaldo.map(x => '<tr><td>' + esc(String(x.fecha).split(' ')[0]) + '</td><td><b>' + esc(x.motivo) + '</b> · ' + esc(x.detalle || '') + (x.cuotas && x.cuotas.length ? '<div class="s">' + x.cuotas.map(c => self._qTxt(c.quincena) + ': S/ ' + self._m(c.monto)).join(' · ') + '</div>' : '') + '</td>' +
-            '<td>S/ ' + self._m(x.monto) + '</td><td>S/ ' + self._m(x.aplicado || 0) + '</td><td><b>S/ ' + self._m(x.saldo) + '</b></td></tr>').join('') + '</tbody></table>' : '') +
-        '<div class="s">Se descuentan al pulsar <b>Liquidar quincena</b>: ahí eliges cuánto descontar en esa quincena.' + (self._puede ? ' <a href="#" data-nuevodesc>+ Registrar un descuento a este conductor</a>' : '') + '</div></div>';
+      const sm = x => x.moneda === 'USD' ? 'US$ ' : 'S/ ';
+      h += '<div class="lq-dsc"><b class="t">Descuentos con saldo pendiente' + (conSaldo.length ? '' : ': ninguno') + '</b>' +
+        (conSaldo.length ? '<table><thead><tr><th>Incidente</th><th>Descuento</th><th>Total</th><th>Ya descontado</th><th>Saldo</th></tr></thead><tbody>' +
+          conSaldo.map(x => '<tr><td>' + esc(x.fechaIncidente || String(x.fecha).split(' ')[0]) + '</td><td><b>' + esc(x.motivo) + '</b> · ' + esc(x.detalle || '') +
+            (typeof FormDescuentos !== 'undefined' && FormDescuentos.planTxt(x) ? '<div class="s">' + esc(FormDescuentos.planTxt(x)) + '</div>' : '') +
+            (x.cuotas && x.cuotas.length ? '<div class="s">' + x.cuotas.map(c => self._qTxt(c.quincena) + ': ' + sm(x) + self._m(c.monto) + (c.tc ? ' (S/ ' + self._m(c.soles) + ')' : '')).join(' · ') + '</div>' : '') + '</td>' +
+            '<td>' + sm(x) + self._m(x.monto) + '</td><td>' + sm(x) + self._m(x.aplicado || 0) + '</td><td><b>' + sm(x) + self._m(x.saldo) + '</b></td></tr>').join('') + '</tbody></table>' : '') +
+        '<div class="s">Se aplican <b>después de liquidar</b> la quincena, con el botón <b>Aplicar descuento</b> (trae la cuota pendiente; puedes cambiarla, poner todo o nada).' + (self._puede ? ' <a href="#" data-nuevodesc>+ Registrar un descuento a este conductor</a>' : '') + '</div></div>';
     }
     // Arrastre: pendientes de quincenas anteriores de este conductor
     const arr = self._arrastre($('lqQuin').value);
@@ -331,7 +335,7 @@ const FormLiquidacionConductores = {
         '<table><thead><tr><th>Quincena</th><th>Estado</th><th>Viajes</th><th>Total bono</th><th>Descuentos</th><th>A pagar</th><th></th></tr></thead><tbody>' +
         arr.map(r => '<tr><td>' + self._qTxt(r.quincena) + '</td><td><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : 'SIN LIQUIDAR') + '</span></td><td>' + r.n +
           '</td><td>S/ ' + self._m(r.totalBono) + '</td><td>' + (r.desc ? '− S/ ' + self._m(r.desc) : '') + '</td><td><b>S/ ' + self._m(r.aPagar) + '</b></td><td>' +
-          (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Marcar depositado</button>' : '') +
+          (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Marcar depositado</button>' + self._btnDesc(r.conductor, r.quincena) : '') +
           '<button class="lq-btn" data-irq="' + r.quincena + '">Ver ›</button></td></tr>').join('') +
         '</tbody></table>' +
         '<div class="lq-res" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div><span>Esta quincena (sin depositar)</span><b>S/ ' + self._m(estaQ) + '</b></div>' +
@@ -353,7 +357,7 @@ const FormLiquidacionConductores = {
           (l.estado === 'REABIERTO' ? '<span class="lq-mot">' + esc(l.reabiertoPor || '') + ' ' + esc(l.fechaReap || '') + ': ' + esc(l.motivoReap || '') + '</span>' : '') + '</td>' +
           '<td>' + esc(l.liquidadoPor || '') + '<span class="lq-mot">' + esc(l.fechaLiq || '') + '</span></td>' +
           '<td>' + (l.estado === 'DEPOSITADO' ? esc(l.fechaDep || '') + ' · ' + esc(l.medio || '') + ' · op. ' + esc(l.operacion || '') + '<span class="lq-mot">' + esc(l.depositadoPor || '') + '</span>' : '') + '</td>' +
-          '<td>' + (self._puede && l.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + l.id + '">Marcar depositado</button>' : '') +
+          '<td>' + (self._puede && l.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + l.id + '">Marcar depositado</button>' + self._btnDesc(l.conductor, l.quincena) : '') +
           (self._puede && (l.estado === 'LIQUIDADO' || l.estado === 'DEPOSITADO') ? '<button class="lq-btn" data-reab="' + l.id + '">Reabrir</button>' : '') + '</td></tr>').join('') +
         '</tbody></table></div>';
     }
@@ -376,6 +380,7 @@ const FormLiquidacionConductores = {
       FormDescuentos.nuevo({ conductor: cond }, () => self._cargar(false));
     }));
     $('lqCuerpo').querySelectorAll('[data-dep]').forEach(b => b.addEventListener('click', () => self._dlgDepositar(b.dataset.dep)));
+    $('lqCuerpo').querySelectorAll('[data-adesc]').forEach(b => b.addEventListener('click', () => { const p = b.dataset.adesc.split('||'); self._dlgAplicarDesc(p[0], p[1]); }));
     $('lqCuerpo').querySelectorAll('[data-reab]').forEach(b => b.addEventListener('click', () => self._dlgReabrir(b.dataset.reab)));
     $('lqCuerpo').querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => self._dlgCorregir(b.dataset.edit)));
     $('lqCuerpo').querySelectorAll('[data-irq]').forEach(b => b.addEventListener('click', () => { $('lqQuin').value = b.dataset.irq; $('lqEst').value = ''; self._pintar(); }));
@@ -402,7 +407,7 @@ const FormLiquidacionConductores = {
       '</td><td>S/ ' + self._m(r.costo) + '</td><td class="depT">S/ ' + self._m(r.totalDep) + '</td>' + self._bonoTd(r.totalBono) +
       '<td style="color:#b91c1c">' + (r.desc ? '− S/ ' + self._m(r.desc) : '') + '</td>' + self._bonoTd(r.aPagar) +
       '<td class="c"><span class="lq-est ' + r.estado + '">' + (r.estado === 'LIQUIDADO' ? 'POR DEPOSITAR' : r.estado) + '</span>' + (r.liq && r.estado === 'DEPOSITADO' ? '<span class="lq-mot">' + esc(r.liq.fechaDep || '') + ' · op. ' + esc(r.liq.operacion || '') + '</span>' : '') + '</td>' +
-      '<td class="c">' + (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Depositar</button>' : '') + '<button class="lq-btn">Ver ›</button></td></tr>';
+      '<td class="c">' + (self._puede && r.liq && r.estado === 'LIQUIDADO' ? '<button class="lq-btn pri" data-dep="' + r.liq.id + '">Depositar</button>' + self._btnDesc(r.conductor, r.quincena) : '') + '<button class="lq-btn">Ver ›</button></td></tr>';
     const pieArr = arr.length ? '<tr class="sub"><td class="i" colspan="2">+ Pendientes de quincenas anteriores</td><td class="c">' + tA.n + '</td><td colspan="4"></td><td>S/ ' + self._m(tA.p) + '</td><td colspan="2"></td></tr>' +
       '<tr><td class="i" colspan="2">TOTAL (QUINCENA + ANTERIORES)</td><td class="c">' + (t.n + tA.n) + '</td><td colspan="4"></td><td>S/ ' + self._m(t.p + tA.p) + '</td><td colspan="2"></td></tr>' : '';
     $('lqCuerpo').innerHTML = '<div class="lq-wrap"><table class="lq-t"><colgroup><col style="width:21%"><col style="width:11%"><col style="width:5%"><col><col><col><col><col><col style="width:10%"><col style="width:12%"></colgroup>' +
@@ -413,6 +418,8 @@ const FormLiquidacionConductores = {
     $('lqCuerpo').querySelectorAll('tr[data-c]').forEach(tr => tr.addEventListener('click', function (ev) {
       const dep = ev.target.closest('[data-dep]');
       if (dep) { ev.stopPropagation(); self._dlgDepositar(dep.dataset.dep); return; }
+      const ad = ev.target.closest('[data-adesc]');
+      if (ad) { ev.stopPropagation(); const p = ad.dataset.adesc.split('||'); self._dlgAplicarDesc(p[0], p[1]); return; }
       $('lqCond').value = tr.dataset.c; $('lqQuin').value = tr.dataset.q; self._pintar();
     }));
   },
@@ -575,56 +582,96 @@ const FormLiquidacionConductores = {
     }).filter(d => d.saldoSinQ > 0.005 || d.enQ > 0);
   },
 
+  /** Botón "Aplicar descuento" (solo si el conductor tiene descuentos con saldo o ya aplicados en esa quincena). */
+  _btnDesc: function (cond, q) {
+    if (!this._puede || !this._descPend(cond, q).length) return '';
+    const ya = this._descDe(cond, q).total;
+    return '<button class="lq-btn" style="border-color:#dc2626;color:#b91c1c" data-adesc="' + esc(cond) + '||' + q + '">' + (ya ? '✎ Descuento (S/ ' + this._m(ya) + ')' : 'Aplicar descuento') + '</button>';
+  },
+  _qAnt: function (q) { const m = String(q).match(/^(\d{4})-(\d{2})-(Q[12])$/); if (!m) return q; if (m[3] === 'Q2') return m[1] + '-' + m[2] + '-Q1'; const d = new Date(Number(m[1]), Number(m[2]) - 2, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-Q2'; },
+
   _dlgLiquidar: function (cond, q) {
     const self = this;
     const vs = self._filas.filter(f => f.conductor === cond && f.quincena === q && f.liqEstado === 'PENDIENTE');
     const t = self._suma(vs);
     const dp = self._descPend(cond, q);
     const bono = Math.round(t.totalBono * 100) / 100;
-    // Monto propuesto: lo ya puesto en esta quincena; si no hay, la cuota sugerida (o todo el saldo), sin pasar del saldo
-    let disp = Math.max(0, bono);
-    const prop = dp.map(function (d) {
-      let v = d.enQ > 0 ? d.enQ : Math.min(d.x.cuotaSugerida > 0 ? d.x.cuotaSugerida : d.saldoSinQ, d.saldoSinQ);
-      if (d.enQ <= 0) { v = Math.min(v, disp); disp -= v; }
-      return Math.max(0, Math.round(v * 100) / 100);
-    });
-    const tablaDesc = dp.length ? '<div class="lq-dsc"><b class="t">Descuentos al conductor — ¿cuánto se descuenta en esta quincena?</b>' +
-      '<table><thead><tr><th>Descuento</th><th>Total</th><th>Saldo</th><th style="width:120px">Descontar ahora (S/)</th></tr></thead><tbody>' +
-      dp.map((d, i) => '<tr><td><b>' + esc(d.x.motivo) + '</b> · ' + esc(d.x.detalle || '') + '<div class="s">' + esc(d.x.id) + (d.x.cuotaSugerida ? ' · cuota sugerida S/ ' + self._m(d.x.cuotaSugerida) : '') + '</div></td>' +
-        '<td>S/ ' + self._m(d.x.monto) + '</td><td>S/ ' + self._m(d.saldoSinQ) + '</td>' +
-        '<td><input data-dsc="' + i + '" inputmode="decimal" value="' + (prop[i] ? prop[i].toFixed(2) : '0') + '"><div class="s"><a href="#" data-todo="' + i + '">todo</a> · <a href="#" data-nada="' + i + '">nada</a></div></td></tr>').join('') +
-      '</tbody></table><div class="s">Puede descontar todo de una vez, una parte o nada; lo que quede sigue como saldo para las próximas quincenas.</div></div>' : '';
-    const ov = self._dlg('Liquidar quincena ' + self._qTxt(q),
+    self._dlg('Liquidar quincena ' + self._qTxt(q),
       '<p style="margin:0 0 8px"><b>' + esc(cond) + '</b> · ' + vs.length + ' viaje(s)</p>' +
       '<div class="lq-res" style="grid-template-columns:repeat(3,1fr)"><div><span>Costo de los viajes</span><b>S/ ' + self._m(t.costo) + '</b></div><div><span>Total depósito</span><b>S/ ' + self._m(t.totalDep) + '</b></div>' +
-      '<div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>' + tablaDesc +
-      (dp.length ? '<div class="lq-res" style="grid-template-columns:1fr 1fr"><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos de la quincena</span><b data-tdesc></b></div>' +
-        '<div class="bono"><span data-tpag-t>A pagar (bono − descuentos)</span><b data-tpag></b></div></div>' : '') +
+      '<div class="bono"><span>Total bono</span><b>S/ ' + self._m(t.totalBono) + '</b></div></div>' +
+      (dp.length ? '<div class="lq-dsc"><b class="t">Este conductor tiene ' + dp.length + ' descuento(s) con saldo.</b><div class="s">Después de liquidar podrás aplicarlo con <b>Aplicar descuento</b> (se abrirá solo; si no quieres descontar en esta quincena, pulsa Cancelar).</div></div>' : '') +
       '<label style="margin-top:10px">Observación (opcional)</label><input data-obs maxlength="300">' +
-      '<p class="nota">Al liquidar, estos viajes quedan revisados y pasan a "Por depositar". Ya no se pueden corregir (ni cambiar sus descuentos) salvo que se reabra la quincena.</p>',
+      '<p class="nota">Al liquidar, estos viajes quedan revisados y pasan a "Por depositar". Ya no se pueden corregir salvo que se reabra la quincena.</p>',
       'Liquidar', async function (ov) {
+        const err = await self._enviar('liqLiquidar', { conductor: cond, quincena: q, claves: vs.map(f => f.clave), totalBono: bono, observacion: ov.querySelector('[data-obs]').value }, ov);
+        if (!err && dp.length) setTimeout(() => self._dlgAplicarDesc(cond, q), 50);
+        return err;
+      });
+  },
+
+  /** Aplicar descuentos a una quincena ya liquidada (por depositar). Trae la cuota pendiente de cada descuento. */
+  _dlgAplicarDesc: function (cond, q) {
+    const self = this;
+    const l = self._liqs.filter(x => x.conductor === cond && x.quincena === q && x.estado === 'LIQUIDADO')[0];
+    if (!l) { mostrarMensaje('Primero liquida la quincena; el descuento se aplica después de liquidar.', 'error'); return; }
+    const dp = self._descPend(cond, q);
+    if (!dp.length) { mostrarMensaje('Este conductor no tiene descuentos con saldo.', 'info'); return; }
+    const bono = Math.round((l.totalBono || 0) * 100) / 100;
+    const tc = self._tcHoy;
+    const sm = x => x.moneda === 'USD' ? 'US$ ' : 'S/ ';
+    const qAnt = self._qAnt(q);
+    // Propuesta: lo ya puesto en esta quincena; si no, la cuota sugerida (mensual: solo si no se descontó la quincena anterior), sin pasar del saldo ni del bono
+    let disp = Math.max(0, bono);
+    const notas = [];
+    const prop = dp.map(function (d) {
+      const x = d.x, usd = x.moneda === 'USD', f = usd ? (tc ? tc.tc : 0) : 1;
+      if (d.enQ > 0) { disp -= d.enQ * (f || 1); return d.enQ; }
+      const mensualToca = !(x.frecuencia === 'MES' && (x.cuotas || []).some(c => c.quincena === qAnt && Number(c.monto) > 0));
+      let v = mensualToca ? Math.min(x.cuotaSugerida > 0 ? x.cuotaSugerida : d.saldoSinQ, d.saldoSinQ) : 0;
+      if (!mensualToca) notas.push(x.motivo + ': cuota mensual, ya se descontó en ' + self._qTxt(qAnt) + ' (propuesto 0).');
+      if (f > 0 && v * f > disp) { v = Math.floor(disp / f * 100) / 100; }
+      v = Math.max(0, Math.round(v * 100) / 100); disp -= v * (f || 1);
+      return v;
+    });
+    const hayUsd = dp.some(d => d.x.moneda === 'USD');
+    const ov = self._dlg('Aplicar descuento · ' + self._qTxt(q),
+      '<p style="margin:0 0 8px"><b>' + esc(cond) + '</b> · liquidación por depositar · Total bono <b>S/ ' + self._m(bono) + '</b></p>' +
+      '<div class="lq-dsc"><table><thead><tr><th>Descuento</th><th>Total</th><th>Saldo</th><th style="width:140px">Descontar ahora</th></tr></thead><tbody>' +
+      dp.map((d, i) => '<tr><td><b>' + esc(d.x.motivo) + '</b> · ' + esc(d.x.detalle || '') + '<div class="s">' + esc(d.x.fechaIncidente ? 'Incidente ' + d.x.fechaIncidente + ' · ' : '') + esc(typeof FormDescuentos !== 'undefined' ? FormDescuentos.planTxt(d.x) : '') + '</div></td>' +
+        '<td>' + sm(d.x) + self._m(d.x.monto) + '</td><td>' + sm(d.x) + self._m(d.saldoSinQ) + '</td>' +
+        '<td><div style="display:flex;align-items:center;gap:4px"><span style="font-size:.72rem">' + sm(d.x).trim() + '</span><input data-dsc="' + i + '" inputmode="decimal" value="' + (prop[i] ? prop[i].toFixed(2) : '0') + '"></div>' +
+        (d.x.moneda === 'USD' ? '<div class="s" data-eq="' + i + '"></div>' : '') +
+        '<div class="s"><a href="#" data-todo="' + i + '">todo</a> · <a href="#" data-nada="' + i + '">nada</a></div></td></tr>').join('') +
+      '</tbody></table>' + (notas.length ? '<div class="s" style="color:#92400e">' + notas.map(esc).join('<br>') + '</div>' : '') +
+      (hayUsd ? '<div class="s">' + (tc ? 'Dólares a soles con TC <b>' + tc.tc.toFixed(3) + '</b> del ' + esc(tc.fecha) + (tc.esHoy ? ' (hoy)' : ' — <b style="color:#b91c1c">no hay TC de hoy, se usa el último registrado</b>') : '<b style="color:#b91c1c">No hay tipo de cambio registrado: regístralo antes de aplicar descuentos en dólares.</b>') + '</div>' : '') +
+      '<div class="s">Lo que no se descuente ahora sigue como saldo para las próximas quincenas.</div></div>' +
+      '<div class="lq-res" style="grid-template-columns:repeat(3,1fr)"><div class="bono"><span>Total bono</span><b>S/ ' + self._m(bono) + '</b></div><div style="border-left-color:#dc2626;background:#fef2f2"><span>Descuentos</span><b data-tdesc></b></div>' +
+      '<div class="bono"><span data-tpag-t>A pagar</span><b data-tpag></b></div></div>',
+      'Aplicar descuento', async function (ov) {
         const montos = dp.map((d, i) => Math.round((parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0) * 100) / 100);
         for (let i = 0; i < dp.length; i++) {
           if (montos[i] < 0) return 'El descuento no puede ser negativo.';
-          if (montos[i] > dp[i].saldoSinQ + 0.005) return 'El descuento "' + dp[i].x.motivo + '" tiene saldo S/ ' + self._m(dp[i].saldoSinQ) + '.';
+          if (montos[i] > dp[i].saldoSinQ + 0.005) return 'El descuento "' + dp[i].x.motivo + '" tiene saldo ' + sm(dp[i].x) + self._m(dp[i].saldoSinQ) + '.';
+          if (montos[i] > 0 && dp[i].x.moneda === 'USD' && !tc) return 'No hay tipo de cambio registrado para el descuento en dólares.';
         }
         const cambia = dp.map((d, i) => ({ id: d.x.id, monto: montos[i] })).filter((it, i) => Math.abs(it.monto - dp[i].enQ) > 0.005);
-        if (cambia.length) {
-          const r = await llamarBackend('descuentosAplicar', { conductor: cond, quincena: q, items: cambia });
-          if (!r || !r.ok) return (r && r.mensaje) || 'No se pudieron guardar los descuentos.';
-        }
-        return self._enviar('liqLiquidar', { conductor: cond, quincena: q, claves: vs.map(f => f.clave), totalBono: bono, observacion: ov.querySelector('[data-obs]').value }, ov);
+        if (!cambia.length) return 'No cambiaste ningún monto.';
+        return self._enviar('descuentosAplicar', { conductor: cond, quincena: q, items: cambia }, ov);
       });
     const calc = function () {
-      const tot = dp.reduce((a, d, i) => a + (parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0), 0);
+      let tot = 0;
+      dp.forEach((d, i) => {
+        const v = parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0;
+        if (d.x.moneda === 'USD') {
+          const soles = tc ? v * tc.tc : 0; tot += soles;
+          const eq = ov.querySelector('[data-eq="' + i + '"]'); if (eq) eq.textContent = v ? '= S/ ' + self._m(soles) : '';
+        } else tot += v;
+      });
       const pag = Math.round((bono - tot) * 100) / 100;
-      if (dp.length) {
-        ov.querySelector('[data-tdesc]').textContent = '− S/ ' + self._m(tot);
-        ov.querySelector('[data-tpag-t]').textContent = pag >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe';
-        ov.querySelector('[data-tpag]').textContent = 'S/ ' + self._m(Math.abs(pag));
-      }
-      const usados = dp.map((d, i) => ({ d: d, m: parseFloat(String(ov.querySelector('[data-dsc="' + i + '"]').value).replace(',', '.')) || 0 })).filter(u => u.m > 0);
-      ov.querySelector('[data-obs]').value = usados.length ? 'DESCUENTOS S/ ' + tot.toFixed(2) + ' (' + usados.map(u => u.d.x.motivo + ' ' + u.m.toFixed(2) + ' de ' + u.d.saldoSinQ.toFixed(2)).join('; ') + '). A PAGAR S/ ' + pag.toFixed(2) : '';
+      ov.querySelector('[data-tdesc]').textContent = '− S/ ' + self._m(tot);
+      ov.querySelector('[data-tpag-t]').textContent = pag >= 0 ? 'A pagar (bono − descuentos)' : 'El conductor debe';
+      ov.querySelector('[data-tpag]').textContent = 'S/ ' + self._m(Math.abs(pag));
     };
     ov.querySelectorAll('[data-dsc]').forEach(inp => inp.addEventListener('input', calc));
     ov.querySelectorAll('[data-todo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const i = +a.dataset.todo; ov.querySelector('[data-dsc="' + i + '"]').value = dp[i].saldoSinQ.toFixed(2); calc(); }));
@@ -636,7 +683,9 @@ const FormLiquidacionConductores = {
     const self = this, l = self._liq(id); if (!l) return;
     const hoy = new Date(); const iso = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
     self._dlg('Marcar depositado',
-      '<p style="margin:0 0 8px"><b>' + esc(l.conductor) + '</b> · ' + self._qTxt(l.quincena) + ' · Total bono <b>S/ ' + self._m(l.totalBono) + '</b></p>' +
+      '<p style="margin:0 0 8px"><b>' + esc(l.conductor) + '</b> · ' + self._qTxt(l.quincena) + ' · Total bono <b>S/ ' + self._m(l.totalBono) + '</b>' +
+        (self._descDe(l.conductor, l.quincena).total ? ' − descuentos S/ ' + self._m(self._descDe(l.conductor, l.quincena).total) + ' = <b style="color:#166534">A pagar S/ ' + self._m(l.totalBono - self._descDe(l.conductor, l.quincena).total) + '</b>' : '') + '</p>' +
+        (!self._descDe(l.conductor, l.quincena).total && self._descPend(l.conductor, l.quincena).length ? '<p class="nota" style="color:#b91c1c">Este conductor tiene descuentos con saldo y no se aplicó ninguno en esta quincena. Si corresponde, cancela y usa <b>Aplicar descuento</b> antes de depositar.</p>' : '') +
       '<div class="g"><div><label>Fecha del depósito</label><input type="date" data-f value="' + iso + '"></div>' +
       '<div><label>Medio</label><select data-m><option>TRANSFERENCIA</option><option>YAPE</option><option>EFECTIVO</option></select></div>' +
       '<div><label>N° de operación</label><input data-op maxlength="40"></div></div>' +

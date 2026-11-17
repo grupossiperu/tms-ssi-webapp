@@ -215,7 +215,8 @@ const FormDescuentos = {
   porQuincena: function (items) {
     const m = {};
     (items || []).filter(x => x.estado !== 'ANULADO').forEach(x => (x.cuotas || []).forEach(q => {
-      const k = x.conductor + '|' + q.quincena; (m[k] = m[k] || []).push({ id: x.id, monto: Number(q.monto) || 0, motivo: x.motivo, detalle: x.detalle, liq: q.liq });
+      const k = x.conductor + '|' + q.quincena; const soles = q.soles !== undefined && q.soles !== null && q.soles !== '' ? Number(q.soles) || 0 : Number(q.monto) || 0;
+      (m[k] = m[k] || []).push({ id: x.id, monto: soles, montoOrig: Number(q.monto) || 0, moneda: x.moneda || 'PEN', tc: q.tc || 0, motivo: x.motivo, detalle: x.detalle, liq: q.liq });
     }));
     return m;
   },
@@ -240,8 +241,8 @@ const FormDescuentos = {
       </div>
       <div class="ds-k" id="dsK"></div>
       <div class="ds-wrap"><table class="ds-t"><colgroup><col style="width:9%"><col style="width:16%"><col style="width:10%"><col><col style="width:8%"><col style="width:17%"><col style="width:8%"><col style="width:9%"><col style="width:8%"></colgroup>
-        <thead><tr><th>Fecha</th><th>Conductor</th><th>Motivo</th><th>Detalle</th><th>Total</th><th>Descontado por quincena</th><th>Saldo</th><th>Estado</th><th></th></tr></thead><tbody id="dsTb"><tr><td colspan="9">Cargando…</td></tr></tbody></table></div>
-      <div class="nota" style="font-size:.75rem;color:#64748b;margin-top:8px">Se descuenta desde la <b>Liquidación de conductores</b>: al pulsar <b>Liquidar quincena</b> eliges cuánto descontar (todo, una parte o nada). El saldo baja cada quincena hasta 0 (Cancelado). Amarillo = puesto en una quincena aún sin liquidar; azul = liquidada; verde = depositada.</div>
+        <thead><tr><th>Incidente</th><th>Conductor</th><th>Motivo</th><th>Detalle</th><th>Total</th><th>Descontado por quincena</th><th>Saldo</th><th>Estado</th><th></th></tr></thead><tbody id="dsTb"><tr><td colspan="9">Cargando…</td></tr></tbody></table></div>
+      <div class="nota" style="font-size:.75rem;color:#64748b;margin-top:8px">Se descuenta desde la <b>Liquidación de conductores</b>: después de liquidar la quincena, el botón <b>Aplicar descuento</b> trae la cuota pendiente (puedes cambiarla, poner todo o nada). Los descuentos en dólares se convierten a soles con el tipo de cambio del día en que se aplican. El saldo baja cada quincena hasta 0 (Cancelado). Amarillo = puesto en una quincena aún sin liquidar; azul = liquidada; verde = depositada.</div>
       <div class="panel-footer" style="padding-top:10px"><button class="boton-secundario" id="dsCerrar">Cerrar</button></div>`;
     abrirPanel('Descuentos al conductor', html, async function (raiz) {
       self._raiz = raiz;
@@ -263,6 +264,14 @@ const FormDescuentos = {
     this._pintar();
   },
 
+  sim: m => m === 'USD' ? 'US$ ' : 'S/ ',
+  /** Plan de cuotas: "4 cuotas mensuales de US$ 125.00". */
+  planTxt: function (x) {
+    if (!(x.nCuotas > 0)) return x.cuotaSugerida ? 'Cuota sugerida ' + this.sim(x.moneda) + UI120.m(x.cuotaSugerida) : '';
+    return x.nCuotas + ' cuota(s) ' + (x.frecuencia === 'MES' ? 'mensuales' : 'quincenales') + ' de ' + this.sim(x.moneda) + UI120.m(x.cuotaSugerida || x.monto / x.nCuotas);
+  },
+  /** Quincena final si se empieza en q0 con n cuotas (cada quincena o cada mes). */
+  qFin: function (q0, n, frec) { let q = q0; for (let i = 1; i < n * (frec === 'MES' ? 2 : 1) - (frec === 'MES' ? 1 : 0); i++) q = UI120.qSig(q); return q; },
   _saldo: function (x) { return x.saldo !== undefined ? x.saldo : Math.max(0, Math.round((x.monto - (x.cuotas || []).reduce((a, q) => a + (Number(q.monto) || 0), 0)) * 100) / 100); },
   _pintar: function () {
     const self = this, raiz = self._raiz, c = raiz.querySelector('#dsCond').value, e = raiz.querySelector('#dsEst').value;
@@ -270,16 +279,16 @@ const FormDescuentos = {
     const L = (self._items || []).filter(x => (!c || x.conductor === c) && (e === 'PEND' ? est(x) === 'PENDIENTE' : e ? est(x) === e : true))
       .sort((a, b) => String(b.fecha).split(' ')[0].split('/').reverse().join('').localeCompare(String(a.fecha).split(' ')[0].split('/').reverse().join('')));
     const act = (self._items || []).filter(x => x.estado !== 'ANULADO' && (!c || x.conductor === c));
-    const saldo = act.reduce((a, x) => a + self._saldo(x), 0);
-    raiz.querySelector('#dsK').innerHTML = '<div><span>Con saldo pendiente</span><b>' + act.filter(x => est(x) === 'PENDIENTE').length + '</b></div><div><span>Total registrado</span><b>S/ ' + UI120.m(act.reduce((a, x) => a + x.monto, 0)) + '</b></div>' +
-      '<div style="border-left-color:#dc2626"><span>Saldo por descontar</span><b>S/ ' + UI120.m(saldo) + '</b></div>';
+        const porMon = (f) => ['PEN', 'USD'].map(mo => ({ mo: mo, v: act.filter(x => (x.moneda || 'PEN') === mo).reduce((a, x) => a + f(x), 0) })).filter(o => o.v > 0.005 || o.mo === 'PEN').map(o => self.sim(o.mo) + UI120.m(o.v)).join(' · ');
+    raiz.querySelector('#dsK').innerHTML = '<div><span>Con saldo pendiente</span><b>' + act.filter(x => est(x) === 'PENDIENTE').length + '</b></div><div><span>Total registrado</span><b>' + porMon(x => x.monto) + '</b></div>' +
+      '<div style="border-left-color:#dc2626"><span>Saldo por descontar</span><b>' + porMon(x => self._saldo(x)) + '</b></div>';
     const etq = { PENDIENTE: '<span class="ds-chip">Pendiente</span>', CANCELADO: '<span class="ds-chip ok">Cancelado</span>', ANULADO: '<span class="ds-chip" style="background:#e2e8f0;color:#475569">Anulado</span>' };
-    raiz.querySelector('#dsTb').innerHTML = L.length ? L.map(x => '<tr class="' + (x.estado === 'ANULADO' ? 'anul' : '') + '"><td>' + esc(x.fecha) + '</td><td><b>' + esc(x.conductor) + '</b></td><td>' + esc(x.motivo) + '</td>' +
+    raiz.querySelector('#dsTb').innerHTML = L.length ? L.map(x => '<tr class="' + (x.estado === 'ANULADO' ? 'anul' : '') + '"><td>' + (x.fechaIncidente ? '<b>' + esc(x.fechaIncidente) + '</b><div style="color:#94a3b8;font-size:.66rem">Reg. ' + esc(String(x.fecha).split(' ')[0]) + '</div>' : esc(x.fecha)) + '</td><td><b>' + esc(x.conductor) + '</b></td><td>' + esc(x.motivo) + '</td>' +
       '<td>' + esc(x.detalle) + (x.referencia ? '<div style="color:#64748b">' + esc(x.referencia) + '</div>' : '') + (x.codigo ? '<div style="color:#64748b">Viaje ' + esc(x.codigo) + '</div>' : '') +
-      (x.cuotaSugerida ? '<div style="color:#64748b">Cuota sugerida S/ ' + UI120.m(x.cuotaSugerida) + '</div>' : '') +
+      (self.planTxt(x) ? '<div style="color:#64748b">' + esc(self.planTxt(x)) + '</div>' : '') +
       (x.estado === 'ANULADO' ? '<div style="color:#b91c1c;text-decoration:none">Anulado: ' + esc(x.motivoAnulacion) + '</div>' : '') + '<div style="color:#94a3b8;font-size:.68rem">' + esc(x.por) + '</div></td>' +
-      '<td><b>S/ ' + UI120.m(x.monto) + '</b></td><td>' + ((x.cuotas || []).length ? x.cuotas.map(q => '<span class="ds-chip ' + (q.liq === 'DEPOSITADO' ? 'ok' : q.liq === 'LIQUIDADO' ? 'lq' : '') + '">' + UI120.qTxt(q.quincena) + ' · S/ ' + UI120.m(q.monto) + '</span>').join('') : '<span style="color:#94a3b8">Aún nada</span>') + '</td>' +
-      '<td><b style="color:' + (self._saldo(x) > 0.005 && x.estado !== 'ANULADO' ? '#b91c1c' : '#166534') + '">S/ ' + UI120.m(self._saldo(x)) + '</b></td><td>' + etq[est(x)] + '</td>' +
+      '<td><b>' + self.sim(x.moneda) + UI120.m(x.monto) + '</b></td><td>' + ((x.cuotas || []).length ? x.cuotas.map(q => '<span class="ds-chip ' + (q.liq === 'DEPOSITADO' ? 'ok' : q.liq === 'LIQUIDADO' ? 'lq' : '') + '"' + (q.tc ? ' title="TC ' + q.tc + ' = S/ ' + UI120.m(q.soles) + '"' : '') + '>' + UI120.qTxt(q.quincena) + ' · ' + self.sim(x.moneda) + UI120.m(q.monto) + (q.tc ? ' (S/ ' + UI120.m(q.soles) + ')' : '') + '</span>').join('') : '<span style="color:#94a3b8">Aún nada</span>') + '</td>' +
+      '<td><b style="color:' + (self._saldo(x) > 0.005 && x.estado !== 'ANULADO' ? '#b91c1c' : '#166534') + '">' + self.sim(x.moneda) + UI120.m(self._saldo(x)) + '</b></td><td>' + etq[est(x)] + '</td>' +
       '<td>' + (self._puede && x.estado !== 'ANULADO' ? '<button class="boton-secundario" style="padding:3px 8px;font-size:.72rem" data-anular="' + x.id + '">Anular</button>' : '') + '</td></tr>').join('')
       : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:14px">Sin descuentos con estos filtros.</td></tr>';
     raiz.querySelectorAll('[data-anular]').forEach(b => b.addEventListener('click', async function () {
@@ -300,22 +309,35 @@ const FormDescuentos = {
         <div class="campo" style="grid-column:1/-1"><label>Detalle (qué se descuenta)</label><input id="dnDet" value="${esc(pre.detalle || '')}" placeholder="Ej. Computadora del camión robada, multa de tránsito…"></div>
         <div class="campo"><label>Referencia</label><input id="dnRef" value="${esc(pre.referencia || '')}" placeholder="N° de denuncia, papeleta…"></div>
         <div class="campo"><label>Código del viaje</label><input id="dnCod" value="${esc(pre.codigo || '')}" placeholder="Opcional" style="text-transform:uppercase"></div>
-        <div class="campo"><label>Monto total a descontar (S/)</label><input id="dnMonto" inputmode="decimal"></div>
-        <div class="campo"><label>Cuota sugerida por quincena (S/)</label><input id="dnSug" inputmode="decimal" placeholder="Opcional"></div>
+        <div class="campo"><label>Fecha del incidente</label><input id="dnFecha" type="date" value="${UI120.hoyIso()}"></div>
+        <div class="campo"><label>Moneda</label><select id="dnMon"><option value="PEN">Soles (S/)</option><option value="USD">Dólares (US$)</option></select></div>
+        <div class="campo"><label id="dnMontoL">Monto total a descontar (S/)</label><input id="dnMonto" inputmode="decimal"></div>
+        <div class="campo"><label>N° de cuotas sugeridas</label><input id="dnN" type="number" min="1" max="60" step="1" placeholder="Ej. 4"></div>
+        <div class="campo"><label>Cada</label><select id="dnFrec"><option value="QUINCENA">Quincena</option><option value="MES">Mes</option></select></div>
+        <div class="campo"><label id="dnCuotaL">Cuota</label><input id="dnCuota" disabled style="background:#f1f5f9;font-weight:700"></div>
       </div>
-      <div class="nota" id="dnNota">El descuento queda con su saldo. En cada <b>Liquidación de conductores</b> eliges cuánto descontar (todo de una vez, una parte o nada) hasta que el saldo llegue a 0. La cuota sugerida solo se propone; la puedes cambiar al liquidar.</div>
+      <div class="nota" id="dnNota"></div>
       <div class="pie"><button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Registrar descuento</button></div>`, 640);
     const nota = function () {
-      const t = UI120.n(w.q('#dnMonto').value), sg = UI120.n(w.q('#dnSug').value);
-      const extra = t > 0 && sg > 0 ? ' Con S/ ' + UI120.m(sg) + ' por quincena se cancela en unas <b>' + Math.ceil(t / sg) + '</b> quincena(s).' : '';
-      w.q('#dnNota').innerHTML = 'El descuento queda con su saldo. En cada <b>Liquidación de conductores</b> eliges cuánto descontar (todo de una vez, una parte o nada) hasta que el saldo llegue a 0.' + extra;
+      const mo = w.q('#dnMon').value, sm = self.sim(mo), t = UI120.n(w.q('#dnMonto').value), n = Math.floor(UI120.n(w.q('#dnN').value)), fr = w.q('#dnFrec').value;
+      w.q('#dnMontoL').textContent = 'Monto total a descontar (' + sm.trim() + ')';
+      w.q('#dnCuota').value = t > 0 && n > 0 ? sm + UI120.m(t / n) : '';
+      const q0 = UI120.quincenaDe(new Date());
+      const plan = t > 0 && n > 0 ? ' Plan: <b>' + n + ' cuota(s) de ' + sm + UI120.m(t / n) + (fr === 'MES' ? ' cada mes' : ' cada quincena') + '</b>, de ' + UI120.qTxt(q0) + ' a ' + UI120.qTxt(self.qFin(q0, n, fr)) + ' (si se aplica en cada liquidación).' : '';
+      w.q('#dnNota').innerHTML = 'El descuento queda con su saldo. Después de liquidar cada quincena, en <b>Liquidación de conductores → Aplicar descuento</b> se trae la cuota pendiente (puedes cambiarla, poner todo o nada) hasta que el saldo llegue a 0.' +
+        (mo === 'USD' ? ' En dólares: cada cuota se convierte a soles con el tipo de cambio del día en que se aplica.' : '') + plan;
     };
-    ['#dnMonto', '#dnSug'].forEach(s => w.q(s).addEventListener('input', nota));
+    ['#dnMonto', '#dnN'].forEach(s => w.q(s).addEventListener('input', nota));
+    ['#dnMon', '#dnFrec'].forEach(s => w.q(s).addEventListener('change', nota));
+    nota();
     w.q('[data-c]').addEventListener('click', w.cerrar);
     w.q('[data-ok]').addEventListener('click', async function () {
       const datos = { conductor: w.q('#dnCond').value.trim().toUpperCase(), motivo: w.q('#dnMot').value, detalle: w.q('#dnDet').value.trim(), referencia: w.q('#dnRef').value.trim(),
-        codigo: w.q('#dnCod').value.trim().toUpperCase(), monto: UI120.n(w.q('#dnMonto').value), cuotaSugerida: UI120.n(w.q('#dnSug').value) };
-      if (datos.cuotaSugerida > datos.monto) { mostrarMensaje('La cuota sugerida no puede ser mayor al monto total.', 'error'); return; }
+        codigo: w.q('#dnCod').value.trim().toUpperCase(), monto: UI120.n(w.q('#dnMonto').value), fechaIncidente: UI120.isoADmy(w.q('#dnFecha').value),
+        moneda: w.q('#dnMon').value, nCuotas: Math.floor(UI120.n(w.q('#dnN').value)), frecuencia: w.q('#dnFrec').value };
+      if (!datos.fechaIncidente) { mostrarMensaje('Escribe la fecha del incidente.', 'error'); return; }
+      if (!(datos.monto > 0)) { mostrarMensaje('Escribe el monto total.', 'error'); return; }
+      if (!(datos.nCuotas >= 1 && datos.nCuotas <= 60)) { mostrarMensaje('Escribe el número de cuotas (1 a 60). Si es de una vez, pon 1.', 'error'); return; }
       const b = this; b.disabled = true; b.textContent = 'Guardando…';
       try {
         const r = await llamarBackend('descuentosGrabar', datos);
