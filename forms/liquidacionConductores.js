@@ -805,6 +805,7 @@ Object.assign(FormLiquidacionConductores, {
       '<label style="margin-top:10px">Conductores <a href="#" data-todos style="font-weight:400;margin-left:8px">Todos</a> · <a href="#" data-ninguno style="font-weight:400">Ninguno</a></label>' +
       '<div data-conds style="max-height:190px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;font-size:.74rem">' +
       conds.map(c => '<label style="font-weight:400;color:#1e293b;display:flex;gap:6px;align-items:center"><input type="checkbox" value="' + esc(c) + '"' + (!cAct || cAct === c ? ' checked' : '') + ' style="width:auto"> ' + esc(c) + '</label>').join('') + '</div>' +
+      '<label style="margin-top:8px;font-weight:400;display:flex;gap:6px;align-items:center"><input type="checkbox" data-arr checked style="width:auto"> Incluir pendientes de quincenas anteriores (sin depositar, desde ' + self._qTxt(self._desdeQ || self.DESDE_DEFECTO) + '), con descuentos y A pagar</label>' +
       '<div class="nota" data-prev style="font-size:.78rem;color:#1c3a5e;font-weight:700"></div>' +
       '<p class="nota">El Excel trae 2 hojas: <b>Liquidaciones</b> (todas las liquidaciones, una por conductor, lista para imprimir) y <b>Dashboard</b> (indicadores, cuadros y gráficos).</p>',
       'Descargar Excel', async function (o) {
@@ -816,7 +817,7 @@ Object.assign(FormLiquidacionConductores, {
       });
     ov.querySelector('.lq-dlg').style.width = 'min(720px,96vw)';
     const prev = () => { const s = self._selExport(ov); const t = self._suma(s.vis);
-      ov.querySelector('[data-prev]').textContent = s.vis.length + ' viaje(s) · ' + s.conds.length + ' conductor(es) · Total bono S/ ' + self._m(t.totalBono || 0); };
+      ov.querySelector('[data-prev]').textContent = s.vis.length + ' viaje(s)' + (s.nArr ? ' (incluye ' + s.nArr + ' de quincenas anteriores)' : '') + ' · ' + s.conds.length + ' conductor(es) · Total bono S/ ' + self._m(t.totalBono || 0) + (s.desc ? ' · Descuentos S/ ' + self._m(s.desc) + ' · A pagar S/ ' + self._m((t.totalBono || 0) - s.desc) : ''); };
     ov.querySelectorAll('select, input').forEach(i => i.addEventListener('change', prev));
     ov.querySelector('[data-todos]').addEventListener('click', e => { e.preventDefault(); ov.querySelectorAll('[data-conds] input').forEach(i => { i.checked = true; }); prev(); });
     ov.querySelector('[data-ninguno]').addEventListener('click', e => { e.preventDefault(); ov.querySelectorAll('[data-conds] input').forEach(i => { i.checked = false; }); prev(); });
@@ -828,9 +829,19 @@ Object.assign(FormLiquidacionConductores, {
     if (qd > qh) { const x = qd; qd = qh; qh = x; }
     const est = ov.querySelector('[data-e]').value;
     const marc = {}; ov.querySelectorAll('[data-conds] input:checked').forEach(i => { marc[i.value] = 1; });
-    const vis = this._filas.filter(f => f.quincena >= qd && f.quincena <= qh && (!est || f.liqEstado === est) && marc[f.conductor])
-      .sort((a, b) => String(a.conductor).localeCompare(String(b.conductor)) || String(a.fecha).localeCompare(String(b.fecha)));
-    return { vis: vis, qd: qd, qh: qh, est: est, conds: Array.from(new Set(vis.map(f => f.conductor))).sort() };
+    const self = this;
+    let vis = this._filas.filter(f => f.quincena >= qd && f.quincena <= qh && (!est || f.liqEstado === est) && marc[f.conductor]);
+    // 17/11: pendientes de quincenas anteriores (sin liquidar o por depositar) desde "Arrastrar pendientes desde"
+    const conArr = ov.querySelector('[data-arr]') ? ov.querySelector('[data-arr]').checked : false;
+    const desde = self._desdeQ || self.DESDE_DEFECTO;
+    const arr = conArr && est !== 'DEPOSITADO' ? this._filas.filter(f => f.quincena >= desde && f.quincena < qd && (f.liqEstado === 'PENDIENTE' || f.liqEstado === 'LIQUIDADO') && marc[f.conductor]) : [];
+    const arrSet = new Set(arr);
+    vis = vis.concat(arr).sort((a, b) => String(a.conductor).localeCompare(String(b.conductor)) || (arrSet.has(a) ? 0 : 1) - (arrSet.has(b) ? 0 : 1) || String(a.quincena).localeCompare(String(b.quincena)) || String(a.fecha).localeCompare(String(b.fecha)));
+    // Descuentos por conductor (una vez por conductor+quincena incluida)
+    const descCond = {};
+    Array.from(new Set(vis.map(f => f.conductor + '|' + f.quincena))).forEach(k => { const p = k.split('|'); descCond[p[0]] = (descCond[p[0]] || 0) + self._descDe(p[0], p[1]).total; });
+    const desc = Object.keys(descCond).reduce((a, c) => a + descCond[c], 0);
+    return { vis: vis, qd: qd, qh: qh, est: est, conds: Array.from(new Set(vis.map(f => f.conductor))).sort(), arrSet: arrSet, nArr: arr.length, descCond: descCond, desc: Math.round(desc * 100) / 100 };
   },
 
   _periodoTxt: function (s) {
@@ -940,7 +951,8 @@ Object.assign(FormLiquidacionConductores, {
       });
       hr.height = 28; r++;
       lista.forEach(function (f) {
-        const v = [self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
+        const esArr = sel.arrSet && sel.arrSet.has(f);
+        const v = [self._qTxt(f.quincena) + (esArr ? ' (ANTERIOR)' : ''), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
           n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), f.producto || '', n2(f.glTracto), n2(f.glGenset), (self._EST_TXT[f.liqEstado] || f.liqEstado) + (f.modPor ? ' · ✎ ' + f.modPor : '')];
         const row = ws.getRow(r);
         v.forEach((x, i) => {
@@ -950,6 +962,7 @@ Object.assign(FormLiquidacionConductores, {
           if (i === 21) { cel.font = { size: 9, bold: true }; cel.fill = relleno('FFE6F2DC'); }
           if (i === 22) { cel.font = { size: 9, bold: true, color: { argb: 'FFB45309' } }; cel.fill = relleno('FFFFF3E0'); }
           if (i === 4 || i === 14 || i === 23 || i === 26) cel.alignment = { wrapText: true, vertical: 'middle' };
+          if (esArr && i !== 18 && i !== 21 && i !== 22) cel.fill = relleno('FFFFEDD5');
         });
         r++;
       });
@@ -961,6 +974,16 @@ Object.assign(FormLiquidacionConductores, {
         if (tv[i] !== undefined) { cel.value = n2(tv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
       }
       tr.getCell(23).font = { bold: true, size: 11, color: { argb: 'FFB45309' } };
+      const dC = Math.round(((sel.descCond || {})[cond] || 0) * 100) / 100;
+      const nA = lista.filter(f => sel.arrSet && sel.arrSet.has(f)).length;
+      if (dC || nA) {
+        r++;
+        if (nA) { const sa = self._suma(lista.filter(f => sel.arrSet.has(f))); ws.mergeCells(r, 1, r, 22); ws.getCell(r, 1).value = 'Incluye ' + nA + ' viaje(s) de quincenas anteriores sin depositar (filas naranjas): total bono S/ ' + self._m(sa.totalBono); ws.getCell(r, 1).font = { size: 9, italic: true, color: { argb: 'FFB45309' } }; r++; }
+        ws.mergeCells(r, 1, r, 22); ws.getCell(r, 1).value = 'DESCUENTOS AL CONDUCTOR'; ws.getCell(r, 1).font = { bold: true, size: 10, color: { argb: 'FFB91C1C' } }; ws.getCell(r, 1).alignment = { horizontal: 'right' };
+        ws.getCell(r, 23).value = -dC; ws.getCell(r, 23).numFmt = '#,##0.00;[Red]-#,##0.00'; ws.getCell(r, 23).font = { bold: true, color: { argb: 'FFB91C1C' } }; ws.getCell(r, 23).border = borde; r++;
+        ws.mergeCells(r, 1, r, 22); ws.getCell(r, 1).value = 'A PAGAR (TOTAL BONO − DESCUENTOS)'; ws.getCell(r, 1).font = { bold: true, size: 11, color: { argb: AZ } }; ws.getCell(r, 1).alignment = { horizontal: 'right' };
+        ws.getCell(r, 23).value = n2(s.totalBono - dC); ws.getCell(r, 23).numFmt = '#,##0.00;[Red]-#,##0.00'; ws.getCell(r, 23).font = { bold: true, size: 12, color: { argb: 'FF166534' } }; ws.getCell(r, 23).fill = relleno('FFDCFCE7'); ws.getCell(r, 23).border = borde;
+      }
       r += 2;
       ws.getCell(r, 2).value = '______________________________'; ws.getCell(r, 16).value = '______________________________';
       ws.getCell(r + 1, 2).value = 'Firma del conductor: ' + cond; ws.getCell(r + 1, 16).value = 'Transportes SSI S.A.C.';
@@ -978,6 +1001,12 @@ Object.assign(FormLiquidacionConductores, {
       if (gv[i] !== undefined) { cel.value = n2(gv[i]); cel.numFmt = i === 8 ? '#,##0' : '#,##0.00;[Red]-#,##0.00'; }
     }
     gr.height = 22;
+    if (sel.desc || sel.nArr) {
+      r++; ws.mergeCells(r, 1, r, 22); ws.getCell(r, 1).value = 'DESCUENTOS (todos los conductores)'; ws.getCell(r, 1).alignment = { horizontal: 'right' }; ws.getCell(r, 1).font = { bold: true, color: { argb: 'FFB91C1C' } };
+      ws.getCell(r, 23).value = -n2(sel.desc); ws.getCell(r, 23).numFmt = '#,##0.00;[Red]-#,##0.00'; ws.getCell(r, 23).font = { bold: true, color: { argb: 'FFB91C1C' } };
+      r++; ws.mergeCells(r, 1, r, 22); ws.getCell(r, 1).value = 'TOTAL A PAGAR' + (sel.nArr ? ' (QUINCENA + ANTERIORES)' : ''); ws.getCell(r, 1).alignment = { horizontal: 'right' }; ws.getCell(r, 1).font = { bold: true, size: 12, color: { argb: AZ } };
+      ws.getCell(r, 23).value = n2(t.totalBono - sel.desc); ws.getCell(r, 23).numFmt = '#,##0.00'; ws.getCell(r, 23).font = { bold: true, size: 12, color: { argb: 'FF166534' } }; ws.getCell(r, 23).fill = relleno('FFDCFCE7');
+    }
 
     /* ---------------- Hoja 2: Dashboard ---------------- */
     const d = wb.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
@@ -1010,10 +1039,10 @@ Object.assign(FormLiquidacionConductores, {
       fr++;
     };
     // Resumen por conductor
-    const resumen = nombres.map(c => { const l = grupos[c], s = self._suma(l); return [c, l.length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono), Array.from(new Set(l.map(f => self._EST_TXT[f.liqEstado]))).join(' / '), l.length ? n2((s.km || 0) / l.length) : 0]; })
+    const resumen = nombres.map(c => { const l = grupos[c], s = self._suma(l), dC = n2((sel.descCond || {})[c] || 0); return [c, l.length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono), Array.from(new Set(l.map(f => self._EST_TXT[f.liqEstado]))).join(' / '), l.length ? n2((s.km || 0) / l.length) : 0, dC, n2(s.totalBono - dC)]; })
       .sort((a, b) => b[5] - a[5]);
-    const totR = ['TOTAL', vis.length, n2(t.km), n2(t.costo), n2(t.totalDep), n2(t.totalBono), '', vis.length ? n2((t.km || 0) / vis.length) : 0]; totR._tot = true;
-    tabla('Resumen por conductor', ['Conductor', 'Viajes', 'Km', 'Costo del viaje', 'Total depósito', 'Total bono', 'Estado', 'Km por viaje'], resumen.concat([totR]), [null, '0', '#,##0', '#,##0.00', '#,##0.00', '#,##0.00', null, '#,##0']);
+    const totR = ['TOTAL', vis.length, n2(t.km), n2(t.costo), n2(t.totalDep), n2(t.totalBono), '', vis.length ? n2((t.km || 0) / vis.length) : 0, n2(sel.desc || 0), n2(t.totalBono - (sel.desc || 0))]; totR._tot = true;
+    tabla('Resumen por conductor' + (sel.nArr ? ' (incluye pendientes de quincenas anteriores)' : ''), ['Conductor', 'Viajes', 'Km', 'Costo del viaje', 'Total depósito', 'Total bono', 'Estado', 'Km por viaje', 'Descuentos', 'A pagar'], resumen.concat([totR]), [null, '0', '#,##0', '#,##0.00', '#,##0.00', '#,##0.00', null, '#,##0', '#,##0.00', '#,##0.00']);
     // Gastos por concepto
     const conceptos = [['Peajes', t.peajes], ['Viático', t.viatico], ['Llanta', t.llanta], ['Cochera', t.cochera], ['Lavado', t.lavado], ['Otros', t.otros], ['Bono', t.bono], ['Feriado', t.feriado], ['Dominical', t.dominical]];
     const tg = t.gastos || 1;
@@ -1069,13 +1098,13 @@ Object.assign(FormLiquidacionConductores, {
   _excelSimple: async function (sel) {
     const self = this, X = await self._cargarXlsx(), n2 = x => Math.round((Number(x) || 0) * 100) / 100;
     const enc = ['CONDUCTOR', 'QUINCENA', 'FECHA', 'PLACA', 'CLIENTE', 'DESTINO', 'CÓDIGO', 'N° VIÁTICO', 'KM', 'PEAJES', 'VIÁTICO', 'LLANTA', 'COCHERA', 'LAVADO', 'OTROS', 'MOTIVO OTROS', 'FERIADO', 'DOMINICAL', 'BONO', 'COSTO DEL VIAJE', 'MONTO DEPOSITADO', 'DEPÓSITOS ADICIONALES', 'TOTAL DEPÓSITO', 'TOTAL BONO', 'PRODUCTO', 'GL TRACTO', 'GL GENSET', 'ESTADO'];
-    const filas = sel.vis.map(f => [f.conductor, self._qTxt(f.quincena), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
+    const filas = sel.vis.map(f => [f.conductor, self._qTxt(f.quincena) + (sel.arrSet && sel.arrSet.has(f) ? ' (ANTERIOR)' : ''), self._f(f.fecha), f.placa, f.cliente, f.destino, f.clave, f.nroViatico, n2(f.km), n2(f.peajes), n2(f.viatico), n2(f.llanta), n2(f.cochera), n2(f.lavado), n2(f.otros), f.motivoOtros || '',
       n2(f.feriado), n2(f.dominical), n2(f.bono), n2(f.costo), n2(f.depositado), n2(f.extras), n2(f.totalDep), n2(f.totalBono), f.producto || '', n2(f.glTracto), n2(f.glGenset), self._EST_TXT[f.liqEstado] || f.liqEstado]);
     const g = self._agrupar(sel.vis, f => f.conductor);
-    const res = Object.keys(g).sort().map(c => { const s = self._suma(g[c]); return [c, g[c].length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono)]; });
+    const res = Object.keys(g).sort().map(c => { const s = self._suma(g[c]), dC = n2((sel.descCond || {})[c] || 0); return [c, g[c].length, n2(s.km), n2(s.costo), n2(s.totalDep), n2(s.totalBono), dC, n2(s.totalBono - dC)]; });
     const wb = X.utils.book_new();
     X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([[self._periodoTxt(sel)], [], enc].concat(filas)), 'Liquidaciones');
-    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Resumen por conductor'], [], ['Conductor', 'Viajes', 'Km', 'Costo del viaje', 'Total depósito', 'Total bono']].concat(res)), 'Dashboard');
+    X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([['Resumen por conductor'], [], ['Conductor', 'Viajes', 'Km', 'Costo del viaje', 'Total depósito', 'Total bono', 'Descuentos', 'A pagar']].concat(res)), 'Dashboard');
     X.writeFile(wb, 'Liquidaciones_' + sel.qd + '.xlsx');
     mostrarMensaje('Excel generado sin gráficos (no cargó el componente de gráficos).', 'exito');
   }
