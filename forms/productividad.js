@@ -97,7 +97,7 @@ const FormProductividad = {
     // Rendimiento con sonda por código
     const kmgal = {};
     const cl = (cie && (cie.items || cie.cierres || cie.resumen)) || (Array.isArray(cie) ? cie : []);
-    (Array.isArray(cl) ? cl : []).forEach(function (x) { const c = U(x.codigo || x.codigoServicio); const k = Number(x.kmGal || x.kmgal || x.rendimiento); if (c && k > 0 && k < 30) kmgal[c] = { kmGal: k, km: Number(x.km) || 0, gal: Number(x.consumo || x.consumoReal) || 0 }; });
+    (Array.isArray(cl) ? cl : (cl && typeof cl === 'object' ? Object.values(cl) : [])).forEach(function (x) { const c = U(x.codigo || x.codigoServicio); const k = Number(x.kmGal || x.kmgal || x.rendimiento); if (c && k > 0 && k < 30) kmgal[c] = { kmGal: k, km: Number(x.km) || 0, gal: Number(x.consumo || x.consumoReal) || 0 }; });
     self._desc = (des && des.ok) ? des.items || [] : [];
     self._viajes = liq.filas.map(function (f) {
       const cod = U(f.clave), base = cod.replace(/-T\d+$/, '');
