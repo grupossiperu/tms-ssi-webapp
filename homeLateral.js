@@ -52,6 +52,7 @@
   }
   const D = {
     servicios: () => dato('serv', async () => { const r = await llamarBackend('listarServiciosPendientes', { fechaDesde: '', fechaHasta: '' }); return Array.isArray(r) ? r : null; }),
+    sobrecostos: () => dato('sobre', async () => { const r = await llamarBackend('sobrecostosListar', {}); return r && r.ok ? r.items || [] : null; }),
     factura: () => dato('fact', async () => { const r = await llamarBackend('filtrarFacturacionPendiente', { tipo: 'TODOS', texto: '' }); return Array.isArray(r) ? r : null; }),
     noFact: () => dato('nof', async () => { const r = await llamarBackend('noFacturableListar', {}); return r && r.ok ? r.filas || [] : []; }),
     acarreo: () => dato('acar', async () => { const r = await llamarBackend('acarreoListar', {}); return r && r.ok ? r.items || {} : null; }),
@@ -330,8 +331,8 @@
         { etq: 'Facturas vencidas', v: null, sub: 'por cobrar', c: '#DC2626', f: clic('btn-cobranzas') }];
       pintarKpis(k);
       const fin = puede('FIN');
-      const [serv, fact, nof, acar, cob, con, pz] = await Promise.all([D.servicios(), fin ? D.factura() : null, fin ? D.noFact() : [], D.acarreo(),
-        fin ? D.cobranza() : null, puede('MAE') ? D.contratos() : null, fin ? D.polizas() : null]);
+      const [serv, fact, nof, acar, cob, con, pz, sob] = await Promise.all([D.servicios(), fin ? D.factura() : null, fin ? D.noFact() : [], D.acarreo(),
+        fin ? D.cobranza() : null, puede('MAE') ? D.contratos() : null, fin ? D.polizas() : null, fin ? D.sobrecostos().catch(() => null) : null]);
       // v121: cuotas de pólizas vencidas o que vencen en 15 días
       const cuotasPz = []; ((pz && pz.editor && pz.items) || []).filter(x => x.estado === 'ACTIVA').forEach(x => (x.cuotas || []).forEach(c => { if (c.estado === 'PENDIENTE' && typeof c.dias === 'number' && c.dias <= 15) cuotasPz.push({ p: x, c: c }); }));
       cuotasPz.sort((a, b) => a.c.dias - b.c.dias);
@@ -361,15 +362,30 @@
       k[3].v = cob ? venc.length : '—'; k[3].sub = montoTxt || 'por cobrar';
       pintarKpis(k);
 
+      // 17/11: resumen por facturar por cliente (viajes sin facturar + sobrecostos por facturar)
+      const porCli = {};
+      const cli = n => { const k = may(n) || 'SIN CLIENTE'; return porCli[k] = porCli[k] || { c: k, nv: 0, vUSD: 0, vPEN: 0, ns: 0, sUSD: 0, sPEN: 0 }; };
+      sinFact.forEach(f => { const o = cli(f['CLIENTE PARA FACTURACIÓN']); o.nv++;
+        [['TARIFA 1', 'MONEDA TARIFA 1'], ['TARIFA 2', 'MONEDA TARIFA 2']].forEach(t => { const m = Number(String(f[t[0]] || 0).replace(',', '.')) || 0; if (!m) return; if (may(f[t[1]] || f['MONEDA TARIFA 1']) === 'S') o.vPEN += m; else o.vUSD += m; }); });
+      const sobPend = (sob || []).filter(x => !x.facturado && !x.anulado && Number(x.total) > 0.005);
+      sobPend.forEach(x => { const o = cli(x.cliente); o.ns++; if (/S/.test(String(x.moneda || '')) && !/\$/.test(String(x.moneda || ''))) o.sPEN += Number(x.total) || 0; else o.sUSD += Number(x.total) || 0; });
+      const resCli = Object.values(porCli).sort((a, b) => (b.vUSD + b.sUSD) - (a.vUSD + a.sUSD) || (b.vPEN + b.sPEN) - (a.vPEN + a.sPEN));
+      const mon = (u, s) => [u > 0.005 ? 'US$ ' + nfmt(u, 2) : '', s > 0.005 ? 'S/ ' + nfmt(s, 2) : ''].filter(Boolean).join('<br>') || '—';
+      const tot = resCli.reduce((a, o) => { ['nv', 'vUSD', 'vPEN', 'ns', 'sUSD', 'sPEN'].forEach(k => a[k] += o[k]); return a; }, { nv: 0, vUSD: 0, vPEN: 0, ns: 0, sUSD: 0, sPEN: 0 });
+      const htmlCli = fact && resCli.length ? '<div class="hl-sub" style="font-weight:700;color:#1c3a5e;margin:0 0 4px;font-size:.78rem;text-transform:uppercase">Por facturar por cliente</div>' +
+        '<table class="hl-tabla"><thead><tr><th>Cliente</th><th style="width:150px">Viajes</th><th style="width:140px">Sobrecostos</th><th style="width:130px">Total</th></tr></thead><tbody>' +
+        resCli.map(o => '<tr><td><b>' + esc(o.c) + '</b></td><td>' + (o.nv ? o.nv + ' · ' + mon(o.vUSD, o.vPEN) : '—') + '</td><td>' + (o.ns ? o.ns + ' · ' + mon(o.sUSD, o.sPEN) : '—') + '</td><td><b>' + mon(o.vUSD + o.sUSD, o.vPEN + o.sPEN) + '</b></td></tr>').join('') +
+        '<tr style="background:#f1f5f9"><td><b>TOTAL</b></td><td><b>' + tot.nv + ' · ' + mon(tot.vUSD, tot.vPEN) + '</b></td><td><b>' + tot.ns + ' · ' + mon(tot.sUSD, tot.sPEN) + '</b></td><td><b>' + mon(tot.vUSD + tot.sUSD, tot.vPEN + tot.sPEN) + '</b></td></tr>' +
+        '</tbody></table><div class="hl-sub" style="margin:2px 0 12px">Viajes = tarifa 1 + tarifa 2 del servicio (sin IGV). Sobrecostos = total registrado.</div>' : '';
       const v = sinFact.slice(0, 9);
       pintarIzq('Viajes culminados sin facturar', { txt: 'Ir a Facturar', f: clic('btn-facturar') },
-        !fact ? 'No tiene acceso a Facturación.' : sinFact.length ? tabla([['Fecha', 56], ['Cliente'], ['Código / BK'], ['Conductor'], ['Situación', 140]], v.map(f => {
+        !fact ? 'No tiene acceso a Facturación.' : (sinFact.length || resCli.length) ? '<table style="display:none"></table>' + htmlCli + (sinFact.length ? '<div class="hl-sub" style="font-weight:700;color:#1c3a5e;margin:0 0 4px;font-size:.78rem;text-transform:uppercase">Viajes culminados sin facturar</div>' : '') + (!sinFact.length ? '' : tabla([['Fecha', 56], ['Cliente'], ['Código / BK'], ['Conductor'], ['Situación', 140]], v.map(f => {
           const c = may(f['CODIGO SERVICIO']), tiene = conConsol.has(c);
           return [fechaCorta(f['FECHA DE PROGRAMACION']), '<b>' + esc(f['CLIENTE PARA FACTURACIÓN']) + '</b>' + (est(f) === 'FALSO FLETE' ? '<div class="hl-sub">Falso flete</div>' : ''),
             esc(c) + '<div class="hl-sub">' + esc(f['BOOKING'] || '') + '</div>', esc(f['CONDUCTOR']),
             tiene ? etiqueta('Listo para facturar', '#DCFCE7', '#166534') : etiqueta('Falta consolidado', '#FEF3C7', '#92400E')];
-        }), sinFact.length, 'Facturar') : 'Todos los viajes culminados están facturados.',
-        v.map(f => conConsol.has(may(f['CODIGO SERVICIO'])) ? clic('btn-facturar') : clic('btn-consolidado-servicios-completar')));
+        }), sinFact.length, 'Facturar')) : 'Todos los viajes culminados están facturados.',
+        (htmlCli ? resCli.concat([0]) : []).map(() => clic('btn-facturar')).concat(v.map(f => conConsol.has(may(f['CODIGO SERVICIO'])) ? clic('btn-facturar') : clic('btn-consolidado-servicios-completar'))));
 
       pintarAlertas([
         acarInc.length && { n: acarInc.length, t: 'Culminados con acarreo incompleto', d: sub3(acarInc, f => esc(f['CODIGO SERVICIO']) + ' · ' + esc(f['CLIENTE PARA FACTURACIÓN']) + ' (' + (acar[f['CODIGO SERVICIO']] ? acar[f['CODIGO SERVICIO']].n + '/3 doc.' : 'sin documentos') + ')'), c: '#D97706', f: clic('btn-consolidado-servicios') },
