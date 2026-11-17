@@ -611,12 +611,24 @@ const FormLiquidacionConductores = {
   },
 
   /** Aplicar descuentos a una quincena ya liquidada (por depositar). Trae la cuota pendiente de cada descuento. */
-  _dlgAplicarDesc: function (cond, q) {
+  _dlgAplicarDesc: async function (cond, q) {
     const self = this;
     const l = self._liqs.filter(x => x.conductor === cond && x.quincena === q && x.estado === 'LIQUIDADO')[0];
     if (!l) { mostrarMensaje('Primero liquida la quincena; el descuento se aplica después de liquidar.', 'error'); return; }
     const dp = self._descPend(cond, q);
     if (!dp.length) { mostrarMensaje('Este conductor no tiene descuentos con saldo.', 'info'); return; }
+    // 17/11: descuentos "al finalizar el contrato" → se proponen completos en la quincena en que vence el contrato
+    if (dp.some(d => d.x.frecuencia === 'CONTRATO') && !self._contratos) {
+      try { const rc = await llamarBackend('contratosListar', {}); self._contratos = rc && rc.ok ? rc.items || [] : []; } catch (e) { self._contratos = []; }
+    }
+    const pal = t => String(t || '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    const vencCont = function () {
+      const pc = pal(cond);
+      const c = (self._contratos || []).filter(x => x.estado !== 'BAJA' && x.vencimiento).filter(x => { const p = pal(x.nombre); return pc.filter(w => p.indexOf(w) >= 0).length >= Math.min(3, pc.length, p.length); })[0];
+      if (!c) return null;
+      const m = String(c.vencimiento).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (!m) return null;
+      return { txt: c.vencimiento, q: m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + (Number(m[1]) <= 15 ? 'Q1' : 'Q2') };
+    }();
     const bono = Math.round((l.totalBono || 0) * 100) / 100;
     const tc = self._tcHoy;
     const sm = x => x.moneda === 'USD' ? 'US$ ' : 'S/ ';
@@ -627,9 +639,16 @@ const FormLiquidacionConductores = {
     const prop = dp.map(function (d) {
       const x = d.x, usd = x.moneda === 'USD', f = usd ? (tc ? tc.tc : 0) : 1;
       if (d.enQ > 0) { disp -= d.enQ * (f || 1); return d.enQ; }
-      const mensualToca = !(x.frecuencia === 'MES' && (x.cuotas || []).some(c => c.quincena === qAnt && Number(c.monto) > 0));
-      let v = mensualToca ? Math.min(x.cuotaSugerida > 0 ? x.cuotaSugerida : d.saldoSinQ, d.saldoSinQ) : 0;
-      if (!mensualToca) notas.push(x.motivo + ': cuota mensual, ya se descontó en ' + self._qTxt(qAnt) + ' (propuesto 0).');
+      let v;
+      if (x.frecuencia === 'CONTRATO') {
+        const toca = vencCont && String(q) >= vencCont.q;
+        v = toca ? d.saldoSinQ : 0;
+        notas.push(x.motivo + ': al finalizar el contrato — ' + (!vencCont ? 'no se encontró la fecha de fin de contrato en el maestro Contratos (propuesto 0).' : toca ? 'el contrato vence el ' + vencCont.txt + ': se propone todo el saldo.' : 'el contrato vence el ' + vencCont.txt + ' (propuesto 0 hasta esa quincena).'));
+      } else {
+        const mensualToca = !(x.frecuencia === 'MES' && (x.cuotas || []).some(c => c.quincena === qAnt && Number(c.monto) > 0));
+        v = mensualToca ? Math.min(x.cuotaSugerida > 0 ? x.cuotaSugerida : d.saldoSinQ, d.saldoSinQ) : 0;
+        if (!mensualToca) notas.push(x.motivo + ': cuota mensual, ya se descontó en ' + self._qTxt(qAnt) + ' (propuesto 0).');
+      }
       if (f > 0 && v * f > disp) { v = Math.floor(disp / f * 100) / 100; }
       v = Math.max(0, Math.round(v * 100) / 100); disp -= v * (f || 1);
       return v;

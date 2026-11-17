@@ -267,6 +267,7 @@ const FormDescuentos = {
   sim: m => m === 'USD' ? 'US$ ' : 'S/ ',
   /** Plan de cuotas: "4 cuotas mensuales de US$ 125.00". */
   planTxt: function (x) {
+    if (x.frecuencia === 'CONTRATO') return 'Al finalizar el contrato';
     if (!(x.nCuotas > 0)) return x.cuotaSugerida ? 'Cuota sugerida ' + this.sim(x.moneda) + UI120.m(x.cuotaSugerida) : '';
     return x.nCuotas + ' cuota(s) ' + (x.frecuencia === 'MES' ? 'mensuales' : 'quincenales') + ' de ' + this.sim(x.moneda) + UI120.m(x.cuotaSugerida || x.monto / x.nCuotas);
   },
@@ -298,6 +299,40 @@ const FormDescuentos = {
     }));
   },
 
+  /** Ventana para elegir un viaje del conductor (incluye tramos que hizo en un viaje con cambio de conductor). */
+  _buscarViaje: async function (cond, alElegir) {
+    const pal = t => String(t || '').toUpperCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+    const pc = pal(cond);
+    const mismo = n => { const p = pal(n); if (!p.length) return false; const a = pc.filter(x => p.indexOf(x) >= 0).length; return a >= Math.min(3, pc.length, p.length) && a >= 2 || (pc.length === 1 && p.indexOf(pc[0]) >= 0); };
+    const w = UI120.ventana('Viajes de ' + esc(cond), '<div class="campo" style="margin-bottom:8px"><input id="bvQ" placeholder="Buscar por código, BK, destino, placa o fecha…"></div><div id="bvL" style="max-height:60vh;overflow:auto">Cargando viajes…</div><div class="pie"><button class="boton-secundario" data-c>Cerrar</button></div>', 820);
+    w.q('[data-c]').addEventListener('click', w.cerrar);
+    let serv = [];
+    try { const r = await llamarBackend('listarServiciosPendientes', { fechaDesde: '', fechaHasta: '' }); serv = Array.isArray(r) ? r : []; } catch (e) { serv = []; }
+    const fIso = v => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + m[2] + m[3]; const d = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return d ? d[3] + ('0' + d[2]).slice(-2) + ('0' + d[1]).slice(-2) : ''; };
+    const fTxt = v => { const k = fIso(v); return k ? k.slice(6, 8) + '/' + k.slice(4, 6) + '/' + k.slice(0, 4) : ''; };
+    const L = [];
+    serv.forEach(f => {
+      let tr = []; try { tr = JSON.parse(String(f['TRAMOS'] || '[]')) || []; } catch (e) { tr = []; }
+      const enTramo = tr.filter(t => mismo(t.conductor) && t.fin);
+      if (mismo(f['CONDUCTOR'])) L.push({ f: f, cod: String(f['CODIGO SERVICIO'] || ''), nota: '' });
+      enTramo.forEach(t => L.push({ f: f, cod: String(f['CODIGO SERVICIO'] || '') + '-T' + t.n, nota: 'Tramo ' + t.n + ' (' + (t.motivo || 'cambio') + ')', placa: t.placa }));
+    });
+    L.sort((a, b) => fIso(b.f['FECHA DE PROGRAMACION']).localeCompare(fIso(a.f['FECHA DE PROGRAMACION'])));
+    const pintar = function () {
+      const q = w.q('#bvQ').value.trim().toUpperCase();
+      const V = L.filter(x => !q || [x.cod, x.f['BOOKING'], x.f['DESTINO 1'], x.f['PLACA TRACTO'], x.placa, fTxt(x.f['FECHA DE PROGRAMACION']), x.f['CLIENTE PARA FACTURACIÓN']].join(' ').toUpperCase().indexOf(q) >= 0).slice(0, 80);
+      w.q('#bvL').innerHTML = V.length ? '<table><thead><tr><th>Fecha</th><th>Código</th><th>Cliente / BK</th><th>Destino</th><th>Placa</th><th>Estado</th></tr></thead><tbody>' +
+        V.map((x, i) => '<tr data-i="' + L.indexOf(x) + '" style="cursor:pointer"><td>' + esc(fTxt(x.f['FECHA DE PROGRAMACION'])) + '</td><td><b>' + esc(x.cod) + '</b>' + (x.nota ? '<div style="color:#b45309;font-size:.7rem">' + esc(x.nota) + '</div>' : '') + '</td><td>' + esc(x.f['CLIENTE PARA FACTURACIÓN'] || '') + '<div style="color:#64748b;font-size:.7rem">' + esc(x.f['BOOKING'] || '') + '</div></td><td>' + esc(x.f['DESTINO 1'] || '') + '</td><td>' + esc(x.placa || x.f['PLACA TRACTO'] || '') + '</td><td>' + esc(x.f['ESTADO'] || '') + '</td></tr>').join('') + '</tbody></table>'
+        : '<div style="color:#94a3b8;padding:12px">' + (L.length ? 'Ningún viaje coincide con la búsqueda.' : 'No se encontraron viajes de este conductor.') + '</div>';
+      w.q('#bvL').querySelectorAll('tr[data-i]').forEach(tr => {
+        tr.addEventListener('mouseenter', () => tr.style.background = '#eff6ff'); tr.addEventListener('mouseleave', () => tr.style.background = '');
+        tr.addEventListener('click', () => { alElegir(L[+tr.dataset.i].cod); w.cerrar(); });
+      });
+    };
+    w.q('#bvQ').addEventListener('input', pintar);
+    pintar(); w.q('#bvQ').focus();
+  },
+
   nuevo: async function (pre, alGrabar) {
     pre = pre || {};
     const self = this;
@@ -308,12 +343,12 @@ const FormDescuentos = {
         <div class="campo"><label>Motivo</label><select id="dnMot">${self.MOTIVOS.map(m => '<option' + (m === pre.motivo ? ' selected' : '') + '>' + m + '</option>').join('')}</select></div>
         <div class="campo" style="grid-column:1/-1"><label>Detalle (qué se descuenta)</label><input id="dnDet" value="${esc(pre.detalle || '')}" placeholder="Ej. Computadora del camión robada, multa de tránsito…"></div>
         <div class="campo"><label>Referencia</label><input id="dnRef" value="${esc(pre.referencia || '')}" placeholder="N° de denuncia, papeleta…"></div>
-        <div class="campo"><label>Código del viaje</label><input id="dnCod" value="${esc(pre.codigo || '')}" placeholder="Opcional" style="text-transform:uppercase"></div>
+        <div class="campo"><label>Código del viaje</label><div style="display:flex;gap:4px"><input id="dnCod" value="${esc(pre.codigo || '')}" placeholder="Opcional" style="text-transform:uppercase"><button type="button" class="boton-secundario" id="dnBuscar" style="padding:4px 9px;white-space:nowrap" title="Buscar el viaje del conductor">🔍 Buscar</button></div></div>
         <div class="campo"><label>Fecha del incidente</label><input id="dnFecha" type="date" value="${UI120.hoyIso()}"></div>
         <div class="campo"><label>Moneda</label><select id="dnMon"><option value="PEN">Soles (S/)</option><option value="USD">Dólares (US$)</option></select></div>
         <div class="campo"><label id="dnMontoL">Monto total a descontar (S/)</label><input id="dnMonto" inputmode="decimal"></div>
         <div class="campo"><label>N° de cuotas sugeridas</label><input id="dnN" type="number" min="1" max="60" step="1" placeholder="Ej. 4"></div>
-        <div class="campo"><label>Cada</label><select id="dnFrec"><option value="QUINCENA">Quincena</option><option value="MES">Mes</option></select></div>
+        <div class="campo"><label>Cada</label><select id="dnFrec"><option value="QUINCENA">Quincena</option><option value="MES">Mes</option><option value="CONTRATO">Al finalizar el contrato</option></select></div>
         <div class="campo"><label id="dnCuotaL">Cuota</label><input id="dnCuota" disabled style="background:#f1f5f9;font-weight:700"></div>
       </div>
       <div class="nota" id="dnNota"></div>
@@ -321,13 +356,21 @@ const FormDescuentos = {
     const nota = function () {
       const mo = w.q('#dnMon').value, sm = self.sim(mo), t = UI120.n(w.q('#dnMonto').value), n = Math.floor(UI120.n(w.q('#dnN').value)), fr = w.q('#dnFrec').value;
       w.q('#dnMontoL').textContent = 'Monto total a descontar (' + sm.trim() + ')';
-      w.q('#dnCuota').value = t > 0 && n > 0 ? sm + UI120.m(t / n) : '';
+      const alFin = fr === 'CONTRATO';
+      w.q('#dnN').disabled = alFin; w.q('#dnN').style.background = alFin ? '#f1f5f9' : '';
+      w.q('#dnCuota').value = alFin ? (t > 0 ? sm + UI120.m(t) + ' al final' : '') : t > 0 && n > 0 ? sm + UI120.m(t / n) : '';
+      if (alFin) { w.q('#dnNota').innerHTML = 'Se descuenta <b>todo el saldo al finalizar el contrato</b> del conductor (según el maestro Contratos). En la liquidación de esa quincena, <b>Aplicar descuento</b> lo propone completo; antes se propone 0 (puedes cambiarlo).' + (mo === 'USD' ? ' En dólares se convierte a soles con el tipo de cambio del día en que se aplica.' : ''); return; }
       const q0 = UI120.quincenaDe(new Date());
       const plan = t > 0 && n > 0 ? ' Plan: <b>' + n + ' cuota(s) de ' + sm + UI120.m(t / n) + (fr === 'MES' ? ' cada mes' : ' cada quincena') + '</b>, de ' + UI120.qTxt(q0) + ' a ' + UI120.qTxt(self.qFin(q0, n, fr)) + ' (si se aplica en cada liquidación).' : '';
       w.q('#dnNota').innerHTML = 'El descuento queda con su saldo. Después de liquidar cada quincena, en <b>Liquidación de conductores → Aplicar descuento</b> se trae la cuota pendiente (puedes cambiarla, poner todo o nada) hasta que el saldo llegue a 0.' +
         (mo === 'USD' ? ' En dólares: cada cuota se convierte a soles con el tipo de cambio del día en que se aplica.' : '') + plan;
     };
     ['#dnMonto', '#dnN'].forEach(s => w.q(s).addEventListener('input', nota));
+    w.q('#dnBuscar').addEventListener('click', function () {
+      const c = w.q('#dnCond').value.trim().toUpperCase();
+      if (!c) { mostrarMensaje('Primero escribe el conductor.', 'error'); return; }
+      self._buscarViaje(c, cod => { w.q('#dnCod').value = cod; });
+    });
     ['#dnMon', '#dnFrec'].forEach(s => w.q(s).addEventListener('change', nota));
     nota();
     w.q('[data-c]').addEventListener('click', w.cerrar);
@@ -337,7 +380,7 @@ const FormDescuentos = {
         moneda: w.q('#dnMon').value, nCuotas: Math.floor(UI120.n(w.q('#dnN').value)), frecuencia: w.q('#dnFrec').value };
       if (!datos.fechaIncidente) { mostrarMensaje('Escribe la fecha del incidente.', 'error'); return; }
       if (!(datos.monto > 0)) { mostrarMensaje('Escribe el monto total.', 'error'); return; }
-      if (!(datos.nCuotas >= 1 && datos.nCuotas <= 60)) { mostrarMensaje('Escribe el número de cuotas (1 a 60). Si es de una vez, pon 1.', 'error'); return; }
+      if (datos.frecuencia !== 'CONTRATO' && !(datos.nCuotas >= 1 && datos.nCuotas <= 60)) { mostrarMensaje('Escribe el número de cuotas (1 a 60). Si es de una vez, pon 1.', 'error'); return; }
       const b = this; b.disabled = true; b.textContent = 'Guardando…';
       try {
         const r = await llamarBackend('descuentosGrabar', datos);
