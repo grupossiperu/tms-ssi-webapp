@@ -7,7 +7,7 @@
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261117c';
+  window.__VERSION_APP = '20261119a';
   ['styles.css', 'home.css', 'home2.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
@@ -212,6 +212,15 @@
             </svg>
           </span>
           <span class="tile-texto"><strong>Reporte de facturación</strong><small>Tabla para el correo</small></span>
+        </button>
+
+        <button class="tile" id="btn-acarreo-consulta" data-modulo="FIN" data-sin-modulo="OPER">
+          <span class="tile-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="7" width="14" height="10" rx="1"></rect><path d="M15 10h4l3 3v4h-7"></path><circle cx="6" cy="18" r="1.8"></circle><circle cx="18" cy="18" r="1.8"></circle>
+            </svg>
+          </span>
+          <span class="tile-texto"><strong>Acarreo (consulta)</strong><small>Ver viajes e imprimir documentos</small></span>
         </button>
 
         <button class="tile" id="btn-cobranzas" data-modulo="FIN">

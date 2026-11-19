@@ -321,6 +321,10 @@ const Sesion = {
       const mods = el.dataset.modulo.split(/\s+/);
       el.style.display = mods.some(function (m) { return self.puede(m); }) ? '' : 'none';
     });
+    // 19/11: data-sin-modulo = se oculta si el usuario YA tiene ese módulo (ej. Acarreo consulta solo para quien no tiene OPER)
+    document.querySelectorAll('[data-sin-modulo]').forEach(function (el) {
+      if (el.dataset.sinModulo.split(/\s+/).some(function (m) { return self.puede(m); })) el.style.display = 'none';
+    });
     const d = this._d || {};
     const n = document.getElementById('homeUsuarioNombre');
     const r = document.getElementById('homeUsuarioRol');
@@ -515,6 +519,8 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('btn-consolidado-servicios').addEventListener('click', function () {
     FormSelServicioContabilidad.abrir();
   });
+  const btnAcCons = document.getElementById('btn-acarreo-consulta');
+  if (btnAcCons) btnAcCons.addEventListener('click', function () { FormSelServicioContabilidad.abrir({ soloLectura: true }); });
 
   document.getElementById('btn-consolidado-servicios-completar').addEventListener('click', function () {
     FormConsolidadoServicios.abrir();
