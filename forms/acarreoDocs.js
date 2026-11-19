@@ -33,6 +33,33 @@ const FormAcarreoDocs = {
     return '<button type="button" class="btn-acarreo ac-pend" title="Registrar contenedor, cita de devolución y documentos">📎 ' + n + '/3</button>';
   },
 
+  /** 19/11: botón de solo consulta (Facturación). */
+  botonVer: function (f) {
+    const it = this.de(f['CODIGO SERVICIO']), n = it ? it.n : 0;
+    return '<button type="button" class="btn-acarreo ' + (it && it.completo ? 'ac-ok' : 'ac-pend') + '" title="Ver e imprimir los documentos del acarreo">📄 Ver (' + n + '/3)</button>';
+  },
+  /** 19/11: ventana de solo consulta: datos de devolución + abrir/imprimir cada documento. */
+  ver: function (f) {
+    const it = this.de(f['CODIGO SERVICIO']) || {};
+    const impo = this.esImpo(f);
+    const docs = [[it.doc1, impo ? 'Ticket de salida' : 'EIR de salida'], [it.grr, 'Guía de remisión remitente (GRE)'], [it.grt, 'Guía de remisión transportista (GRT)']];
+    const fila = d => '<tr><td style="padding:6px 4px">' + esc(d[1]) + '</td><td style="padding:6px 4px;text-align:right">' + (d[0] && d[0].url
+      ? '<a class="boton-secundario" style="padding:4px 10px;text-decoration:none" href="' + esc(d[0].url) + '" target="_blank" rel="noopener">Abrir / imprimir</a>'
+      : '<span style="color:#b91c1c">No subido</span>') + '</td></tr>';
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)">' +
+      '<div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between"><b>Documentos del acarreo</b><button type="button" data-x style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>' +
+      '<div style="padding:14px 16px;font-size:.85rem">' +
+      '<div style="background:#f1f5f9;border-radius:9px;padding:8px 10px;margin-bottom:10px">' + esc(f['CLIENTE PARA FACTURACIÓN'] || '') + ' · BK ' + esc(f['BOOKING'] || '—') + ' · ' + esc(f['CODIGO SERVICIO'] || '') +
+      '<br>Contenedor: <b>' + esc(f['N° CONTENEDOR'] || f['CONTENEDOR'] || it.contenedor || '—') + '</b> · ' + (impo ? 'Importación' : 'Exportación') + '</div>' +
+      '<table style="width:100%;border-collapse:collapse">' + docs.map(fila).join('') + '</table>' +
+      '<div style="font-size:.75rem;color:#64748b;margin-top:8px">El documento se abre en otra pestaña; desde ahí se imprime o descarga. Solo consulta: para subir o cambiar documentos, pedir a Operaciones.</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:12px"><button type="button" class="boton-secundario" data-x>Cerrar</button></div></div></div>';
+    document.body.appendChild(ov);
+    ov.querySelectorAll('[data-x]').forEach(b => b.addEventListener('click', () => ov.remove()));
+  },
+
   _fechaLocal: function (f) {
     const fv = f['FECHA DE DEVOLUCION'];
     if (!fv || String(fv).trim() === '-') return '';

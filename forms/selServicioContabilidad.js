@@ -19,7 +19,9 @@ const FormSelServicioContabilidad = {
   ESTADOS: ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO',
     'CULMINADO', 'FALSO FLETE', 'REPROGRAMADO', 'CANCELADO'],
 
-  abrir: async function () {
+  abrir: async function (opts) {
+    // 19/11: modo consulta (Facturación): solo ver, imprimir el servicio y ver/imprimir los documentos del acarreo
+    this._soloLectura = !!(opts && opts.soloLectura) || (typeof Sesion !== 'undefined' && !Sesion.puede('OPER'));
     const html = `
       <div class="barra-filtros">
         <div class="campo"><label>Estado</label><div id="msEstado"></div></div>
@@ -112,7 +114,10 @@ const FormSelServicioContabilidad = {
         </div>
       </div>`;
 
-    abrirPanel('Acarreo - Selección', html, (raiz) => this._wire(raiz), { ancho: true });
+    abrirPanel(this._soloLectura ? 'Acarreo - Consulta' : 'Acarreo - Selección', html, (raiz) => {
+      if (this._soloLectura) { const e = raiz.querySelector('.acarreo-estados'); if (e) e.style.display = 'none'; }
+      this._wire(raiz);
+    }, { ancho: true });
   },
 
   _wire: function (raiz) {
@@ -342,21 +347,23 @@ const FormSelServicioContabilidad = {
           <td>${d2 ? linea(d2, formatoFechaHora(f['FECHA DE POSICIONAMIENTO 2'], f['HORA DE POSICIONAMIENTO 2'])) : '-'}</td>
           <td>${linea(f['DEPOSITO DE DEVOLUCION'], fechaHoraOAviso(f['FECHA DE DEVOLUCION'], f['HORA DE DEVOLUCION']))}</td>
           <td>${obs ? '<span class="badge-obs">' + obs + '</span>' : ''}</td>
-          <td style="text-align:center;">
-            <button type="button" class="btn-datos ${completo ? 'dt-ok' : 'dt-pend'}" title="${completo ? 'Datos completos' : 'Faltan datos del servicio'} · clic para editar"><span class="dt-punto"></span>✎ Editar datos</button>
+          <td style="text-align:center;">${self._soloLectura ? '<span style="font-size:.72rem;color:' + (completo ? '#166534' : '#b45309') + '">' + (completo ? '✓ Completos' : 'Incompletos') + '</span>' :
+            '<button type="button" class="btn-datos ' + (completo ? 'dt-ok' : 'dt-pend') + '" title="' + (completo ? 'Datos completos' : 'Faltan datos del servicio') + ' · clic para editar"><span class="dt-punto"></span>✎ Editar datos</button>'}
           </td>
-          <td style="text-align:center;">${FormAcarreoDocs.boton(f)}</td>
+          <td style="text-align:center;">${self._soloLectura ? FormAcarreoDocs.botonVer(f) : FormAcarreoDocs.boton(f)}</td>
           <td style="text-align:center;"><button type="button" class="btn-imprimir-fila" title="Imprimir este servicio" style="cursor:pointer; font-size:15px; border:none; background:transparent; padding:0;">🖨️</button></td>
           <td><span class="badge-estado est-${estadoTxt.replace(/\s+/g, '-').toLowerCase()}">${f['ESTADO'] || ''}</span></td>`;
 
-        tr.querySelector('.btn-datos').addEventListener('click', function (ev) {
+        const bDat = tr.querySelector('.btn-datos');
+        if (bDat) bDat.addEventListener('click', function (ev) {
           ev.stopPropagation();
           FormServicio.abrir(f._fila);
         });
 
         tr.querySelector('.btn-acarreo').addEventListener('click', function (ev) {
           ev.stopPropagation();
-          FormAcarreoDocs.abrir(f, function () { cargar(); });
+          if (self._soloLectura) FormAcarreoDocs.ver(f);
+          else FormAcarreoDocs.abrir(f, function () { cargar(); });
         });
 
         tr.querySelector('.btn-imprimir-fila').addEventListener('click', function (ev) {
