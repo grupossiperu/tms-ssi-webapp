@@ -32,6 +32,10 @@ const MTM_METODOS = ['AJUSTE', 'CALIBRACIÓN', 'DIAGNÓSTICO', 'ESCANEO', 'INSTA
   'PRUEBA', 'REAJUSTE', 'RECTIFICADO', 'REEMPLAZO', 'REMAN', 'REPARACIÓN', 'ROTACIÓN', 'SOLDADURA', 'OTROS'];
 const MTM_TALLERES = ['TALLER EXTERNO', 'SSI', 'TIMO', 'TURBO 2000', 'COASA'];
 const MTM_TIPOS_COSTO = ['SERVICIO', 'MANO DE OBRA', 'OTROS'];
+// Costo: documento de respaldo e IGV. SIN DOCUMENTO no lleva IGV (el precio es el que se paga).
+const MTM_TIPOS_DOC = ['FACTURA', 'COTIZACIÓN', 'SIN DOCUMENTO'];
+const MTM_IGV = 0.18;
+function _mtmAfectoIgv(tipoDoc) { return String(tipoDoc || '').toUpperCase() !== 'SIN DOCUMENTO'; }
 
 function _mtmAbreviarSistema(s) {
   const t = String(s || '').trim().toUpperCase();
@@ -180,12 +184,22 @@ const FormMantenimiento = {
         </div>
         <div class="mt-seccion"><h3><label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0"><input type="checkbox" id="dTieneCosto" style="width:auto"> ¿Tiene costo?</label></h3>
           <div class="fila-campos">
-            <div class="campo"><label>Tipo de costo</label><select id="dTipoCosto" disabled>${MT.opciones(MTM_TIPOS_COSTO, '')}</select></div>
-            <div class="campo"><label>Moneda</label><select id="dMoneda" disabled>${MT.opciones(['S/', '$'], '')}</select></div>
-            <div class="campo"><label>Cantidad</label><input type="number" id="dCantidad" min="0" step="any" disabled></div>
-            <div class="campo"><label>Precio unitario</label><input type="number" id="dPrecio" min="0" step="any" disabled></div>
-            <div class="campo"><label>Costo total</label><input type="text" id="dCostoTotal" readonly></div>
+            <div class="campo"><label>Tipo de documento</label><select id="dTipoDoc" disabled>${MT.opciones(MTM_TIPOS_DOC, '')}</select></div>
             <div class="campo"><label>N° documento</label><input type="text" id="dDocumento" autocomplete="off" style="text-transform:uppercase" disabled></div>
+            <div class="campo"><label>Moneda</label><select id="dMoneda" disabled>${MT.opciones(['S/', '$'], '')}</select></div>
+            <div class="campo"><label>IGV</label><input type="text" id="dIgvAviso" readonly value="—"></div>
+          </div>
+          <div class="mt-ayuda" style="margin:2px 0 6px">Una línea por cada servicio o repuesto del documento. Escribe el precio sin IGV o con IGV: el otro se completa solo.</div>
+          <div class="mt-tabla-wrap" style="max-height:230px">
+            <table class="tabla-lista" id="tablaItems">
+              <thead><tr><th style="min-width:170px">Descripción</th><th style="width:120px">Tipo de costo</th><th style="width:70px">Cant.</th>
+                <th style="width:105px">P. unit. sin IGV</th><th style="width:105px">P. unit. con IGV</th><th style="width:95px;text-align:right">Importe</th><th style="width:32px"></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px">
+            <button type="button" class="boton-secundario" id="btnAgregarItem" disabled>+ Agregar ítem</button>
+            <div id="dResumenCosto" style="font-size:.85rem;color:#1c3a5e;font-weight:600"></div>
           </div>
         </div>
         <div class="mt-botones">
@@ -223,28 +237,116 @@ const FormMantenimiento = {
         if (!tecnicoFijo && l && l !== 'SSI') $('dTecnico').value = '';
       });
 
-      const camposCosto = ['dTipoCosto', 'dMoneda', 'dCantidad', 'dPrecio', 'dDocumento'];
+      /* ---------------- Costo: documento, IGV e ítems ---------------- */
+      const cuerpoItems = raiz.querySelector('#tablaItems tbody');
+      const afecto = () => _mtmAfectoIgv($('dTipoDoc').value);
+      const filaItemHtml = () => `
+        <tr>
+          <td><input type="text" class="i-desc" autocomplete="off" style="text-transform:uppercase;width:100%"></td>
+          <td><select class="i-tipo" style="width:100%">${MT.opciones(MTM_TIPOS_COSTO, '')}</select></td>
+          <td><input type="number" class="i-cant" min="0" step="any" value="1" style="width:100%"></td>
+          <td><input type="number" class="i-neto" min="0" step="any" style="width:100%"></td>
+          <td><input type="number" class="i-bruto" min="0" step="any" style="width:100%"></td>
+          <td class="i-importe" style="text-align:right;white-space:nowrap">—</td>
+          <td style="text-align:center"><button type="button" class="i-quitar boton-secundario" style="padding:2px 7px" title="Quitar ítem">&times;</button></td>
+        </tr>`;
+      function agregarItem() { cuerpoItems.insertAdjacentHTML('beforeend', filaItemHtml()); habilitarItems($('dTieneCosto').checked); }
+      function habilitarItems(si) {
+        cuerpoItems.querySelectorAll('input,select,button').forEach(el => { el.disabled = !si; });
+      }
+      function calcularItems() {
+        const igv = afecto() ? MTM_IGV : 0;
+        let neto = 0, bruto = 0;
+        cuerpoItems.querySelectorAll('tr').forEach(function (tr) {
+          const c = MT.num(tr.querySelector('.i-cant').value);
+          const n = MT.num(tr.querySelector('.i-neto').value);
+          const b = MT.num(tr.querySelector('.i-bruto').value);
+          const cant = (!isNaN(c) && c >= 0) ? c : 0;
+          const imp = (!isNaN(b) && b >= 0) ? cant * b : 0;
+          tr.querySelector('.i-importe').textContent = imp > 0 ? MT.dinero(imp) : '—';
+          if (!isNaN(n) && n >= 0) neto += cant * n;
+          bruto += imp;
+        });
+        const mon = $('dMoneda').value || '';
+        $('dResumenCosto').innerHTML = bruto > 0
+          ? 'Subtotal: ' + esc(mon) + ' ' + MT.dinero(neto) + ' · IGV ' + (igv ? '18%' : '0%') + ': ' + esc(mon) + ' ' + MT.dinero(bruto - neto) +
+            ' · <span style="color:#16a34a">Total: ' + esc(mon) + ' ' + MT.dinero(bruto) + '</span>'
+          : '';
+      }
+      function sincronizarPrecios(tr, desde) {
+        const igv = afecto() ? MTM_IGV : 0;
+        const elN = tr.querySelector('.i-neto'), elB = tr.querySelector('.i-bruto');
+        if (desde === 'neto') {
+          const n = MT.num(elN.value);
+          elB.value = (!isNaN(n) && n >= 0) ? MT.dinero(n * (1 + igv)) : '';
+        } else {
+          const b = MT.num(elB.value);
+          elN.value = (!isNaN(b) && b >= 0) ? MT.dinero(b / (1 + igv)) : '';
+        }
+      }
+      function recalcularTodo() {
+        // Al cambiar el documento cambia el IGV: se mantiene el precio sin IGV y se recalcula el precio con IGV.
+        cuerpoItems.querySelectorAll('tr').forEach(tr => { if (tr.querySelector('.i-neto').value !== '') sincronizarPrecios(tr, 'neto'); });
+        $('dIgvAviso').value = afecto() ? 'Afecto · 18%' : 'No afecto · 0%';
+        calcularItems();
+      }
+      cuerpoItems.addEventListener('input', function (ev) {
+        const tr = ev.target.closest('tr');
+        if (!tr) return;
+        if (ev.target.classList.contains('i-neto')) sincronizarPrecios(tr, 'neto');
+        if (ev.target.classList.contains('i-bruto')) sincronizarPrecios(tr, 'bruto');
+        calcularItems();
+      });
+      cuerpoItems.addEventListener('click', function (ev) {
+        if (!ev.target.classList.contains('i-quitar')) return;
+        if (cuerpoItems.querySelectorAll('tr').length > 1) ev.target.closest('tr').remove();
+        else ev.target.closest('tr').querySelectorAll('input').forEach(i => { i.value = i.classList.contains('i-cant') ? '1' : ''; });
+        calcularItems();
+        _refrescarSnapshotFormulario();
+      });
+      $('btnAgregarItem').addEventListener('click', function () { agregarItem(); calcularItems(); _refrescarSnapshotFormulario(); });
+      $('dTipoDoc').addEventListener('change', recalcularTodo);
+      $('dMoneda').addEventListener('change', calcularItems);
+
+      const camposCosto = ['dTipoDoc', 'dMoneda', 'dDocumento'];
       function habilitarCosto(si) {
         camposCosto.forEach(id => { $(id).disabled = !si; if (!si) $(id).value = ''; });
-        if (!si) $('dCostoTotal').value = '';
+        $('btnAgregarItem').disabled = !si;
+        if (!si) {
+          cuerpoItems.innerHTML = filaItemHtml();
+          $('dIgvAviso').value = '—';
+        }
+        habilitarItems(si);
+        calcularItems();
       }
+      agregarItem();
       $('dTieneCosto').addEventListener('change', function () { habilitarCosto(this.checked); });
-      function calcularCosto() {
-        const c = MT.num($('dCantidad').value), p = MT.num($('dPrecio').value);
-        $('dCostoTotal').value = (!isNaN(c) && !isNaN(p) && c >= 0 && p >= 0) ? MT.dinero(c * p) : '';
+      habilitarCosto(false);
+
+      /** Ítems válidos (con precio). Devuelve [] si no hay costo. */
+      function leerItems() {
+        if (!$('dTieneCosto').checked) return [];
+        return Array.from(cuerpoItems.querySelectorAll('tr')).map(function (tr) {
+          const c = MT.num(tr.querySelector('.i-cant').value), b = MT.num(tr.querySelector('.i-bruto').value), n = MT.num(tr.querySelector('.i-neto').value);
+          return {
+            descripcion: tr.querySelector('.i-desc').value.trim().toUpperCase(),
+            tipo: tr.querySelector('.i-tipo').value,
+            cantidad: (!isNaN(c) && c > 0) ? c : 1,
+            neto: (!isNaN(n) && n >= 0) ? n : 0,
+            bruto: (!isNaN(b) && b >= 0) ? b : 0
+          };
+        }).filter(it => it.bruto > 0);
       }
-      $('dCantidad').addEventListener('input', calcularCosto);
-      $('dPrecio').addEventListener('input', calcularCosto);
 
       $('btnInicioMant').addEventListener('click', solicitarCierrePanel);
 
       function limpiarDetalle() {
-        const doc = $('dDocumento').value, mon = $('dMoneda').value, conCosto = $('dTieneCosto').checked;
+        const doc = $('dDocumento').value, mon = $('dMoneda').value, tdoc = $('dTipoDoc').value, conCosto = $('dTieneCosto').checked;
         $('dRepuesto').innerHTML = cfg.sinRepuesto ? '<span>NO APLICA</span>' : opcionesRepuesto(repuestos);
         ['dSistema', 'dMetodo', 'dObs'].forEach(id => { $(id).value = ''; });
         $('dAceite').checked = false;
         habilitarCosto(conCosto);
-        if (conCosto) { $('dDocumento').value = doc; $('dMoneda').value = mon; }
+        if (conCosto) { $('dDocumento').value = doc; $('dMoneda').value = mon; $('dTipoDoc').value = tdoc; recalcularTodo(); }
         _refrescarSnapshotFormulario();
         $('dSistema').focus();
       }
@@ -264,18 +366,32 @@ const FormMantenimiento = {
         const marcados = Array.from(raiz.querySelectorAll('.d-rep:checked')).map(c => repuestos.find(s => String(s.fila) === c.value)).filter(Boolean);
         const ninguno = cfg.sinRepuesto || raiz.querySelectorAll('.d-rep-no:checked').length > 0;
         if (!marcados.length && !ninguno) { mostrarMensaje('Marca al menos un repuesto, o "Ninguno (NO APLICA)".', 'error'); return; }
+        const items = leerItems();
+        if ($('dTieneCosto').checked && !items.length) {
+          mostrarMensaje('Agrega al menos un ítem con precio, o desmarca "¿Tiene costo?".', 'error');
+          return;
+        }
         const lista = marcados.length ? marcados : [null];
         const rep = lista[0];
-        const datos = {
+        // El documento queda como "COTIZACIÓN 4025-26": el tipo explica si el precio lleva IGV o no.
+        const documento = [$('dTipoDoc').value, $('dDocumento').value.trim().toUpperCase()].filter(Boolean).join(' ');
+        const obsBase = $('dObs').value.trim().toUpperCase();
+        // El costo que se graba es el que realmente se paga (con IGV si el documento es afecto).
+        const conCosto = function (it) {
+          return it ? {
+            tieneCosto: true, tipoCosto: it.tipo, monedaCosto: $('dMoneda').value,
+            cantidadCosto: String(it.cantidad), precioCosto: MT.dinero(it.bruto), documentoCosto: documento,
+            observacion: [it.descripcion, obsBase].filter(Boolean).join(' · ')
+          } : { tieneCosto: false, tipoCosto: '', monedaCosto: '', cantidadCosto: '', precioCosto: '', documentoCosto: '', observacion: obsBase };
+        };
+        const datos = Object.assign({
           nombre: $('dNombre').value, fechaInicial: $('dFechaIni').value, horaInicial: $('dHoraIni').value,
           fechaFinal: $('dFechaFin').value, horaFinal: $('dHoraFin').value, tipoMantenimiento: $('dTipo').value,
           tecnico: $('dTecnico').value, placa: $('dPlaca').value, lugar: $('dLugar').value,
           repuesto: rep ? rep.producto : 'NO APLICA', filaSalida: rep ? rep.fila : 0,
-          sistema: $('dSistema').value, metodo: $('dMetodo').value, kilometraje: $('dKm').value, observacion: $('dObs').value,
-          tieneCosto: $('dTieneCosto').checked, tipoCosto: $('dTipoCosto').value, monedaCosto: $('dMoneda').value,
-          cantidadCosto: $('dCantidad').value, precioCosto: $('dPrecio').value, documentoCosto: $('dDocumento').value,
+          sistema: $('dSistema').value, metodo: $('dMetodo').value, kilometraje: $('dKm').value,
           confirmarKm: !!confirmarKm, cambioAceite: $('dAceite').checked
-        };
+        }, conCosto(items[0] || null));
         const r = await MT.llamar('mtGrabarMantenimiento', datos);
         if (!r) return;
         if (!r.confirmarKm && lista.length > 1) {
@@ -290,6 +406,18 @@ const FormMantenimiento = {
           r.mensaje = 'Reparación registrada con ' + (lista.length - fallidos.length) + ' repuesto(s).' + (fallidos.length ? ' No se pudo: ' + fallidos.join(', ') + '.' : '');
           const ok = lista.filter(s => fallidos.indexOf(s.producto) < 0);
           repuestos = repuestos.filter(s => ok.indexOf(s) < 0);
+        }
+        if (!r.confirmarKm && items.length > 1) {
+          // Los demás ítems del documento: una fila por ítem, misma reparación y mismo N° de documento.
+          const fallidos = [];
+          for (let i = 1; i < items.length; i++) {
+            const d2 = Object.assign({}, datos, { repuesto: 'NO APLICA', filaSalida: 0, confirmarKm: true, cambioAceite: false }, conCosto(items[i]));
+            const r2 = await MT.llamar('mtGrabarMantenimiento', d2);
+            if (!r2 || r2.confirmarKm) fallidos.push(items[i].descripcion || ('ítem ' + (i + 1)));
+          }
+          const grabados = items.length - fallidos.length;
+          r.mensaje = (r.mensaje || 'Reparación registrada.') + ' ' + grabados + ' de ' + items.length + ' ítem(s) con costo.' +
+            (fallidos.length ? ' No se pudo: ' + fallidos.join(', ') + '.' : '');
         }
         if (r.confirmarKm) {
           if (confirmar('El kilometraje ingresado presenta una variación muy alta.\n\nÚltimo km: ' + r.kmAnterior +
