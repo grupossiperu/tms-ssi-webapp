@@ -997,6 +997,17 @@ const FormServicio = {
       raiz.querySelector('#' + id).addEventListener('change', calcularCombustible);
     });
 
+    // v136: precio del petróleo del día (Repsol, LIMA - CANTOLAO). Solo en servicio nuevo y si el campo está vacío; se puede cambiar.
+    if (!self._modoEdicion) {
+      llamarBackend('repsolDiarioUltimo', {}).then(function (r) {
+        const c = raiz.querySelector('#txtCostoPetroleoGalon');
+        if (!c || !r || !r.ok || !r.hay || !(r.precio > 0) || String(c.value).trim() !== '') return;
+        c.value = Number(r.precio).toFixed(2);
+        c.title = 'Precio Repsol ' + (r.zona || 'LIMA - CANTOLAO') + ' del ' + (r.fecha || '') + ' (vigente desde ' + (r.vigencia || '—') + '). Puede cambiarlo.';
+        calcularCombustible();
+      }).catch(function () { /* sin precio del día: se escribe a mano */ });
+    }
+
     // Tarifa 1 / Tarifa 2: selección de moneda mediante botones "S/" y "$"
     // en vez del InputBox "S = Soles / D = Dólares" del VBA original (que
     // generaba un messagebox molesto cada vez que se salía del campo).
