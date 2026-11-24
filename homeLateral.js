@@ -91,6 +91,7 @@
         '<div class="hl-topbar"><button type="button" class="hl-menu" id="hlMenu" aria-label="Abrir menú"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button></div>' +
         '<section class="hl-tablero" id="hlTablero">' +
           '<div class="hl-saludo"><div><h1 id="hlHola">Buen día</h1><p id="hlFecha"></p></div><div class="hl-vista" id="hlVista"></div></div>' +
+          '<div class="hl-repsol" id="hlRepsol" hidden></div>' +
           '<div class="hl-kpis" id="hlKpis"></div>' +
           '<div class="hl-sec-tit" id="hlRapTit">Accesos rápidos</div>' +
           '<div class="hl-rapidos" id="hlRapidos"></div>' +
@@ -492,8 +493,33 @@
       ]);
     };
 
+    // ---------- v136: Combustible Repsol (solo maestros; el servidor solo manda el saldo a MAESTRO) ----------
+    async function pintarRepsol() {
+      const caja = $('#hlRepsol'); if (!caja) return;
+      let r = null;
+      try { r = await llamarBackend('repsolDiarioUltimo', {}); } catch (e) { r = null; }
+      if (!r || !r.ok || !r.maestro) { caja.hidden = true; return; }
+      const m = n => 'S/ ' + Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const usado = r.linea ? Math.min(100, Math.max(0, (1 - r.saldo / r.linea) * 100)) : 0;
+      const viejo = !r.esDeHoy;
+      const alcanza = r.alcanza;
+      caja.hidden = false;
+      caja.innerHTML =
+        '<div class="hl-rp-tit">⛽ Combustible Repsol <small>' + (viejo ? '<b class="r">Lectura del ' + esc(r.fecha) + ' ' + esc(r.hora) + ' (no es de hoy)</b>' : 'Actualizado hoy ' + esc(r.hora)) + '</small></div>' +
+        '<div class="hl-rp-grid">' +
+          '<div class="hl-rp-box"><small>Saldo disponible</small><strong class="' + (r.saldo < r.necesario ? 'r' : '') + '">' + m(r.saldo) + '</strong>' +
+            '<span>Línea aprobada ' + m(r.linea) + '</span><div class="hl-rp-barra"><i style="width:' + usado.toFixed(1) + '%"></i></div><span>' + usado.toFixed(0) + '% de la línea usada</span></div>' +
+          '<div class="hl-rp-box"><small>Precio petróleo hoy (Cantolao)</small><strong>S/ ' + Number(r.precio).toFixed(2) + '</strong>' +
+            '<span>' + esc(r.producto || 'Diesel E+') + '</span><span>Vigente desde ' + esc(r.vigencia || '—') + '</span></div>' +
+          '<div class="hl-rp-box"><small>Necesitan los programados</small><strong>' + m(r.necesario) + '</strong>' +
+            '<span>' + (r.viajes || []).length + ' viaje(s) · ' + Number(r.galones || 0).toLocaleString('es-PE') + ' gl × S/ ' + Number(r.precio).toFixed(2) + '</span>' +
+            '<span class="' + (alcanza ? 'ok' : 'r') + '">' + (alcanza ? '✓ Alcanza · quedaría ' + m(r.saldo - r.necesario) : '⚠ Faltan ' + m(r.faltante)) + '</span></div>' +
+        '</div>' +
+        (r.alerta ? '<div class="hl-rp-alerta">⚠ ' + esc(r.alerta) + (r.vencio ? ' · Venció el ' + esc(r.vencio) : '') + '</div>' : '');
+    }
+
     // ---------- Arranque ----------
-    const listo = function () { armarNav(); saludo(); mostrar(vistaInicio()); };
+    const listo = function () { armarNav(); saludo(); mostrar(vistaInicio()); pintarRepsol(); setInterval(pintarRepsol, 10 * 60000); };
     if (typeof Sesion !== 'undefined' && Sesion.alListo) Sesion.alListo(function () { setTimeout(listo, 60); }); else listo();
     [document.getElementById('cmBadge'), document.getElementById('mtAlertasBadge')].forEach(function (b) {
       if (b && window.MutationObserver) new MutationObserver(contadores).observe(b, { attributes: true, childList: true, characterData: true, subtree: true });

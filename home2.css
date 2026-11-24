@@ -89,6 +89,20 @@ body.hl .hl-topbar .mini-ver svg{ stroke:#059669; }
 .hl-saludo p{ margin:2px 0 0; color:var(--t-tenue); font-size:.92rem; }
 
 .hl-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin:20px 0 26px; }
+/* v136 Combustible Repsol (solo maestros) */
+.hl-repsol{ margin:18px 0 0; background:var(--t-blanco); border:1px solid var(--t-linea); border-left:4px solid #EA580C; border-radius:14px; padding:12px 16px; }
+.hl-repsol[hidden]{ display:none!important; }
+.hl-rp-tit{ font-weight:700; color:var(--t-tinta); font-size:.95rem; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.hl-rp-tit small{ font-weight:500; color:var(--t-tenue); font-size:.78rem; }
+.hl-rp-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:8px; }
+.hl-rp-box{ display:flex; flex-direction:column; gap:2px; }
+.hl-rp-box small{ color:var(--t-tenue); font-size:.76rem; text-transform:uppercase; letter-spacing:.03em; }
+.hl-rp-box strong{ font-size:1.45rem; color:var(--t-tinta); }
+.hl-rp-box span{ font-size:.8rem; color:var(--t-tenue); }
+.hl-repsol .r{ color:#B91C1C; } .hl-repsol .ok{ color:#047857; font-weight:600; } .hl-repsol span.r{ font-weight:600; }
+.hl-rp-barra{ height:6px; background:#F1F5F9; border-radius:4px; overflow:hidden; margin:4px 0 1px; }
+.hl-rp-barra i{ display:block; height:100%; background:#EA580C; }
+.hl-rp-alerta{ margin-top:10px; background:#FEE2E2; color:#991B1B; border-radius:8px; padding:6px 10px; font-size:.84rem; font-weight:600; }
 .hl-kpi{
   text-align:left; cursor:pointer; font:inherit; background:var(--t-blanco); border:1px solid var(--t-linea);
   border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; transition:border-color .12s, box-shadow .12s;
