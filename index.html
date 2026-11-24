@@ -4,10 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema de Servicios - Transportes SSI S.A.C.</title>
+<!-- App instalable (v135): manifiesto, íconos y colores para el celular -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1c3a5e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TMS SSI">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<script src="pwa.js"></script>
 <!-- Se cargan con ?v=VERSIÓN: el navegador guarda los archivos y solo los vuelve a bajar
      cuando cambia este número. ¡SUBIR __VERSION_APP en cada publicación del frontend! -->
 <script>
-  window.__VERSION_APP = '20261124a';
+  window.__VERSION_APP = '20261124b';
   ['styles.css', 'home.css', 'home2.css'].forEach(function (h) {
     document.write('<link rel="stylesheet" href="' + h + '?v=' + window.__VERSION_APP + '">');
   });
