@@ -169,7 +169,7 @@ const FormMantenimiento = {
             <div class="campo"><label>Técnico / taller</label>${tecnicoFijo
               ? '<input type="text" id="dTecnico" readonly value="' + esc(cfg.tecnicos[0]) + '">'
               : '<input type="text" id="dTecnico" list="dlTecnicos" autocomplete="off" style="text-transform:uppercase" value="' + esc(cfg.tecnicoInicial || '') + '">' + MT.datalist('dlTecnicos', cfg.tecnicos)}</div>
-            <div class="campo"><label>Kilometraje</label><input type="number" id="dKm" min="0" step="any"><div class="mt-ayuda" id="dKmAyuda"></div></div>
+            <div class="campo"><label id="dKmLabel">Kilometraje</label><input type="number" id="dKm" min="0" step="any"><div class="mt-ayuda" id="dKmAyuda"></div></div>
             <div class="campo"><label>Duración</label><input type="text" id="dDuracion" readonly></div>
           </div>
         </div>
@@ -212,13 +212,32 @@ const FormMantenimiento = {
       const $ = id => raiz.querySelector('#' + id);
       let repuestos = cfg.repuestos.slice();
 
-      function ayudaKm() {
-        const placa = $('dPlaca').value.trim().toUpperCase();
-        const km = d.kmPorPlaca[placa];
-        $('dKmAyuda').textContent = km ? 'Último km registrado: ' + Number(km).toLocaleString('es-PE') : '';
+      // v134: con la placa y la fecha inicial se busca la lectura en los consolidados
+      // (tracto = km del viaje más cercano; carreta = km acumulado de sus viajes; genset = horómetro).
+      let kmAuto = '', turnoKm = 0;
+      async function ayudaKm() {
+        const placa = $('dPlaca').value.trim().toUpperCase().replace(/[\s-]/g, '');
+        const fecha = $('dFechaIni').value;
+        if (!placa || !fecha) { $('dKmAyuda').textContent = ''; return; }
+        const t = ++turnoKm;
+        $('dKmAyuda').textContent = 'Buscando la lectura en los consolidados…';
+        let r = null;
+        try { r = await llamarBackend('mtLecturaEnFecha', { placa: placa, fecha: fecha }); } catch (e) { r = null; }
+        if (t !== turnoKm) return;
+        if (!r || r.ok === false) { $('dKmAyuda').textContent = 'No se pudo buscar la lectura: escríbela a mano.'; return; }
+        $('dKmLabel').textContent = r.unidad === 'h' ? 'Horómetro (horas)' : 'Kilometraje';
+        if (r.sugerido != null) {
+          if (!$('dKm').value || $('dKm').value === kmAuto) { $('dKm').value = r.sugerido; kmAuto = String(r.sugerido); }
+          $('dKmAyuda').innerHTML = '<b style="color:#047857">Sugerido: ' + Number(r.sugerido).toLocaleString('es-PE') + (r.unidad === 'h' ? ' h' : ' km') +
+            '</b> · ' + esc(r.texto || '') + '. Puedes corregirlo.';
+        } else {
+          if ($('dKm').value === kmAuto) { $('dKm').value = ''; kmAuto = ''; }
+          $('dKmAyuda').textContent = r.texto || '';
+        }
       }
       ayudaKm();
       $('dPlaca').addEventListener('change', ayudaKm);
+      $('dFechaIni').addEventListener('change', ayudaKm);
 
       function duracion() {
         const a = new Date($('dFechaIni').value + 'T' + ($('dHoraIni').value || '00:00:00'));
