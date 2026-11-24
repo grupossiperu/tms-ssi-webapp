@@ -133,9 +133,108 @@ const FormIncConductor = {
     const app = self._pintar('<h2>Hola, ' + esc(String(d.nombre || '').split(' ')[0] || '') + ' 👋</h2>' +
       '<button class="grande" id="incRep" style="background:#dc2626">🚨 REPORTAR UNA FALLA</button>' +
       '<button class="grande" id="incMis" style="background:#1c3a5e">📋 MIS REPORTES</button>' +
-      '<p class="ayuda" style="text-align:center">Si algo falla en tu tracto o carreta, repórtalo aquí. El mecánico lo verá al instante.</p>');
+      (d.rol === 'CONDUCTOR' || !self._modoPanel ? '<button class="grande" id="incLiq" style="background:#047857">💰 MI LIQUIDACIÓN</button>' : '') +
+      '<p class="ayuda" style="text-align:center">Si algo falla en tu tracto o carreta, repórtalo aquí. El mecánico lo verá al instante.</p>' +
+      (d.rol === 'CONDUCTOR' ? '<button type="button" id="incClave" style="display:block;margin:18px auto 0;background:#fff;border:2px solid #cbd5e1;border-radius:12px;padding:10px 16px;font-size:1rem;font-weight:700;color:#1c3a5e">🔑 Cambiar mi contraseña</button>' : ''));
     app.querySelector('#incRep').addEventListener('click', function () { if (self._r && self._r.lista && self._r.lista.length && self._r.km) self._lista(); else { self._r = {}; self._paso1(); } });
     app.querySelector('#incMis').addEventListener('click', function () { self._mis(); });
+    const bl = app.querySelector('#incLiq'); if (bl) bl.addEventListener('click', function () { self._miLiq(); });
+    const bc = app.querySelector('#incClave'); if (bc) bc.addEventListener('click', function () { self._miClave(); });
+  },
+
+  /* ===== v135: Mi liquidación (solo lo del conductor; sin tarifas ni facturación) ===== */
+  _miLiq: async function (quincena) {
+    const self = this;
+    const app = self._pintar('<button class="atras" id="a">◀ Inicio</button><h2>💰 Mi liquidación</h2><div id="l">Cargando…</div>');
+    app.querySelector('#a').addEventListener('click', () => self._inicio());
+    let r = self._liq;
+    if (!r || quincena === undefined) {
+      try { r = await llamarBackend('liqMia', {}); } catch (e) { r = null; }
+      self._liq = r;
+    }
+    const l = app.querySelector('#l');
+    if (!r || !r.ok) { l.textContent = (r && r.mensaje) || 'No se pudo cargar. Revisa tu señal.'; return; }
+    if (r.aviso) { l.innerHTML = '<p>' + esc(r.aviso) + '</p>'; return; }
+    const N = v => Number(v) || 0;
+    const S = v => 'S/ ' + N(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const qTxt = q => { const m = String(q || '').match(/^(\d{4})-(\d{2})-Q([12])$/); if (!m) return q; const mes = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'][+m[2] - 1]; return (m[3] === '1' ? '1 al 15 ' : '16 al fin de ') + mes + ' ' + m[1]; };
+    const qs = Array.from(new Set((r.filas || []).map(f => f.quincena).concat((r.liquidaciones || []).map(x => x.quincena)).filter(Boolean))).sort().reverse();
+    if (!qs.length) { l.innerHTML = '<p>Todavía no tienes viajes liquidables.</p>'; return; }
+    const q = quincena && qs.indexOf(quincena) >= 0 ? quincena : qs[0];
+    const viajes = (r.filas || []).filter(f => f.quincena === q).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+    const liq = (r.liquidaciones || []).filter(x => x.quincena === q && x.estado !== 'REABIERTO').slice(-1)[0];
+    // Descuentos aplicados en esta quincena
+    const descQ = [];
+    (r.descuentos || []).forEach(dd => (dd.cuotas || []).forEach(c => { if (c.quincena === q && N(c.monto) > 0) descQ.push({ d: dd, soles: N(c.soles || (dd.moneda === 'USD' ? 0 : c.monto)), monto: N(c.monto) }); }));
+    const totDesc = descQ.reduce((a, x) => a + x.soles, 0);
+    const gastos = liq ? N(liq.gastos) : viajes.reduce((a, f) => a + N(f.gastos), 0);
+    const dep = liq ? N(liq.totalDep) : viajes.reduce((a, f) => a + N(f.totalDep), 0);
+    const bono = liq ? N(liq.totalBono) : viajes.reduce((a, f) => a + N(f.totalBono), 0);
+    const estado = !liq ? ['EN REVISIÓN', '#b45309', '#fef3c7', 'La oficina aún no cierra esta quincena.'] :
+      liq.estado === 'DEPOSITADO' ? ['DEPOSITADO', '#166534', '#dcfce7', 'Pagado el ' + (liq.fechaDep || '').slice(0, 10) + (liq.medio ? ' · ' + liq.medio : '') + (liq.operacion ? ' · op. ' + liq.operacion : '')] :
+        ['LIQUIDADO · POR DEPOSITAR', '#1d4ed8', '#dbeafe', 'Revisado por la oficina el ' + (liq.fechaLiq || '').slice(0, 10) + '. Pronto se deposita.'];
+    const corr = {};
+    (r.historial || []).forEach(h => { if (h.ACCION === 'CORREGIR') (corr[h.CLAVE] = corr[h.CLAVE] || []).push(h); });
+    const fila = (k, v, extra) => N(v) ? '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px dashed #e2e8f0"><span>' + k + (extra ? ' <small style="color:#64748b">(' + esc(extra) + ')</small>' : '') + '</span><b>' + S(v) + '</b></div>' : '';
+    const camp = { peajes: 'Peajes', viatico: 'Viático', llanta: 'Llanta', cochera: 'Cochera', lavado: 'Lavado', otros: 'Otros', bono: 'Bono', feriado: 'Feriado', dominical: 'Dominical', depositado: 'Depositado' };
+    let html = '<label class="l">Quincena</label><select class="t" id="q">' + qs.map(x => '<option value="' + esc(x) + '"' + (x === q ? ' selected' : '') + '>' + esc(qTxt(x)) + '</option>').join('') + '</select>' +
+      '<div class="card" style="margin-top:12px;border-left-color:' + estado[1] + '"><span class="chip" style="background:' + estado[2] + ';color:' + estado[1] + '">' + estado[0] + '</span>' +
+      '<div class="ayuda" style="margin:4px 0 8px">' + esc(estado[3]) + '</div>' +
+      fila('Gastos de tus viajes (con bono)', gastos) + fila('Te depositamos para los viajes', dep) +
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:1.1rem"><span>Bono de la quincena</span><b>' + S(bono) + '</b></div>' +
+      (totDesc ? '<div style="display:flex;justify-content:space-between;padding:3px 0;color:#b91c1c"><span>Descuentos</span><b>− ' + S(totDesc) + '</b></div>' : '') +
+      '<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:1.25rem;border-top:2px solid #cbd5e1;margin-top:4px"><span><b>A recibir</b></span><b style="color:#047857">' + S(bono - totDesc) + '</b></div></div>';
+    html += '<h3 style="margin:16px 0 8px">🚛 Tus viajes (' + viajes.length + ')</h3>';
+    html += viajes.length ? viajes.map(f => {
+      const cs = corr[f.clave] || [];
+      return '<div class="card" style="border-left-color:#1c3a5e"><div style="font-weight:800">' + esc(f.fecha) + ' · ' + esc(f.destino || '') + '</div>' +
+        '<div style="color:#475569;font-size:.9rem;margin-bottom:6px">' + esc([f.codigo, f.placa, f.cliente].filter(Boolean).join(' · ')) + '</div>' +
+        fila('Peajes', f.peajes) + fila('Viático', f.viatico) + fila('Llanta', f.llanta) + fila('Cochera', f.cochera) + fila('Lavado', f.lavado) + fila('Otros', f.otros, f.motivoOtros) +
+        fila('Feriado', f.feriado) + fila('Dominical', f.dominical) + fila('Bono del viaje', f.bono) + fila('Depósito del viaje', f.depositado) + fila('Depósitos adicionales', f.extras) +
+        '<div style="display:flex;justify-content:space-between;padding:6px 0 0;font-weight:800"><span>Bono de este viaje</span><span>' + S(f.totalBono) + '</span></div>' +
+        (cs.length ? '<div style="margin-top:8px;background:#fff7ed;border-radius:10px;padding:8px 10px;font-size:.9rem"><b style="color:#c2410c">✎ Correcciones de la oficina</b>' +
+          cs.map(h => '<div style="margin-top:4px">' + esc(camp[String(h.CAMPO || '').toLowerCase()] || h.CAMPO) + ': <s style="color:#94a3b8">' + esc(h.ANTES) + '</s> → <b>' + esc(h.DESPUES) + '</b>' + (h.MOTIVO ? '<br><small style="color:#64748b">' + esc(h.MOTIVO) + ' · ' + esc(String(h.FECHA || '').slice(0, 10)) + '</small>' : '') + '</div>').join('') + '</div>' : '') +
+        '</div>';
+    }).join('') : '<p class="ayuda">No hay viajes en esta quincena.</p>';
+    const conSaldo = (r.descuentos || []).filter(dd => dd.estado !== 'ANULADO' && (N(dd.saldo) > 0 || descQ.some(x => x.d === dd)));
+    if (conSaldo.length) {
+      html += '<h3 style="margin:16px 0 8px">📉 Tus descuentos</h3>' + conSaldo.map(dd => {
+        const mon = dd.moneda === 'USD' ? 'US$ ' : 'S/ ';
+        const aqui = descQ.filter(x => x.d === dd);
+        return '<div class="card" style="border-left-color:#dc2626"><div style="font-weight:800">' + esc(dd.motivo || 'DESCUENTO') + (dd.fechaIncidente ? ' · ' + esc(dd.fechaIncidente) : '') + '</div>' +
+          (dd.detalle ? '<div style="color:#475569;font-size:.9rem">' + esc(dd.detalle) + '</div>' : '') +
+          '<div style="margin-top:6px">Total: <b>' + mon + N(dd.monto).toFixed(2) + '</b> · Falta: <b style="color:#b91c1c">' + mon + N(dd.saldo).toFixed(2) + '</b></div>' +
+          (aqui.length ? '<div style="color:#b91c1c;font-size:.9rem">En esta quincena: − ' + S(aqui.reduce((a, x) => a + x.soles, 0)) + '</div>' : '') + '</div>';
+      }).join('');
+    }
+    l.innerHTML = html;
+    l.querySelector('#q').addEventListener('change', function () { self._miLiq(this.value); });
+  },
+
+  /* ===== v135: el conductor cambia su contraseña (la que quiera) ===== */
+  _miClave: function () {
+    const self = this;
+    const app = self._pintar('<button class="atras" id="a">◀ Inicio</button><h2>🔑 Cambiar mi contraseña</h2>' +
+      '<label class="l">Contraseña actual</label><input class="t" type="password" id="ca" autocomplete="current-password">' +
+      '<div class="ayuda">Si nunca la cambiaste, es tu DNI.</div>' +
+      '<label class="l">Contraseña nueva</label><input class="t" type="password" id="cn" autocomplete="new-password">' +
+      '<label class="l">Repite la contraseña nueva</label><input class="t" type="password" id="cr" autocomplete="new-password">' +
+      '<div class="err" id="e"></div><button class="grande" id="g" style="background:#1c3a5e">GUARDAR</button>');
+    app.querySelector('#a').addEventListener('click', () => self._inicio());
+    app.querySelector('#g').addEventListener('click', async function () {
+      const e = app.querySelector('#e'), b = this;
+      const a = app.querySelector('#ca').value, n = app.querySelector('#cn').value.trim(), rp = app.querySelector('#cr').value.trim();
+      if (!a) { e.textContent = 'Escribe tu contraseña actual.'; return; }
+      if (!n) { e.textContent = 'Escribe la contraseña nueva.'; return; }
+      if (n !== rp) { e.textContent = 'Las contraseñas nuevas no coinciden.'; return; }
+      b.disabled = true; b.textContent = 'Guardando…'; e.textContent = '';
+      let r = null;
+      try { r = await llamarBackend('cambiarMiClave', { actual: a, nueva: n }); } catch (x) { r = null; }
+      b.disabled = false; b.textContent = 'GUARDAR';
+      if (!r || !r.ok) { e.textContent = (r && r.mensaje) || 'No se pudo cambiar. Revisa tu señal.'; return; }
+      self._pintar('<h2>✅ Listo</h2><p style="font-size:1.1rem">Tu contraseña cambió. Desde ahora entra con la nueva.</p><button class="grande" id="v" style="background:#1c3a5e">VOLVER AL INICIO</button>')
+        .querySelector('#v').addEventListener('click', () => self._inicio());
+    });
   },
 
   /* Paso 1: unidades del día (tracto + km y carreta). Se piden UNA sola vez. */

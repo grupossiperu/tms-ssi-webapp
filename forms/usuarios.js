@@ -17,7 +17,7 @@ const FormUsuarios = {
     TRANSPORTE: 'Transporte — Operaciones, Almacén, Mantenimiento y Maestros',
     FACTURACION: 'Facturación — Finanzas y Maestros',
     MANTENIMIENTO: 'Mantenimiento — solo Mantenimiento (y atiende las incidencias de conductores)',
-    CONDUCTOR: 'Conductor — solo reporta fallas de su unidad desde el celular (contraseña inicial = su mismo usuario)'
+    CONDUCTOR: 'Conductor — reporta fallas de su unidad y ve su liquidación desde el celular (contraseña inicial = su DNI)'
   },
 
   _lista: [],
@@ -72,7 +72,7 @@ const FormUsuarios = {
       $('usrClave').parentNode.style.display = esCond ? 'none' : '';
       if (esCond) $('usrClave').value = '';
       $('usrRolAyuda').textContent = (self.ROLES_TEXTO[$('usrRol').value] || '') +
-        (esCond ? ' Contraseña fija: inicial del usuario + su DNI (de PERSONAL). No la puede cambiar; al guardar se restablece.' : '');
+        (esCond ? ' Contraseña inicial: su DNI (de PERSONAL). Luego la puede cambiar desde su celular; "Restablecer" la vuelve a su DNI.' : '');
     };
     $('usrRol').addEventListener('change', ayudaRol);
 
@@ -232,10 +232,10 @@ const FormUsuarios = {
   /** Cambiar mi contraseña (cualquier usuario con sesión). */
   cambiarMiClave: function () {
     const d = Sesion.datos() || {};
-    if (d.rol === 'CONDUCTOR') { mostrarMensaje('La contraseña de los conductores es fija y no se puede cambiar.', 'info'); return; }
+    const esCond = d.rol === 'CONDUCTOR';
     const html = `
       <div style="max-width:380px;margin:0 auto;">
-        <p style="font-size:.85rem;color:#64748b;margin-top:0;">Usuario: <strong>${esc(d.usuario || '')}</strong>. La contraseña nueva debe tener mínimo 8 caracteres, con letras y números, y no contener su usuario.</p>
+        <p style="font-size:.85rem;color:#64748b;margin-top:0;">Usuario: <strong>${esc(d.usuario || '')}</strong>. ${esCond ? 'Puede poner la contraseña que quiera.' : 'La contraseña nueva debe tener mínimo 8 caracteres, con letras y números, y no contener su usuario.'}</p>
         <div class="campo"><label>Contraseña actual</label><input type="password" id="mcActual" autocomplete="current-password"></div>
         <div class="campo"><label>Contraseña nueva</label><input type="password" id="mcNueva" autocomplete="new-password"></div>
         <div class="campo"><label>Repita la contraseña nueva</label><input type="password" id="mcRepite" autocomplete="new-password"></div>
