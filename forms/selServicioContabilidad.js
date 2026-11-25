@@ -498,8 +498,10 @@ const FormSelServicioContabilidad = {
         '<div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center"><b>⛽ QR combustible · ' + esc(codigo) + '</b><button type="button" id="qrX" style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>' +
         '<div style="padding:14px 16px"><div style="font-size:.85rem;color:#334155">' + esc(f['CONDUCTOR'] || '') + ' · ' + esc(f['PLACA TRACTO'] || '') + '</div>' +
         '<div id="qrVista" style="text-align:center;margin:12px 0;color:#64748b">Cargando…</div>' +
-        '<label style="font-weight:700;font-size:.85rem">Subir / reemplazar QR (imagen)</label><input type="file" id="qrArch" accept="image/*" style="display:block;margin:6px 0">' +
-        '<div style="display:flex;gap:8px"><input id="qrTarj" placeholder="N° tarjeta" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:8px"><input id="qrVig" placeholder="Vigente hasta dd/mm/aaaa" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:8px"></div>' +
+        '<label style="font-weight:700;font-size:.85rem">Subir / reemplazar QR</label>' +
+        '<div id="qrPegar" tabindex="0" style="margin:6px 0;border:2px dashed #94a3b8;border-radius:10px;padding:14px;text-align:center;color:#475569;cursor:text;outline:none;background:#f8fafc">📋 Haz clic aquí y pega la imagen del QR (Ctrl+V)</div>' +
+        '<div style="font-size:.75rem;color:#64748b">o elige un archivo: <input type="file" id="qrArch" accept="image/*" style="font-size:.75rem"></div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px"><input id="qrTarj" placeholder="N° tarjeta (opcional)" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:8px"><input id="qrVig" placeholder="Vigente hasta dd/mm/aaaa" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:8px"></div>' +
         '<button type="button" id="qrSub" class="boton-primario" style="margin-top:10px;width:100%">Guardar QR</button>' +
         '<div style="font-size:.75rem;color:#64748b;margin-top:6px">El conductor lo ve en su app → "Mi servicio y QR".</div></div></div>';
       document.body.appendChild(velo);
@@ -510,11 +512,29 @@ const FormSelServicioContabilidad = {
         const q = await llamarBackend('qrVer', { codigo: codigo });
         vista.innerHTML = (q && q.ok && q.dataUrl) ? '<img src="' + q.dataUrl + '" style="width:240px;max-width:100%"><div style="font-size:.85rem">Tarjeta ' + esc(q.tarjeta || '') + ' · generado ' + esc(q.generado || '') + ' · vence ' + esc(q.vigencia || '') + '</div>' : 'Este servicio aún no tiene QR.';
       } catch (e) { vista.textContent = 'Este servicio aún no tiene QR.'; }
+      const hoy = new Date(); const dd = String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
+      velo.querySelector('#qrVig').value = dd;
+      const zona = velo.querySelector('#qrPegar');
+      let qrDataUrl = '';
+      const leer = (file) => new Promise((ok, mal) => { const rd = new FileReader(); rd.onload = () => ok(rd.result); rd.onerror = mal; rd.readAsDataURL(file); });
+      const ponerImagen = async (file) => {
+        if (!file || !/^image\//.test(file.type)) { mostrarMensaje('Lo pegado no es una imagen.', 'error'); return; }
+        qrDataUrl = await leer(file);
+        zona.style.borderColor = '#16a34a'; zona.style.background = '#f0fdf4';
+        zona.innerHTML = '<img src="' + qrDataUrl + '" style="width:200px;max-width:100%"><div style="font-size:.8rem;color:#166534;margin-top:4px">✓ Imagen lista. Pulsa "Guardar QR" (o pega otra para cambiarla).</div>';
+      };
+      zona.addEventListener('click', () => zona.focus());
+      zona.addEventListener('paste', async (ev) => {
+        ev.preventDefault();
+        const it = [...((ev.clipboardData && ev.clipboardData.items) || [])].find(x => x.kind === 'file' && /^image\//.test(x.type));
+        if (!it) { mostrarMensaje('No hay una imagen copiada. Copia el QR (o haz una captura con Win+Shift+S) y vuelve a pegar.', 'error'); return; }
+        await ponerImagen(it.getAsFile());
+      });
+      velo.querySelector('#qrArch').addEventListener('change', async function () { if (this.files[0]) await ponerImagen(this.files[0]); });
+      setTimeout(() => zona.focus(), 50);
       velo.querySelector('#qrSub').addEventListener('click', async function () {
-        const file = velo.querySelector('#qrArch').files[0];
-        if (!file) { mostrarMensaje('Elija la imagen del QR.', 'error'); return; }
-        const dataUrl = await new Promise((ok, mal) => { const rd = new FileReader(); rd.onload = () => ok(rd.result); rd.onerror = mal; rd.readAsDataURL(file); });
-        const hoy = new Date(); const dd = String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
+        const dataUrl = qrDataUrl;
+        if (!dataUrl) { mostrarMensaje('Pega la imagen del QR o elige un archivo.', 'error'); return; }
         this.disabled = true;
         const r = await llamarBackend('qrGuardar', { codigo: codigo, placa: f['PLACA TRACTO'] || '', tarjeta: velo.querySelector('#qrTarj').value.trim(), generado: dd, vigencia: velo.querySelector('#qrVig').value.trim() || dd, dataUrl: dataUrl });
         this.disabled = false;
