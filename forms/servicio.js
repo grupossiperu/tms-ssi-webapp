@@ -630,6 +630,16 @@ const FormServicio = {
       ventana.document.body.textContent = 'No se pudo cargar el servicio para imprimir.';
       return;
     }
+    this.imprimirDesdeDatos(f, ventana);
+  },
+
+  /** v137: imprime la hoja del servicio desde un objeto fila (lo usa también la app del conductor). */
+  imprimirDesdeDatos: function (f, ventanaAbierta) {
+    const ventana = ventanaAbierta || window.open('', '_blank');
+    if (!ventana) {
+      mostrarMensaje('El navegador bloqueó la ventana. Habilite las ventanas emergentes para este sitio.', 'error');
+      return;
+    }
     const txt = function (c) {
       const x = f[c];
       return (x === null || x === undefined || String(x).trim() === '-') ? '' : String(x).trim();
