@@ -131,6 +131,7 @@ const FormIncConductor = {
     const self = this;
     const d = Sesion.datos() || {};
     const app = self._pintar('<h2>Hola, ' + esc(String(d.nombre || '').split(' ')[0] || '') + ' 👋</h2>' +
+      (d.rol === 'CONDUCTOR' || !self._modoPanel ? '<button class="grande" id="incServ" style="background:#ea580c">🚚 MI SERVICIO Y QR</button>' : '') +
       '<button class="grande" id="incRep" style="background:#dc2626">🚨 REPORTAR UNA FALLA</button>' +
       '<button class="grande" id="incMis" style="background:#1c3a5e">📋 MIS REPORTES</button>' +
       (d.rol === 'CONDUCTOR' || !self._modoPanel ? '<button class="grande" id="incLiq" style="background:#047857">💰 MI LIQUIDACIÓN</button>' : '') +
@@ -140,6 +141,59 @@ const FormIncConductor = {
     app.querySelector('#incMis').addEventListener('click', function () { self._mis(); });
     const bl = app.querySelector('#incLiq'); if (bl) bl.addEventListener('click', function () { self._miLiq(); });
     const bc = app.querySelector('#incClave'); if (bc) bc.addEventListener('click', function () { self._miClave(); });
+    const bs = app.querySelector('#incServ'); if (bs) bs.addEventListener('click', function () { self._miServicio(); });
+  },
+
+  /* ===== v137: Mi servicio (hoja del servicio + QR de combustible Repsol) ===== */
+  _miServicio: async function () {
+    const self = this;
+    const app = self._pintar('<button class="atras" id="a">◀ Inicio</button><h2>🚚 Mi servicio</h2><div id="l">Cargando…</div>');
+    app.querySelector('#a').addEventListener('click', () => self._inicio());
+    let r = null;
+    try { r = await llamarBackend('miServicio', {}); } catch (e) { r = null; }
+    const l = app.querySelector('#l');
+    if (!r || !r.ok) { l.textContent = (r && r.mensaje) || 'No se pudo cargar. Revisa tu señal.'; return; }
+    const lista = (r.servicios || []).slice().sort((a, b) => {
+      const pa = /PROGRAMADO/i.test(a.ESTADO || '') ? 1 : 0, pb = /PROGRAMADO/i.test(b.ESTADO || '') ? 1 : 0;
+      return pa - pb || String(a['FECHA DE PROGRAMACION'] || '').localeCompare(String(b['FECHA DE PROGRAMACION'] || ''));
+    });
+    if (!lista.length) { l.innerHTML = '<p>No tienes servicios programados ni en curso.</p>'; return; }
+    const fch = v => { if (!v || v === '-') return ''; const d = new Date(v); return isNaN(d) ? String(v) : String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); };
+    const hr = v => { if (!v || v === '-') return ''; const s = String(v); const m = s.match(/T(\d{2}):(\d{2})/); if (m && /1899/.test(s)) { const d = new Date(v); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } return s.slice(0, 5); };
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const vence = t => { const m = String(t || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+    l.innerHTML = lista.map((f, i) => {
+      const q = f._qr; const v = q && vence(q.vigencia); const vencido = v && v < hoy;
+      const est = String(f.ESTADO || 'PROGRAMADO').toUpperCase();
+      return '<div class="card" style="border-left-color:' + (est === 'PROGRAMADO' ? '#ea580c' : '#1c3a5e') + '">' +
+        '<span class="chip">' + esc(est) + '</span>' +
+        '<div style="font-weight:800;font-size:1.1rem;margin-top:6px">' + esc(f['DESTINO 1'] || '') + ' · ' + esc(f.PACKING || '') + '</div>' +
+        '<div style="color:#475569;font-size:.92rem">' + esc([f['CLIENTE PARA FACTURACIÓN'], 'BK ' + (f.BOOKING || '—'), f['CODIGO SERVICIO']].filter(Boolean).join(' · ')) + '</div>' +
+        '<div style="margin-top:6px;font-size:.95rem">🚛 ' + esc((f['PLACA TRACTO'] || '') + ' / ' + (f['PLACA CARRETA'] || '')) + '</div>' +
+        '<div style="font-size:.95rem">📦 Retiro: <b>' + esc(f['DEPOSITO DE RETIRO'] || '') + '</b> ' + esc(fch(f['FECHA DE RETIRO']) + ' ' + hr(f['HORA DE RETIRO'])) + '</div>' +
+        '<div style="font-size:.95rem">🏭 Planta: <b>' + esc(fch(f['FECHA DE POSICIONAMIENTO 1']) + ' ' + hr(f['HORA DE POSICIONAMIENTO 1'])) + '</b></div>' +
+        '<div style="font-size:.95rem">↩ Devolución: <b>' + esc(f['DEPOSITO DE DEVOLUCION'] || '') + '</b></div>' +
+        '<button class="grande" data-hoja="' + i + '" style="background:#1c3a5e;margin-top:10px">📄 Ver hoja del servicio (PDF)</button>' +
+        (q ? '<div style="margin-top:10px;text-align:center;background:#fff;border:2px solid ' + (vencido ? '#dc2626' : '#ea580c') + ';border-radius:14px;padding:10px">' +
+              '<div style="font-weight:800;color:#ea580c">⛽ QR de combustible Repsol</div>' +
+              '<div id="qrimg' + i + '" style="margin:8px auto;min-height:60px;color:#64748b">Cargando QR…</div>' +
+              '<div style="font-size:.9rem">Tarjeta ' + esc(q.tarjeta || '') + ' · placa ' + esc(q.placa || '') + '</div>' +
+              '<div style="font-size:.95rem;font-weight:800;color:' + (vencido ? '#dc2626' : '#047857') + '">' + (vencido ? 'QR vencido (' + esc(q.vigencia) + '): pide uno nuevo a la oficina' : 'Válido hasta el ' + esc(q.vigencia || '')) + '</div></div>'
+          : '<div class="ayuda" style="margin-top:10px;text-align:center">⛽ Aún no tiene QR de combustible. La oficina lo envía el día del viaje.</div>') +
+        '</div>';
+    }).join('');
+    l.querySelectorAll('[data-hoja]').forEach(b => b.addEventListener('click', function () {
+      const f = lista[+b.dataset.hoja];
+      if (typeof FormServicio !== 'undefined' && FormServicio.imprimirDesdeDatos) FormServicio.imprimirDesdeDatos(f);
+    }));
+    lista.forEach(async (f, i) => {
+      if (!f._qr) return;
+      const cont = l.querySelector('#qrimg' + i);
+      let q = null; try { q = await llamarBackend('qrVer', { codigo: f['CODIGO SERVICIO'] }); } catch (e) { q = null; }
+      if (!cont) return;
+      if (q && q.ok && q.dataUrl) cont.innerHTML = '<img src="' + q.dataUrl + '" alt="QR combustible" style="width:100%;max-width:300px;image-rendering:pixelated">';
+      else cont.textContent = (q && q.mensaje) || 'No se pudo cargar el QR.';
+    });
   },
 
   /* ===== v135: Mi liquidación (solo lo del conductor; sin tarifas ni facturación) ===== */
