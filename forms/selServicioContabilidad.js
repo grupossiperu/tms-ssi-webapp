@@ -106,6 +106,7 @@ const FormSelServicioContabilidad = {
           <button class="boton-secundario" id="btnReprogPos" title="Cambiar la cita de posicionamiento y cobrar la reprogramación">📅 Reprogramar posicionamiento</button>
           <button class="boton-secundario" id="btnCambioCond" title="Robo, falla o accidente: el viaje sigue con otro conductor y/o tracto">🔁 Cambio de conductor / tracto</button>
           <button class="boton-secundario" id="btnTramos" title="Ver los tramos del viaje y liquidar el tramo interrumpido">🧾 Tramos</button>
+          <button class="boton-secundario" id="btnQrComb" title="Ver o subir el QR de combustible Repsol del servicio (lo ve el conductor en su app)">⛽ QR combustible</button>
           <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
           <button class="boton-peligro" id="btnBorrarServicio" style="display:none;background:#7f1d1d" title="Solo maestros: borra el servicio y todo lo amarrado">🗑 Borrar servicio</button>
         </div>
@@ -482,6 +483,43 @@ const FormSelServicioContabilidad = {
           mostrarMensaje(e.message || String(e), 'error');
           b.textContent = 'Borrar definitivamente'; revisar();
         }
+      });
+    });
+
+    // v137: QR de combustible Repsol del servicio (ver / subir imagen).
+    raiz.querySelector('#btnQrComb').addEventListener('click', async function () {
+      const f = self._servicioSeleccionado;
+      if (self._filaSeleccionada === null || !f) { mostrarMensaje('Seleccione un servicio para continuar.', 'error'); return; }
+      const codigo = String(f['CODIGO SERVICIO'] || '').trim();
+      if (!codigo) { mostrarMensaje('El servicio no tiene código.', 'error'); return; }
+      const velo = document.createElement('div');
+      velo.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+      velo.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)">' +
+        '<div style="background:#1c3a5e;color:#fff;padding:12px 16px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center"><b>⛽ QR combustible · ' + esc(codigo) + '</b><button type="button" id="qrX" style="background:none;border:0;color:#fff;font-size:20px;cursor:pointer">×</button></div>' +
+        '<div style="padding:14px 16px"><div style="font-size:.85rem;color:#334155">' + esc(f['CONDUCTOR'] || '') + ' · ' + esc(f['PLACA TRACTO'] || '') + '</div>' +
+        '<div id="qrVista" style="text-align:center;margin:12px 0;color:#64748b">Cargando…</div>' +
+        '<label style="font-weight:700;font-size:.85rem">Subir / reemplazar QR (imagen)</label><input type="file" id="qrArch" accept="image/*" style="display:block;margin:6px 0">' +
+        '<div style="display:flex;gap:8px"><input id="qrTarj" placeholder="N° tarjeta" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:8px"><input id="qrVig" placeholder="Vigente hasta dd/mm/aaaa" style="flex:1;padding:6px;border:1px solid #cbd5e1;border-radius:8px"></div>' +
+        '<button type="button" id="qrSub" class="boton-primario" style="margin-top:10px;width:100%">Guardar QR</button>' +
+        '<div style="font-size:.75rem;color:#64748b;margin-top:6px">El conductor lo ve en su app → "Mi servicio y QR".</div></div></div>';
+      document.body.appendChild(velo);
+      const cerrar = () => velo.remove();
+      velo.querySelector('#qrX').addEventListener('click', cerrar);
+      const vista = velo.querySelector('#qrVista');
+      try {
+        const q = await llamarBackend('qrVer', { codigo: codigo });
+        vista.innerHTML = (q && q.ok && q.dataUrl) ? '<img src="' + q.dataUrl + '" style="width:240px;max-width:100%"><div style="font-size:.85rem">Tarjeta ' + esc(q.tarjeta || '') + ' · generado ' + esc(q.generado || '') + ' · vence ' + esc(q.vigencia || '') + '</div>' : 'Este servicio aún no tiene QR.';
+      } catch (e) { vista.textContent = 'Este servicio aún no tiene QR.'; }
+      velo.querySelector('#qrSub').addEventListener('click', async function () {
+        const file = velo.querySelector('#qrArch').files[0];
+        if (!file) { mostrarMensaje('Elija la imagen del QR.', 'error'); return; }
+        const dataUrl = await new Promise((ok, mal) => { const rd = new FileReader(); rd.onload = () => ok(rd.result); rd.onerror = mal; rd.readAsDataURL(file); });
+        const hoy = new Date(); const dd = String(hoy.getDate()).padStart(2, '0') + '/' + String(hoy.getMonth() + 1).padStart(2, '0') + '/' + hoy.getFullYear();
+        this.disabled = true;
+        const r = await llamarBackend('qrGuardar', { codigo: codigo, placa: f['PLACA TRACTO'] || '', tarjeta: velo.querySelector('#qrTarj').value.trim(), generado: dd, vigencia: velo.querySelector('#qrVig').value.trim() || dd, dataUrl: dataUrl });
+        this.disabled = false;
+        if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo guardar el QR.', 'error'); return; }
+        mostrarMensaje(r.mensaje, 'exito'); cerrar();
       });
     });
 
