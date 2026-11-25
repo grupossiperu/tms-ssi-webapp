@@ -69,11 +69,17 @@ const FormSelServicioContabilidad = {
         .est-falso-flete { background: #fce7f3; color: #9d174d; }
         .est-reprogramado { background: #fef9c3; color: #854d0e; }
         .est-cancelado { background: #fee2e2; color: #991b1b; }
-        .acarreo-estados { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-        .acarreo-estados .boton-secundario, .acarreo-estados .boton-peligro { padding: 7px 10px; font-size: .8rem; }
-        .acarreo-estados .flecha { color: #94a3b8; font-weight: 700; }
-        .acarreo-estados .sep { width: 14px; }
-        .acarreo-lbl { font-size: .78rem; font-weight: 700; color: #1c3a5e; margin-right: 4px; }
+        .acarreo-pie { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+        .acarreo-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .acarreo-caja { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; background: #f8fafc; }
+        .acarreo-caja.estado { background: #eff6ff; border-color: #bfdbfe; }
+        .acarreo-caja .boton-secundario, .acarreo-caja .boton-primario, .acarreo-fila .boton-peligro { padding: 7px 10px; font-size: .8rem; }
+        .acarreo-lbl { font-size: .72rem; font-weight: 700; color: #1c3a5e; text-transform: uppercase; letter-spacing: .03em; }
+        .acarreo-caja select { padding: 6px 8px; border: 1px solid #94a3b8; border-radius: 8px; font-weight: 700; font-size: .85rem; min-width: 190px; }
+        .acarreo-caja button:disabled, .acarreo-caja select:disabled { opacity: .45; cursor: not-allowed; }
+        .acarreo-conf { font-size: .82rem; color: #1e293b; display: none; align-items: center; gap: 6px; }
+        .acarreo-sel { font-size: .8rem; color: #475569; }
+        .acarreo-sel b { color: #1c3a5e; }
       </style>
       <div class="acarreo-tabla-wrap">
         <table class="tabla-lista" id="tablaServicios">
@@ -90,28 +96,48 @@ const FormSelServicioContabilidad = {
           <tbody></tbody>
         </table>
       </div>
-      <div class="panel-footer" style="padding-top:10px; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-        <div class="acarreo-estados">
-          <span class="acarreo-lbl">Cambiar estado:</span>
-          <button class="boton-secundario btn-estado" data-estado="PROGRAMADO">Programado</button><span class="flecha">🡢</span>
-          <button class="boton-secundario btn-estado" data-estado="RETIRANDO">Retirando</button><span class="flecha">🡢</span>
-          <button class="boton-secundario btn-estado" data-estado="EN RUTA CLIENTE">En Ruta Cliente</button><span class="flecha">🡢</span>
-          <button class="boton-secundario btn-estado" data-estado="EN CLIENTE">En Cliente</button><span class="flecha">🡢</span>
-          <button class="boton-secundario btn-estado" data-estado="EN RUTA RETORNO">En Ruta Retorno</button><span class="flecha">🡢</span>
-          <button class="boton-secundario btn-estado" data-estado="COLA PUERTO">Cola Puerto</button><span class="flecha">🡢</span>
-          <button class="boton-secundario btn-estado" data-estado="CULMINADO">Culminado</button>
-          <span class="sep"></span>
-          <button class="boton-secundario btn-estado" data-estado="FALSO FLETE">Falso Flete</button>
-          <button class="boton-secundario btn-estado" data-estado="REPROGRAMADO">Reprogramado</button>
-          <button class="boton-secundario" id="btnReprogPos" title="Cambiar la cita de posicionamiento y cobrar la reprogramación">📅 Reprogramar posicionamiento</button>
-          <button class="boton-secundario" id="btnCambioCond" title="Robo, falla o accidente: el viaje sigue con otro conductor y/o tracto">🔁 Cambio de conductor / tracto</button>
-          <button class="boton-secundario" id="btnTramos" title="Ver los tramos del viaje y liquidar el tramo interrumpido">🧾 Tramos</button>
-          <button class="boton-secundario" id="btnQrComb" title="Ver o subir el QR de combustible Repsol del servicio (lo ve el conductor en su app)">⛽ QR combustible</button>
-          <button class="boton-peligro btn-estado" data-estado="CANCELADO">Cancelar viaje</button>
-          <button class="boton-peligro" id="btnBorrarServicio" style="display:none;background:#7f1d1d" title="Solo maestros: borra el servicio y todo lo amarrado">🗑 Borrar servicio</button>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <button class="boton-secundario" id="btnCancelarSelServicio">Cerrar</button>
+      <div class="panel-footer" style="padding-top:10px;">
+        <div class="acarreo-pie">
+          <div class="acarreo-fila acarreo-estados">
+            <div class="acarreo-caja estado">
+              <span class="acarreo-lbl">Estado del viaje</span>
+              <select id="selEstadoViaje" disabled>
+                <option value="">— Seleccione un servicio —</option>
+                <optgroup label="Flujo del viaje">
+                  <option value="PROGRAMADO">Programado</option>
+                  <option value="RETIRANDO">Retirando</option>
+                  <option value="EN RUTA CLIENTE">En ruta cliente</option>
+                  <option value="EN CLIENTE">En cliente</option>
+                  <option value="EN RUTA RETORNO">En ruta retorno</option>
+                  <option value="COLA PUERTO">Cola puerto</option>
+                  <option value="CULMINADO">Culminado</option>
+                </optgroup>
+                <optgroup label="Otros estados">
+                  <option value="REPROGRAMADO">Reprogramado</option>
+                  <option value="FALSO FLETE">Falso flete</option>
+                  <option value="CANCELADO">Cancelado (cancelar viaje)</option>
+                </optgroup>
+              </select>
+              <button class="boton-primario" id="btnSigEstado" disabled>Siguiente ➜</button>
+              <span class="acarreo-conf" id="confEstado"><span id="confEstadoTxt"></span>
+                <button class="boton-primario" id="confEstadoSi" style="padding:5px 10px;font-size:.78rem">Sí, cambiar</button>
+                <button class="boton-secundario" id="confEstadoNo" style="padding:5px 10px;font-size:.78rem">No</button></span>
+            </div>
+            <div class="acarreo-caja">
+              <span class="acarreo-lbl">Acciones del servicio</span>
+              <button class="boton-secundario acc-serv" id="btnQrComb" title="Ver, pegar o subir el QR de combustible Repsol del servicio (lo ve el conductor en su app)">⛽ QR combustible</button>
+              <button class="boton-secundario acc-serv" id="btnReprogPos" title="Cambiar la cita de posicionamiento y cobrar la reprogramación">📅 Reprogramar posicionamiento</button>
+              <button class="boton-secundario acc-serv" id="btnCambioCond" title="Robo, falla o accidente: el viaje sigue con otro conductor y/o tracto">🔁 Cambio de conductor / tracto</button>
+              <button class="boton-secundario acc-serv" id="btnTramos" title="Ver los tramos del viaje y liquidar el tramo interrumpido">🧾 Tramos</button>
+            </div>
+          </div>
+          <div class="acarreo-fila" style="justify-content:space-between;">
+            <span class="acarreo-sel" id="acarreoSel">Ningún servicio seleccionado. Haz clic en una fila.</span>
+            <div style="display:flex; gap:8px;">
+              <button class="boton-peligro" id="btnBorrarServicio" style="display:none;background:#7f1d1d" title="Solo maestros: borra el servicio y todo lo amarrado">🗑 Borrar servicio</button>
+              <button class="boton-secundario" id="btnCancelarSelServicio">Cerrar</button>
+            </div>
+          </div>
         </div>
       </div>`;
 
@@ -377,12 +403,19 @@ const FormSelServicioContabilidad = {
           tr.classList.add('seleccionada');
           self._filaSeleccionada = Number(tr.dataset.fila);
           self._servicioSeleccionado = f;
+          if (self._pintarBarra) self._pintarBarra();
         });
         tbody.appendChild(tr);
       });
 
       // Si el booking escrito ubica un solo servicio, queda seleccionado.
       if (booking && filas.length === 1) tbody.querySelector('tr').click();
+      else {
+        // Mantener seleccionado el mismo servicio tras recargar (p. ej. después de cambiar el estado).
+        const trSel = self._filaSeleccionada !== null && tbody.querySelector('tr[data-fila="' + self._filaSeleccionada + '"]');
+        if (trSel) trSel.click();
+        else { self._filaSeleccionada = null; self._servicioSeleccionado = null; if (self._pintarBarra) self._pintarBarra(); }
+      }
       if (filas.length === 0) {
         tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; color:#64748b; padding:14px;">' +
           (booking ? 'No se encontró ningún servicio con ese booking.' : 'No hay servicios con estos filtros.') + '</td></tr>';
@@ -423,9 +456,48 @@ const FormSelServicioContabilidad = {
       await llamarBackend('cambiarEstadoServicio', { fila: self._filaSeleccionada, nuevoEstado: nuevoEstado });
       cargar();
     }
-    raiz.querySelectorAll('.btn-estado').forEach(function (b) {
-      b.addEventListener('click', function () { cambiarEstado(b.dataset.estado); });
+
+    // Barra de estado: lista (con confirmación) + botón "Siguiente".
+    const FLUJO = ['PROGRAMADO', 'RETIRANDO', 'EN RUTA CLIENTE', 'EN CLIENTE', 'EN RUTA RETORNO', 'COLA PUERTO', 'CULMINADO'];
+    const NOMBRE_EST = { 'PROGRAMADO': 'Programado', 'RETIRANDO': 'Retirando', 'EN RUTA CLIENTE': 'En ruta cliente', 'EN CLIENTE': 'En cliente', 'EN RUTA RETORNO': 'En ruta retorno', 'COLA PUERTO': 'Cola puerto', 'CULMINADO': 'Culminado', 'REPROGRAMADO': 'Reprogramado', 'FALSO FLETE': 'Falso flete', 'CANCELADO': 'Cancelado' };
+    const selEst = raiz.querySelector('#selEstadoViaje');
+    const btnSig = raiz.querySelector('#btnSigEstado');
+    const conf = raiz.querySelector('#confEstado');
+    const ocultarConf = () => { conf.style.display = 'none'; };
+    const estadoSel = (f) => String((f && f['ESTADO']) || '').trim().toUpperCase() || 'PROGRAMADO';
+    self._pintarBarra = function () {
+      const f = self._servicioSeleccionado;
+      ocultarConf();
+      const hay = self._filaSeleccionada !== null && !!f;
+      selEst.disabled = !hay;
+      raiz.querySelectorAll('.acc-serv').forEach(b => { b.disabled = !hay; });
+      const info = raiz.querySelector('#acarreoSel');
+      if (!hay) {
+        selEst.value = ''; btnSig.disabled = true; btnSig.textContent = 'Siguiente ➜';
+        info.textContent = 'Ningún servicio seleccionado. Haz clic en una fila.';
+        return;
+      }
+      const est = estadoSel(f);
+      selEst.value = NOMBRE_EST[est] ? est : '';
+      const i = FLUJO.indexOf(est);
+      const sig = (i >= 0 && i < FLUJO.length - 1) ? FLUJO[i + 1] : (est === 'REPROGRAMADO' ? 'PROGRAMADO' : '');
+      btnSig.disabled = !sig;
+      btnSig.dataset.estado = sig;
+      btnSig.textContent = sig ? 'Siguiente: ' + NOMBRE_EST[sig] + ' ➜' : 'Siguiente ➜';
+      info.innerHTML = 'Servicio seleccionado: <b>' + esc(f['CODIGO SERVICIO'] || ('fila ' + self._filaSeleccionada)) + '</b> · ' +
+        esc(f['CONDUCTOR'] || '') + ' · ' + esc(f['PLACA TRACTO'] || '') + ' · estado actual <b>' + esc(NOMBRE_EST[est] || est || '-') + '</b>';
+    };
+    btnSig.addEventListener('click', function () { if (btnSig.dataset.estado) cambiarEstado(btnSig.dataset.estado); });
+    selEst.addEventListener('change', function () {
+      const f = self._servicioSeleccionado;
+      const nuevo = selEst.value, actual = estadoSel(f);
+      if (!nuevo || nuevo === actual) { ocultarConf(); return; }
+      raiz.querySelector('#confEstadoTxt').innerHTML = (nuevo === 'CANCELADO' ? '⚠️ ¿<b>Cancelar el viaje</b>?' : '¿Cambiar a <b>' + esc(NOMBRE_EST[nuevo]) + '</b>?');
+      conf.style.display = 'inline-flex';
     });
+    raiz.querySelector('#confEstadoSi').addEventListener('click', function () { const n = selEst.value; ocultarConf(); self._pintarBarra(); cambiarEstado(n); });
+    raiz.querySelector('#confEstadoNo').addEventListener('click', function () { ocultarConf(); self._pintarBarra(); });
+    self._pintarBarra();
 
     // v107: borrar servicio completo (solo MAESTRO).
     const esMaestroAc = typeof Sesion !== 'undefined' && Sesion.datos && (Sesion.datos() || {}).rol === 'MAESTRO';
