@@ -145,6 +145,22 @@ const FormIncConductor = {
   },
 
   /* ===== v137: Mi servicio (hoja del servicio + QR de combustible Repsol) ===== */
+  // Galones a abastecer (tracto / generador) y botón a la ubicación de la planta.
+  _abastecerYMapa: function (f) {
+    const gl = v => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isNaN(n) ? 0 : n; };
+    const gt = gl(f['GL TRACTO']), gg = gl(f['GL GENERADOR']);
+    const linea = (txt, n) => '<div style="display:flex;justify-content:space-between;font-size:1.05rem;padding:3px 0"><span>' + txt + '</span><b>' +
+      (n > 0 ? esc(String(n)) + ' galones' : '<span style="color:#64748b">No abastecer</span>') + '</b></div>';
+    const url = String(f['UBICACION PACKING'] || '').trim();
+    const okUrl = /^https?:\/\//i.test(url);
+    return '<div style="margin-top:10px;background:#fff7ed;border:2px solid #fdba74;border-radius:14px;padding:10px 12px">' +
+        '<div style="font-weight:800;color:#c2410c;margin-bottom:4px">⛽ Cuánto abastecer</div>' +
+        linea('Tracto', gt) + linea('Generador', gg) + '</div>' +
+      (okUrl
+        ? '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="grande" style="display:block;text-align:center;text-decoration:none;background:#047857;color:#fff;margin-top:10px;padding:14px;border-radius:12px;font-weight:800">📍 Cómo llegar a la planta</a>'
+        : '<div class="ayuda" style="margin-top:10px;text-align:center">📍 Ubicación no registrada, consulta con la oficina.</div>');
+  },
+
   _miServicio: async function () {
     const self = this;
     const app = self._pintar('<button class="atras" id="a">◀ Inicio</button><h2>🚚 Mi servicio</h2><div id="l">Cargando…</div>');
@@ -180,6 +196,7 @@ const FormIncConductor = {
               '<div style="font-size:.9rem">Tarjeta ' + esc(q.tarjeta || '') + ' · placa ' + esc(q.placa || '') + '</div>' +
               '<div style="font-size:.95rem;font-weight:800;color:' + (vencido ? '#dc2626' : '#047857') + '">' + (vencido ? 'QR vencido (' + esc(q.vigencia) + '): pide uno nuevo a la oficina' : 'Válido hasta el ' + esc(q.vigencia || '')) + '</div></div>'
           : '<div class="ayuda" style="margin-top:10px;text-align:center">⛽ Aún no tiene QR de combustible. La oficina lo envía el día del viaje.</div>') +
+        self._abastecerYMapa(f) +
         '</div>';
     }).join('');
     l.querySelectorAll('[data-hoja]').forEach(b => b.addEventListener('click', function () {
