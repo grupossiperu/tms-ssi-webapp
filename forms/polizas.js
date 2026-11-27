@@ -5,6 +5,8 @@
  * adjunto en Drive; endoso por venta de unidad (devolución = pagado − prima/365 × días usados; anula cuotas posteriores).
  * Exportar Excel (SheetJS) y "Copiar para Excel" (misma tabla con formato).
  * Usa UI120 (forms/tramos.js) para las ventanas.
+ * v139 (27/11/2026): devolución del endoso por depósito o nota de crédito; la NC queda como saldo a favor con la
+ * aseguradora y se usa en cuotas de otra póliza de la misma aseguradora y moneda (monto libre por cuota).
  */
 const FormPolizas = {
   _datos: null,
@@ -32,7 +34,7 @@ const FormPolizas = {
     cont.innerHTML = `
       <style>
         .pz-barra{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin-bottom:10px}.pz-barra .campo{margin:0;min-width:150px}
-        .pz-k{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.pz-k div{background:#f1f5f9;border-radius:10px;padding:8px 12px;border-left:4px solid #94a3b8}
+        .pz-k{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:10px}.pz-k div{background:#f1f5f9;border-radius:10px;padding:8px 12px;border-left:4px solid #94a3b8}
         .pz-k span{display:block;font-size:.68rem;font-weight:700;color:#64748b;text-transform:uppercase}.pz-k b{font-size:1.1rem;color:#1c3a5e}
         .pz-t{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.78rem}.pz-t th{background:#e2e8f0;padding:6px;text-align:left;font-size:.7rem;position:sticky;top:0}
         .pz-t td{padding:6px;border-bottom:1px solid #eef2f7;vertical-align:top;overflow-wrap:anywhere}.pz-t tbody tr{cursor:pointer}.pz-t tbody tr:hover td{background:#f8fafc}
@@ -86,7 +88,11 @@ const FormPolizas = {
       c.querySelector('#pzK').innerHTML = '<div><span>Pólizas activas</span><b>' + act.length + '</b></div>' +
         '<div style="border-left-color:#d97706"><span>Vencen en ' + self._datos.diasAviso + ' días</span><b>' + act.filter(x => x.diasFin !== null && x.diasFin <= self._datos.diasAviso).length + '</b></div>' +
         '<div style="border-left-color:#dc2626"><span>Cuotas vencidas sin pagar</span><b>' + act.reduce((a, x) => a + (x.vencidas || 0), 0) + '</b></div>' +
-        '<div style="border-left-color:#2563eb"><span>Saldo por pagar</span><b style="font-size:.95rem">' + porMon('saldo') + '</b></div>';
+        '<div style="border-left-color:#2563eb"><span>Saldo por pagar</span><b style="font-size:.95rem">' + porMon('saldo') + '</b></div>' +
+        '<div id="pzFav" style="border-left-color:#16a34a;cursor:pointer" title="Ver notas de crédito"><span>Saldo a favor (notas de crédito)</span>' +
+        ((self._datos.saldoFavor || []).length ? (self._datos.saldoFavor || []).map(f => '<b style="font-size:.85rem;display:block">' + esc(f.aseguradora || 'SIN ASEGURADORA') + ': ' + self._mon(f.moneda) + ' ' + m(f.saldo) + '</b>').join('') : '<b style="font-size:.95rem">—</b>') +
+        '<span style="text-transform:none;font-weight:600;color:#16a34a">Ver detalle ›</span></div>';
+      c.querySelector('#pzFav').addEventListener('click', () => self._verNotas());
     }
     const cab = ed ? '<colgroup><col style="width:17%"><col style="width:9%"><col style="width:13%"><col style="width:9%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:12%"><col style="width:6%"></colgroup>' +
       '<thead><tr><th>Póliza</th><th>Tipo</th><th>Aseguradora / N°</th><th>Prima anual</th><th>Vigencia</th><th>Estado</th><th>Cuotas</th><th>Próxima cuota</th><th>Adjunto</th></tr></thead>'
@@ -129,6 +135,7 @@ const FormPolizas = {
         <div class="campo" style="grid-column:span 2"><label>Placas / unidades cubiertas (opcional)</label><input id="pfPlacas" value="${esc(x.placas)}" placeholder="Ej. AYN941, A5O859" style="text-transform:uppercase"></div>
         <div class="campo"><label>Observación</label><input id="pfObs" value="${esc(x.observacion || '')}"></div>
       </div>
+      <div id="pfFav" style="display:none;margin-top:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 12px;font-size:.8rem"></div>
       <div class="sub">Adjunto</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         ${x.archivoUrl ? '<a href="' + esc(x.archivoUrl) + '" target="_blank" rel="noopener">📎 ' + esc(x.archivoNombre || 'Ver póliza actual') + '</a>' : '<span style="color:#64748b;font-size:.8rem">Sin archivo</span>'}
@@ -142,16 +149,16 @@ const FormPolizas = {
         <button type="button" class="boton-secundario" id="pfGen">Generar cuotas iguales (mensuales)</button>
         <button type="button" class="boton-secundario" id="pfMas">+ Agregar cuota</button>
       </div>
-      <table><thead><tr><th style="width:34px">N°</th><th>N° liquidación</th><th style="width:110px">Monto</th><th style="width:140px">Vence</th><th style="width:140px">Fecha de pago</th><th style="width:118px">Estado</th><th style="width:30px"></th></tr></thead><tbody id="pfCuotas"></tbody></table>
+      <table><thead><tr><th style="width:30px">N°</th><th>N° liquidación</th><th style="width:96px">Monto</th><th style="width:132px">Vence</th><th style="width:132px">Fecha de pago</th><th style="width:110px">Estado</th><th style="width:240px">Pagar con nota de crédito</th><th style="width:26px"></th></tr></thead><tbody id="pfCuotas"></tbody></table>
       <div class="res" id="pfRes"></div>
-      ${x.id ? '<div class="sub">Endosos (venta / baja de unidad)</div>' + (x.endosos.length ? '<table><thead><tr><th>Fecha baja</th><th>Placa</th><th>Días usados</th><th>Usado</th><th>Pagado</th><th>Devolución</th><th>Nota de crédito</th><th>Cuotas anuladas</th><th>Registró</th></tr></thead><tbody>' +
-        x.endosos.map((e, i) => '<tr><td>' + esc(e.fechaBaja) + '</td><td>' + esc(e.placa) + '</td><td>' + e.dias + '</td><td>' + UI120.m(e.usado) + '</td><td>' + UI120.m(e.pagado) + '</td><td><b>' + self._mon(x.moneda) + ' ' + UI120.m(e.devolucion) + '</b>' + (e.manual ? ' (manual)' : '') + '</td><td>' + (e.nc ? '<b>' + esc(e.nc.numero) + '</b><div style="color:#64748b">' + esc(e.nc.fecha || '') + ' · ' + self._mon(x.moneda) + ' ' + UI120.m(e.nc.monto) + '</div>' : '<span style="color:#b45309">Pendiente</span>') +
-          ' <button type="button" class="boton-secundario pf-nc" data-i="' + i + '" style="padding:2px 8px;font-size:.72rem;margin-top:2px">' + (e.nc ? '✎ Editar' : '+ Agregar') + '</button></td><td>' + (e.anuladas || []).join(', ') + '</td><td>' + esc(e.por) + '<div style="color:#94a3b8">' + esc(e.registrado) + '</div></td></tr>').join('') + '</tbody></table>' : '<div style="color:#64748b;font-size:.8rem">Sin endosos.</div>') +
+      ${x.id ? '<div class="sub">Endosos (venta / baja de unidad)</div>' + (x.endosos.length ? '<table><thead><tr><th>Fecha baja</th><th>Placa</th><th>Días usados</th><th>Usado</th><th>Pagado</th><th>Devolución</th><th>Cómo se devolvió</th><th>Cuotas anuladas</th><th>Registró</th></tr></thead><tbody>' +
+        x.endosos.map((e, i) => '<tr><td>' + esc(e.fechaBaja) + '</td><td>' + esc(e.placa) + '</td><td>' + e.dias + '</td><td>' + UI120.m(e.usado) + '</td><td>' + UI120.m(e.pagado) + '</td><td><b>' + self._mon(x.moneda) + ' ' + UI120.m(e.devolucion) + '</b>' + (e.manual ? ' (manual)' : '') + '</td><td>' + self._txtDev(x, e) +
+          ' <button type="button" class="boton-secundario pf-nc" data-i="' + i + '" style="padding:2px 8px;font-size:.72rem;margin-top:2px">' + (e.nc || e.deposito ? '✎ Editar' : '+ Registrar') + '</button></td><td>' + (e.anuladas || []).join(', ') + '</td><td>' + esc(e.por) + '<div style="color:#94a3b8">' + esc(e.registrado) + '</div></td></tr>').join('') + '</tbody></table>' : '<div style="color:#64748b;font-size:.8rem">Sin endosos.</div>') +
         '<button type="button" class="boton-secundario" id="pfEndoso" style="margin-top:6px">Registrar endoso (venta / baja de una unidad)</button>' : ''}
       <div class="pie">
         ${x.id ? '<button class="boton-secundario" id="pfBaja" style="margin-right:auto">' + (x.estado === 'ACTIVA' ? 'Dar de baja la póliza' : 'Reactivar') + '</button>' : ''}
         ${x.id && x.estado === 'ACTIVA' ? '<button class="boton-secundario" id="pfRenovar" style="background:#eef2ff;border-color:#c7d2fe;color:#3730a3">🔄 Renovar póliza</button>' : ''}
-        <button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar</button></div>`, 920);
+        <button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar</button></div>`, 1080);
     w.q('#pfMon').value = x.moneda || 'USD';
     const tb = w.q('#pfCuotas');
     const fila = function (c) {
@@ -159,8 +166,17 @@ const FormPolizas = {
       const tr = document.createElement('tr');
       tr.innerHTML = '<td class="n"></td><td><input class="cl" value="' + esc(c.liquidacion || '') + '" style="text-transform:uppercase"></td><td><input class="cm" inputmode="decimal" value="' + (c.monto || '') + '"></td>' +
         '<td><input type="date" class="cv" value="' + self._iso(c.vence) + '"></td><td><input type="date" class="cp" value="' + self._iso(c.pago) + '"></td>' +
-        '<td><select class="ce" style="font-size:.74rem;padding:5px 3px"><option>PENDIENTE</option><option>PAGADA</option><option>ANULADA</option></select>' + (c.nota ? '<div style="font-size:.66rem;color:#64748b">' + esc(c.nota) + '</div>' : '') + '</td><td><button type="button" class="qx" style="border:0;background:none;color:#b91c1c;cursor:pointer;font-size:16px">×</button></td>';
+        '<td><select class="ce" style="font-size:.74rem;padding:5px 3px"><option>PENDIENTE</option><option>PAGADA</option><option>ANULADA</option></select>' + (c.nota ? '<div style="font-size:.66rem;color:#64748b">' + esc(c.nota) + '</div>' : '') + '</td>' +
+        '<td><div style="display:flex;gap:4px"><select class="cn" style="font-size:.72rem;padding:5px 3px;flex:1;min-width:0"></select><input class="cnm" inputmode="decimal" placeholder="Monto" style="width:76px" value="' + (Number(c.ncMonto) > 0 ? c.ncMonto : '') + '"></div><div class="cap" style="font-size:.66rem;color:#166534"></div></td><td><button type="button" class="qx"style="border:0;background:none;color:#b91c1c;cursor:pointer;font-size:16px">×</button></td>';
       tr.querySelector('.ce').value = c.estado || 'PENDIENTE';
+      tr.dataset.ncRef = c.ncRef || '';
+      tr.querySelector('.cn').addEventListener('input', function () {
+        tr.dataset.ncRef = this.value;
+        if (!this.value) tr.querySelector('.cnm').value = '';
+        else if (!tr.querySelector('.cnm').value) tr.querySelector('.cnm').value = Math.max(0, Math.min(UI120.n(tr.querySelector('.cm').value), disponible(this.value, tr))).toFixed(2);
+        cubrir(tr); resumen();
+      });
+      tr.querySelector('.cnm').addEventListener('change', function () { cubrir(tr); resumen(); });
       tr.querySelector('.cp').addEventListener('change', function () { if (this.value && tr.querySelector('.ce').value === 'PENDIENTE') tr.querySelector('.ce').value = 'PAGADA'; resumen(); });
       tr.querySelector('.qx').addEventListener('click', () => { tr.remove(); numerar(); resumen(); });
       tr.querySelectorAll('input,select').forEach(i => i.addEventListener('input', resumen));
@@ -168,18 +184,62 @@ const FormPolizas = {
     };
     const numerar = () => tb.querySelectorAll('tr').forEach((tr, i) => { tr.querySelector('.n').textContent = i + 1; });
     const leer = () => Array.from(tb.querySelectorAll('tr')).map(tr => ({ liquidacion: tr.querySelector('.cl').value.trim(), monto: UI120.n(tr.querySelector('.cm').value),
-      vence: self._dmy(tr.querySelector('.cv').value), pago: self._dmy(tr.querySelector('.cp').value), estado: tr.querySelector('.ce').value }));
-    const ncTot = (x.endosos || []).reduce((a, e) => a + (e.nc ? Number(e.nc.monto) || 0 : 0), 0);
+      vence: self._dmy(tr.querySelector('.cv').value), pago: self._dmy(tr.querySelector('.cp').value), estado: tr.querySelector('.ce').value,
+      ncRef: tr.dataset.ncRef || '', ncMonto: tr.dataset.ncRef ? UI120.n(tr.querySelector('.cnm').value) : 0 }));
+    // ---- Notas de crédito disponibles (misma aseguradora y moneda, de otra póliza) ----
+    const notas = self._datos.notasCredito || [];
+    const usoOrig = {};
+    (x.cuotas || []).forEach(c => { if (c.ncRef && c.estado !== 'ANULADA' && Number(c.ncMonto) > 0) usoOrig[c.ncRef] = (usoOrig[c.ncRef] || 0) + Number(c.ncMonto); });
+    const aseg = () => String(w.q('#pfAseg').value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const aptas = () => notas.filter(n => n.aseguradora === aseg() && n.moneda === w.q('#pfMon').value && n.polizaId !== x.id);
+    const disponible = function (ref, trExcl) {
+      const n = notas.find(k => k.key === ref); if (!n) return 0;
+      let usoForm = 0;
+      tb.querySelectorAll('tr').forEach(tr => { if (tr !== trExcl && tr.dataset.ncRef === ref && tr.querySelector('.ce').value !== 'ANULADA') usoForm += UI120.n(tr.querySelector('.cnm').value); });
+      return Math.round((n.saldo + (usoOrig[ref] || 0) - usoForm) * 100) / 100;
+    };
+    const cubrir = function (tr) {
+      const m = UI120.n(tr.querySelector('.cm').value), nc = tr.dataset.ncRef ? UI120.n(tr.querySelector('.cnm').value) : 0;
+      if (nc > 0 && m > 0 && nc >= m - 0.001 && tr.querySelector('.ce').value === 'PENDIENTE') {
+        tr.querySelector('.ce').value = 'PAGADA';
+        if (!tr.querySelector('.cp').value) { const h = new Date(); tr.querySelector('.cp').value = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0'); }
+      }
+    };
+    const pintarNC = function () {
+      const ap = aptas(), mo = self._mon(w.q('#pfMon').value);
+      tb.querySelectorAll('tr').forEach(tr => {
+        const sel = tr.querySelector('.cn'), ref = tr.dataset.ncRef || '';
+        const lista = ap.slice();
+        if (ref && !lista.some(n => n.key === ref)) { const n0 = notas.find(n => n.key === ref); if (n0) lista.push(n0); }
+        sel.innerHTML = '<option value="">' + (lista.length ? '— No usar —' : '— Sin notas de crédito —') + '</option>' +
+          lista.map(n => '<option value="' + esc(n.key) + '">NC ' + esc(n.numero) + ' · disp. ' + mo + ' ' + UI120.m(disponible(n.key, tr)) + '</option>').join('');
+        sel.value = ref; sel.disabled = !lista.length && !ref;
+        tr.querySelector('.cnm').disabled = !ref;
+        const nc = ref ? UI120.n(tr.querySelector('.cnm').value) : 0, m = UI120.n(tr.querySelector('.cm').value);
+        tr.querySelector('.cap').textContent = nc > 0 ? 'Con NC ' + mo + ' ' + UI120.m(nc) + ' · a pagar: ' + mo + ' ' + UI120.m(Math.max(0, m - nc)) : '';
+      });
+      const box = w.q('#pfFav');
+      if (ap.length) {
+        const fav = ap.reduce((a, n) => a + Math.max(0, disponible(n.key, null)), 0);
+        box.style.display = '';
+        box.innerHTML = '💳 <b>Saldo a favor con ' + esc(aseg()) + ': ' + mo + ' ' + UI120.m(fav) + '</b> · ' +
+          ap.map(n => 'NC ' + esc(n.numero) + ' (de ' + esc(n.poliza) + (n.placa ? ' / ' + esc(n.placa) : '') + ')').join(' · ') +
+          '. Úselo en cada cuota, columna <b>"Pagar con nota de crédito"</b>, con el monto que quiera.';
+      } else { box.style.display = 'none'; box.innerHTML = ''; }
+    };
     const resumen = function () {
+      pintarNC();
       const cs = leer(), mo = self._mon(w.q('#pfMon').value), prima = UI120.n(w.q('#pfPrima').value);
       const tot = cs.filter(c => c.estado !== 'ANULADA').reduce((a, c) => a + c.monto, 0), pag = cs.filter(c => c.estado === 'PAGADA').reduce((a, c) => a + c.monto, 0);
+      const ncTot = cs.filter(c => c.estado !== 'ANULADA').reduce((a, c) => a + (c.ncMonto || 0), 0);
+      const saldo = cs.filter(c => c.estado !== 'ANULADA' && c.estado !== 'PAGADA').reduce((a, c) => a + Math.max(0, c.monto - (c.ncMonto || 0)), 0);
       w.q('#pfRes').innerHTML = '<div><span>Total cuotas</span><b>' + mo + ' ' + UI120.m(tot) + '</b>' + (prima && Math.abs(tot - prima) > 0.01 && cs.length ? '<div style="font-size:.68rem;color:#b45309">Prima anual: ' + mo + ' ' + UI120.m(prima) + '</div>' : '') + '</div>' +
         '<div><span>Pagado</span><b>' + mo + ' ' + UI120.m(pag) + '</b></div>' +
-        (ncTot ? '<div><span>Notas de crédito</span><b>− ' + mo + ' ' + UI120.m(ncTot) + '</b></div>' : '') +
-        '<div><span>Saldo</span><b>' + mo + ' ' + UI120.m(Math.max(0, Math.round((tot - pag - ncTot) * 100) / 100)) + '</b>' + (ncTot ? '<div style="font-size:.68rem;color:#64748b">cuotas pendientes − notas de crédito</div>' : '') + '</div>';
+        (ncTot ? '<div style="background:#f0fdf4"><span>Cubierto con nota de crédito</span><b>' + mo + ' ' + UI120.m(ncTot) + '</b></div>' : '') +
+        '<div><span>Saldo</span><b>' + mo + ' ' + UI120.m(Math.max(0, Math.round(saldo * 100) / 100)) + '</b>' + (ncTot ? '<div style="font-size:.68rem;color:#64748b">cuotas pendientes − lo que cubre la NC</div>' : '') + '</div>';
     };
     (x.cuotas || []).forEach(fila); resumen();
-    ['#pfPrima', '#pfMon'].forEach(s => w.q(s).addEventListener('input', resumen));
+    ['#pfPrima', '#pfMon', '#pfAseg'].forEach(s => w.q(s).addEventListener('input', resumen));
     w.q('#pfMas').addEventListener('click', () => fila({}));
     w.q('#pfGen').addEventListener('click', function () {
       const n = Math.max(1, Math.min(24, parseInt(w.q('#pfN').value, 10) || 0)), prima = UI120.n(w.q('#pfPrima').value), v1 = w.q('#pfV1').value;
@@ -199,7 +259,7 @@ const FormPolizas = {
     if (x.id && w.q('#pfRenovar')) w.q('#pfRenovar').addEventListener('click', function () { w.cerrar(); self.renovar(x); });
     if (x.id) {
       w.q('#pfEndoso').addEventListener('click', () => self.endoso(x, w));
-      w.velo.querySelectorAll('.pf-nc').forEach(b => b.addEventListener('click', () => self.notaCredito(x, Number(b.dataset.i), w)));
+      w.velo.querySelectorAll('.pf-nc').forEach(b => b.addEventListener('click', () => self.devolucion(x, Number(b.dataset.i), w)));
       w.q('#pfBaja').addEventListener('click', async function () {
         const baja = x.estado === 'ACTIVA'; let motivo = '';
         if (baja) { motivo = prompt('Motivo de la baja de la póliza:'); if (!motivo || !motivo.trim()) return; }
@@ -211,6 +271,10 @@ const FormPolizas = {
     w.q('[data-ok]').addEventListener('click', async function () {
       const arch = w.q('#pfArch').files[0];
       if (arch && arch.size > 10 * 1024 * 1024) { mostrarMensaje('El archivo pasa de 10 MB.', 'error'); return; }
+      const csNc = leer(), iMal = csNc.findIndex(c => c.ncRef && !(c.ncMonto > 0));
+      if (iMal >= 0) { mostrarMensaje('Escriba el monto de la nota de crédito en la cuota ' + (iMal + 1) + ' o quite la nota.', 'error'); return; }
+      const sobra = Array.from(tb.querySelectorAll('tr')).find(tr => tr.dataset.ncRef && disponible(tr.dataset.ncRef, null) < -0.001);
+      if (sobra) { mostrarMensaje('Se está usando más de lo disponible de una nota de crédito (cuota ' + sobra.querySelector('.n').textContent + ').', 'error'); return; }
       const datos = { id: x.id || '', nombre: w.q('#pfNom').value, tipo: w.q('#pfTipo').value, aseguradora: w.q('#pfAseg').value, numero: w.q('#pfNum').value,
         moneda: w.q('#pfMon').value, prima: w.q('#pfPrima').value, inicio: self._dmy(w.q('#pfIni').value), fin: self._dmy(w.q('#pfFin').value),
         placas: w.q('#pfPlacas').value, observacion: w.q('#pfObs').value, cuotas: leer(), renuevaDe: x._renuevaDe || '' };
@@ -253,7 +317,16 @@ const FormPolizas = {
         <div class="campo"><label>Pagado (base)</label><input id="enPag" inputmode="decimal" value="${pagado.toFixed(2)}"></div>
         <div class="campo"><label>Devolución (escribir para fijarla)</label><input id="enMan" inputmode="decimal" placeholder="Automática"></div>
         <div class="campo"><label>Observación</label><input id="enObs" placeholder="N° de endoso, comprador…"></div>
-        <div class="campo"><label>N° nota de crédito (si ya la tiene)</label><input id="enNcN" style="text-transform:uppercase"></div>
+        <div class="campo"><label>¿Cómo se devuelve?</label><select id="enTipo"><option value="">Pendiente (aún no se sabe)</option><option value="DEPOSITO">Depósito en nuestra cuenta</option><option value="NC">Nota de crédito (saldo a favor)</option></select></div>
+      </div>
+      <div class="g" id="enDep" style="display:none;margin-top:6px">
+        <div class="campo"><label>Fecha del depósito</label><input type="date" id="enDepF"></div>
+        <div class="campo"><label>Banco</label><input id="enDepB" style="text-transform:uppercase"></div>
+        <div class="campo"><label>N° de operación</label><input id="enDepO" style="text-transform:uppercase"></div>
+        <div class="campo"><label>Monto depositado</label><input id="enDepM" inputmode="decimal" placeholder="Igual a la devolución"></div>
+      </div>
+      <div class="g" id="enNc" style="display:none;margin-top:6px">
+        <div class="campo"><label>N° nota de crédito</label><input id="enNcN" style="text-transform:uppercase"></div>
         <div class="campo"><label>Fecha de la nota de crédito</label><input type="date" id="enNcF"></div>
         <div class="campo"><label>Monto de la nota de crédito</label><input id="enNcM" inputmode="decimal" placeholder="Igual a la devolución"></div>
       </div>
@@ -261,7 +334,7 @@ const FormPolizas = {
       <div class="res" id="enRes"></div>
       <div class="nota" id="enAnuTxt"></div>
       <div class="nota">Usado = prima anual ÷ 365 × días desde el inicio hasta la baja. Devolución = pagado − usado (si sale negativo, no hay devolución).</div>
-      <div class="nota">La nota de crédito es opcional aquí: se puede agregar después desde la ficha de la póliza. Su monto se resta del saldo por pagar.</div>
+      <div class="nota">La devolución se puede registrar después desde la ficha. La nota de crédito queda como saldo a favor con la aseguradora y se usa en cuotas de otra póliza de la misma aseguradora.</div>
       <div class="pie"><button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Registrar endoso</button></div>`, 760);
     const calc = function () {
       const fb = w.q('#enFec').value ? new Date(w.q('#enFec').value + 'T00:00:00') : null;
@@ -274,12 +347,16 @@ const FormPolizas = {
       w.q('#enAnuTxt').innerHTML = anul.length ? 'Se anularán ' + anul.length + ' cuota(s): ' + anul.map(c => 'N° ' + c.n + ' (' + esc(c.vence) + ', ' + mo + ' ' + UI120.m(c.monto) + ')').join(' · ') : '';
     };
     w.velo.querySelectorAll('input').forEach(i => { i.addEventListener('input', calc); i.addEventListener('change', calc); }); calc();
+    w.q('#enTipo').addEventListener('change', function () { w.q('#enDep').style.display = this.value === 'DEPOSITO' ? '' : 'none'; w.q('#enNc').style.display = this.value === 'NC' ? '' : 'none'; });
     w.q('[data-c]').addEventListener('click', w.cerrar);
     w.q('[data-ok]').addEventListener('click', async function () {
       const datos = { id: x.id, placa: w.q('#enPla').value, fechaBaja: self._dmy(w.q('#enFec').value), primaBase: w.q('#enPri').value, pagadoBase: w.q('#enPag').value,
         devolucionManual: w.q('#enMan').value.trim(), anularPosteriores: w.q('#enAnu').checked, observacion: w.q('#enObs').value,
-        ncNumero: w.q('#enNcN').value.trim().toUpperCase(), ncFecha: self._dmy(w.q('#enNcF').value), ncMonto: w.q('#enNcM').value.trim() };
-      if (!datos.ncNumero && (datos.ncFecha || datos.ncMonto)) { mostrarMensaje('Escriba el N° de la nota de crédito o deje vacíos su fecha y monto.', 'error'); return; }
+        devTipo: w.q('#enTipo').value,
+        ncNumero: w.q('#enNcN').value.trim().toUpperCase(), ncFecha: self._dmy(w.q('#enNcF').value), ncMonto: w.q('#enNcM').value.trim(),
+        depFecha: self._dmy(w.q('#enDepF').value), depBanco: w.q('#enDepB').value.trim(), depOperacion: w.q('#enDepO').value.trim(), depMonto: w.q('#enDepM').value.trim() };
+      if (datos.devTipo === 'NC' && !datos.ncNumero) { mostrarMensaje('Escriba el N° de la nota de crédito.', 'error'); return; }
+      if (datos.devTipo === 'DEPOSITO' && !datos.depFecha) { mostrarMensaje('Escriba la fecha del depósito.', 'error'); return; }
       if (!confirm('¿Registrar el endoso de ' + (datos.placa || '?') + ' al ' + (datos.fechaBaja || '?') + '?')) return;
       const b = this; b.disabled = true;
       const r = await llamarBackend('polizasEndoso', datos);
@@ -288,36 +365,74 @@ const FormPolizas = {
     });
   },
 
-  /* ---------------- Nota de crédito de un endoso ---------------- */
-  notaCredito: function (x, i, wFicha) {
+  /* ---------------- Devolución de un endoso: depósito o nota de crédito ---------------- */
+  _txtDev: function (x, e) {
+    const mo = this._mon(x.moneda);
+    if (e.deposito && e.tipoDev === 'DEPOSITO') return '<b>Depósito</b><div style="color:#64748b">' + esc(e.deposito.fecha || '') + (e.deposito.banco ? ' · ' + esc(e.deposito.banco) : '') + (e.deposito.operacion ? ' · op. ' + esc(e.deposito.operacion) : '') + ' · ' + mo + ' ' + UI120.m(e.deposito.monto) + '</div>';
+    if (e.nc) return '<b>NC ' + esc(e.nc.numero) + '</b><div style="color:#64748b">' + esc(e.nc.fecha || '') + ' · ' + mo + ' ' + UI120.m(e.nc.monto) + '</div>' +
+      (e.ncUsado > 0 ? '<div style="color:#166534">Usado ' + mo + ' ' + UI120.m(e.ncUsado) + ' · saldo ' + mo + ' ' + UI120.m(e.ncSaldo) + '</div>' : '<div style="color:#166534">Saldo a favor: ' + mo + ' ' + UI120.m(e.nc.monto) + '</div>');
+    return '<span style="color:#b45309">Pendiente</span>';
+  },
+
+  devolucion: function (x, i, wFicha) {
     const self = this, e = (x.endosos || [])[i]; if (!e) return;
-    const mo = self._mon(x.moneda), nc = e.nc || {};
-    const w = UI120.ventana('Nota de crédito · endoso ' + esc(e.placa), `
-      <div class="info"><span>Póliza: <b>${esc(x.nombre)}</b></span><span>Baja: <b>${esc(e.fechaBaja)}</b></span><span>Devolución: <b>${mo} ${UI120.m(e.devolucion)}</b></span></div>
-      <div class="g" style="margin-top:10px">
+    const mo = self._mon(x.moneda), nc = e.nc || {}, dep = e.deposito || {};
+    const tipo0 = e.deposito && e.tipoDev === 'DEPOSITO' ? 'DEPOSITO' : e.nc ? 'NC' : '';
+    const usos = (e.ncUsos || []).map(u => 'cuota ' + u.cuota + ' de ' + esc(u.poliza) + ': ' + mo + ' ' + UI120.m(u.monto)).join(' · ');
+    const w = UI120.ventana('Devolución del endoso · ' + esc(e.placa), `
+      <div class="info"><span>Póliza: <b>${esc(x.nombre)}</b></span><span>Aseguradora: <b>${esc(x.aseguradora || '—')}</b></span><span>Baja: <b>${esc(e.fechaBaja)}</b></span><span>Devolución: <b>${mo} ${UI120.m(e.devolucion)}</b></span></div>
+      <div class="g" style="margin-top:10px"><div class="campo" style="grid-column:span 2"><label>¿Cómo se devolvió?</label><select id="dvT"><option value="">Pendiente</option><option value="DEPOSITO">Depósito en nuestra cuenta</option><option value="NC">Nota de crédito (saldo a favor con la aseguradora)</option></select></div></div>
+      <div class="g" id="dvDep" style="margin-top:6px">
+        <div class="campo"><label>Fecha del depósito</label><input type="date" id="dvDF" value="${self._iso(dep.fecha)}"></div>
+        <div class="campo"><label>Banco</label><input id="dvDB" style="text-transform:uppercase" value="${esc(dep.banco || '')}"></div>
+        <div class="campo"><label>N° de operación</label><input id="dvDO" style="text-transform:uppercase" value="${esc(dep.operacion || '')}"></div>
+        <div class="campo"><label>Monto depositado (${mo})</label><input id="dvDM" inputmode="decimal" value="${dep.monto || e.devolucion || ''}"></div>
+      </div>
+      <div class="g" id="dvNc" style="margin-top:6px">
         <div class="campo"><label>N° nota de crédito</label><input id="ncN" style="text-transform:uppercase" value="${esc(nc.numero || '')}"></div>
         <div class="campo"><label>Fecha</label><input type="date" id="ncF" value="${self._iso(nc.fecha)}"></div>
         <div class="campo"><label>Monto (${mo})</label><input id="ncM" inputmode="decimal" value="${nc.numero ? nc.monto : e.devolucion}"></div>
       </div>
-      <div class="nota">El monto de la nota de crédito se resta del saldo por pagar de la póliza.</div>
-      <div class="pie">${e.nc ? '<button class="boton-secundario" data-q style="margin-right:auto;color:#b91c1c">Quitar nota de crédito</button>' : ''}<button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar</button></div>`, 620);
-    const enviar = async function (b, datos) {
-      b.disabled = true;
+      ${usos ? '<div class="nota" style="color:#166534">Ya usada en: ' + usos + '</div>' : ''}
+      <div class="nota">La nota de crédito no se resta de esta póliza: queda como saldo a favor con ${esc(x.aseguradora || 'la aseguradora')} y se usa en las cuotas de otra póliza de la misma aseguradora y moneda.</div>
+      <div class="pie"><button class="boton-secundario" data-c>Cancelar</button><button class="boton-primario" data-ok>Guardar</button></div>`, 700);
+    const ver = () => { const t = w.q('#dvT').value; w.q('#dvDep').style.display = t === 'DEPOSITO' ? '' : 'none'; w.q('#dvNc').style.display = t === 'NC' ? '' : 'none'; };
+    w.q('#dvT').value = tipo0; ver(); w.q('#dvT').addEventListener('change', ver);
+    w.q('[data-c]').addEventListener('click', w.cerrar);
+    w.q('[data-ok]').addEventListener('click', async function () {
+      const t = w.q('#dvT').value, datos = { id: x.id, idx: i, tipo: t || 'PENDIENTE' };
+      if (t === 'NC') {
+        datos.numero = w.q('#ncN').value.trim().toUpperCase(); datos.fecha = self._dmy(w.q('#ncF').value); datos.monto = UI120.n(w.q('#ncM').value);
+        if (!datos.numero) { mostrarMensaje('Escriba el N° de la nota de crédito.', 'error'); return; }
+        if (!(datos.monto > 0)) { mostrarMensaje('El monto debe ser mayor que 0.', 'error'); return; }
+      } else if (t === 'DEPOSITO') {
+        datos.fecha = self._dmy(w.q('#dvDF').value); datos.banco = w.q('#dvDB').value.trim(); datos.operacion = w.q('#dvDO').value.trim(); datos.monto = UI120.n(w.q('#dvDM').value);
+        if (!datos.fecha) { mostrarMensaje('Escriba la fecha del depósito.', 'error'); return; }
+        if (!(datos.monto > 0)) { mostrarMensaje('Escriba el monto depositado.', 'error'); return; }
+      } else if (tipo0 && !confirm('¿Dejar la devolución como pendiente?')) return;
+      const b = this; b.disabled = true;
       const r = await llamarBackend('polizasEndosoNC', datos);
       if (!r || !r.ok) { mostrarMensaje((r && r.mensaje) || 'No se pudo guardar.', 'error'); b.disabled = false; return; }
       w.cerrar(); if (wFicha) wFicha.cerrar(); mostrarMensaje(r.mensaje, 'exito'); self._recargar();
-    };
+    });
+  },
+
+  /** Saldo a favor: todas las notas de crédito con lo usado y lo que queda. */
+  _verNotas: function () {
+    const self = this;
+    const L = (self._datos.notasCredito || []).slice().sort((a, b) => (b.saldo > 0) - (a.saldo > 0) || a.aseguradora.localeCompare(b.aseguradora));
+    const fav = self._datos.saldoFavor || [];
+    const w = UI120.ventana('Saldo a favor · notas de crédito',
+      (fav.length ? '<div class="info" style="background:#f0fdf4">' + fav.map(f => '<span>' + esc(f.aseguradora || 'SIN ASEGURADORA') + ': <b>' + self._mon(f.moneda) + ' ' + UI120.m(f.saldo) + '</b> (' + f.notas + ' nota' + (f.notas > 1 ? 's' : '') + ')</span>').join('') + '</div>'
+        : '<div class="info"><span>No hay saldo a favor.</span></div>') +
+      (L.length ? '<table style="margin-top:10px"><thead><tr><th>Aseguradora</th><th>Nota de crédito</th><th>Sale de</th><th>Monto</th><th>Usado</th><th>Saldo</th><th>Usada en</th></tr></thead><tbody>' +
+        L.map(n => '<tr><td>' + esc(n.aseguradora) + '</td><td><b>' + esc(n.numero) + '</b><div style="color:#64748b">' + esc(n.fecha || '') + '</div></td><td>' + esc(n.poliza) + (n.placa ? '<div style="color:#64748b">' + esc(n.placa) + '</div>' : '') + '</td>' +
+          '<td>' + self._mon(n.moneda) + ' ' + UI120.m(n.monto) + '</td><td>' + UI120.m(n.usado) + '</td><td><b style="color:' + (n.saldo > 0 ? '#166534' : '#94a3b8') + '">' + UI120.m(n.saldo) + '</b></td>' +
+          '<td style="font-size:.72rem">' + (n.usos.length ? n.usos.map(u => esc(u.poliza) + ' · cuota ' + u.cuota + ': ' + UI120.m(u.monto)).join('<br>') : '<span style="color:#94a3b8">Sin usar</span>') + '</td></tr>').join('') + '</tbody></table>'
+        : '<p style="color:#64748b">Aún no hay notas de crédito. Se registran en el endoso de una póliza (columna "Cómo se devolvió").</p>') +
+      '<div class="nota">Para usar el saldo: abra (o cree) una póliza de la misma aseguradora y moneda y, en cada cuota, elija la nota en "Pagar con nota de crédito" con el monto que quiera.</div>' +
+      '<div class="pie"><button class="boton-secundario" data-c>Cerrar</button></div>', 980);
     w.q('[data-c]').addEventListener('click', w.cerrar);
-    w.q('[data-ok]').addEventListener('click', function () {
-      const numero = w.q('#ncN').value.trim().toUpperCase(), monto = UI120.n(w.q('#ncM').value);
-      if (!numero) { mostrarMensaje('Escriba el N° de la nota de crédito.', 'error'); return; }
-      if (!(monto > 0)) { mostrarMensaje('El monto debe ser mayor que 0.', 'error'); return; }
-      enviar(this, { id: x.id, idx: i, numero: numero, fecha: self._dmy(w.q('#ncF').value), monto: monto });
-    });
-    if (e.nc) w.q('[data-q]').addEventListener('click', function () {
-      if (!confirm('¿Quitar la nota de crédito ' + e.nc.numero + ' de este endoso?')) return;
-      enviar(this, { id: x.id, idx: i, quitar: true });
-    });
   },
 
   _recargar: function () { this._forzar = true; if (this._cont && document.body.contains(this._cont)) this.render(this._cont); },
@@ -325,14 +440,14 @@ const FormPolizas = {
   /* ---------------- Exportar / copiar ---------------- */
   _filasExport: function () {
     const ed = this._datos.editor, L = this._vis(), self = this, out = [];
-    const enc = ed ? ['PÓLIZA', 'TIPO', 'ASEGURADORA', 'N° PÓLIZA', 'MONEDA', 'PRIMA ANUAL', 'INICIO', 'FIN', 'ESTADO', 'PLACAS', 'CUOTA', 'N° LIQUIDACIÓN', 'MONTO', 'VENCE', 'FECHA DE PAGO', 'ESTADO CUOTA']
+    const enc = ed ? ['PÓLIZA', 'TIPO', 'ASEGURADORA', 'N° PÓLIZA', 'MONEDA', 'PRIMA ANUAL', 'INICIO', 'FIN', 'ESTADO', 'PLACAS', 'CUOTA', 'N° LIQUIDACIÓN', 'MONTO', 'VENCE', 'FECHA DE PAGO', 'ESTADO CUOTA', 'PAGADO CON NC', 'N° NC']
       : ['PÓLIZA', 'TIPO', 'ASEGURADORA', 'N° PÓLIZA', 'FIN', 'ESTADO', 'ADJUNTO'];
     L.forEach(x => {
       const est = x.estado !== 'ACTIVA' ? 'DE BAJA' : x.diasFin === null ? 'SIN FECHA' : x.diasFin < 0 ? 'VENCIDA' : x.diasFin <= self._datos.diasAviso ? 'POR VENCER' : 'VIGENTE';
       if (!ed) { out.push([x.nombre, x.tipo, x.aseguradora, x.numero, x.fin, est, x.archivoUrl]); return; }
       const base = [x.nombre, x.tipo, x.aseguradora, x.numero, x.moneda === 'PEN' ? 'S/' : 'US$', x.prima || '', x.inicio, x.fin, est, x.placas];
-      if (!x.cuotas.length) out.push(base.concat(['', '', '', '', '', '']));
-      else x.cuotas.forEach(c => out.push(base.concat([c.n, c.liquidacion, Number(c.monto) || 0, c.vence, c.pago, c.estado])));
+      if (!x.cuotas.length) out.push(base.concat(['', '', '', '', '', '', '', '']));
+      else x.cuotas.forEach(c => out.push(base.concat([c.n, c.liquidacion, Number(c.monto) || 0, c.vence, c.pago, c.estado, Number(c.ncMonto) > 0 ? Number(c.ncMonto) : '', c.ncNumero || ''])));
     });
     return { enc: enc, filas: out };
   },
@@ -356,7 +471,7 @@ const FormPolizas = {
     const d = this._filasExport();
     const th = 'style="background:#bcd3ee;border:1px solid #7f9cc0;padding:4px 6px;font-family:Calibri,Arial;font-size:10pt;font-weight:bold;text-align:center"';
     const td = (v, n) => '<td style="border:1px solid #c9d3df;padding:3px 6px;font-family:Calibri,Arial;font-size:10pt;text-align:' + (n ? 'right' : 'left') + '">' + esc(v === null || v === undefined ? '' : (n && v !== '' ? Number(v).toFixed(2) : v)) + '</td>';
-    const numCols = this._datos.editor ? [5, 12] : [];
+    const numCols = this._datos.editor ? [5, 12, 16] : [];
     const html = '<table style="border-collapse:collapse"><thead><tr>' + d.enc.map(h => '<th ' + th + '>' + h + '</th>').join('') + '</tr></thead><tbody>' +
       d.filas.map(f => '<tr>' + f.map((v, i) => td(v, numCols.indexOf(i) >= 0)).join('') + '</tr>').join('') + '</tbody></table>';
     const tsv = [d.enc].concat(d.filas).map(f => f.map(v => String(v === null || v === undefined ? '' : v).replace(/\t|\n/g, ' ')).join('\t')).join('\n');
